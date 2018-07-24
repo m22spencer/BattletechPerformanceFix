@@ -1,0 +1,9 @@
+{
+	"Name": "BattletechPerformanceFix",
+	"Author": "",
+	"Website": "",
+
+	"DependsOn": ["DynModLib"],
+	"DLL": "BattletechPerformanceFix.dll",
+	"DLLEntryPoint": "BattletechPerformanceFix.Control.Start"
+}
