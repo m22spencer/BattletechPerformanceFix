@@ -7,6 +7,8 @@ using BattleTech.UI;
 using BattleTech.Data;
 using System.Diagnostics;
 using System;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace BattletechPerformanceFix
 {
@@ -16,6 +18,8 @@ namespace BattletechPerformanceFix
 
         public static ModSettings settings = new ModSettings();
 
+        public static HarmonyInstance harmony;
+
         public static void Start(string modDirectory, string json)
         {
             mod = new Mod(modDirectory);
@@ -23,8 +27,10 @@ namespace BattletechPerformanceFix
 
             mod.LoadSettings(settings);
 			
-			var harmony = HarmonyInstance.Create(mod.Name);
+			harmony = HarmonyInstance.Create(mod.Name);
             harmony.PatchAll(Assembly.GetExecutingAssembly());
+
+
 
             // logging output can be found under BATTLETECH\BattleTech_Data\output_log.txt
             // or also under yourmod/log.txt
