@@ -18,12 +18,32 @@ namespace BattletechPerformanceFix
         static int bound = 0;
 
         public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
+            try {
             inst = __instance;
             index = index < 0 ? 0 : (index > (bound-10) ? (bound-10) : index);           
             ___inventoryWidget.ClearInventory();
             bound = ___storageInventory.Count;
             __state = ___storageInventory;
-            ___storageInventory = __state.Skip(index).Take(10).ToList();
+
+            // re-use HBS sorting implementation, awful but less issues with mods that touch sorting.
+            var a = new ListElementController_InventoryGear_NotListView();
+            var b = new ListElementController_InventoryGear_NotListView();
+            var ac = new InventoryItemElement_NotListView();
+            var bc = new InventoryItemElement_NotListView();
+            ac.controller = a;
+            bc.controller = b;
+            var cs = iw.Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+            __state.Sort(new Comparison<MechComponentRef>((l,r) => {
+                a.componentRef = l;
+                b.componentRef = r;
+                return cs.Invoke(ac, bc);
+            }));
+        
+
+            ___storageInventory = x.Skip(index).Take(10).ToList();
+            } catch (Exception e) {
+                Control.mod.Logger.Log(string.Format("Exn: {0}", e));
+            }
         }
 
         public static void Postfix(ref List<MechComponentRef> ___storageInventory, ref List<MechComponentRef> __state) {
