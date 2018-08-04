@@ -1,10 +1,8 @@
-## Store Fix (249 unique items in sell list)
-With Fix                   |  Without Fix
-:-------------------------:|:-------------------------:
-![](gifs/fix-store.gif)    |  ![](gifs/nofix-store.gif)
+## Store Fix (249 unique items in sell list) 
+Fix on right.
+![](gifs/compare-store.gif)
 
 ## MechlabThottling + ItemsList Fix (249 unique items in list)
-With Fix                   |  Without Fix
-:-------------------------:|:-------------------------:
-![](gifs/fix-mechlab.gif)  |  ![](gifs/nofix-mechlab.gif)
+Fix on right.
+![](gifs/compare-mechlab.gif)
 
