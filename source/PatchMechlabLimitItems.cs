@@ -65,8 +65,6 @@ namespace BattletechPerformanceFix
                                             , f("filterEnabledUpgrade")
                                             , false );
 
-            Control.mod.Logger.Log(string.Format("SG: {0} {1} {2}", f("filteringWeapons"), f("filteringEquipment"), ___storageInventory.Count));
-
             ListElementController_BASE tmpctl = new ListElementController_InventoryGear();
             var current = __state.Where(d => { 
                 tmpctl.weaponDef = null;
@@ -165,10 +163,9 @@ namespace BattletechPerformanceFix
                 Control.mod.Logger.Log("Warning: sr is null");
                 return;
             }
-            
-            var pos = 1.0f - ((float)index / (float)(bound-7));
 
-            __instance.StartCoroutine(Go(sr, pos));
+            // Something else keeps setting the normalizedPosition, so ensure we set it last.
+            __instance.StartCoroutine(Go(sr, sr.verticalNormalizedPosition));
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("Exn: {0}", e));
             }
@@ -236,14 +233,18 @@ namespace BattletechPerformanceFix
             }
         }
     }
-
-    [HarmonyPatch(typeof(UnityEngine.UI.ScrollRect), "OnScroll")]
-    public static class OnScrollHook {
-        public static void Prefix(UnityEngine.EventSystems.PointerEventData data) {
+    
+    [HarmonyPatch(typeof(UnityEngine.UI.ScrollRect), "LateUpdate")]
+    public static class OnDragHook {
+        public static void Postfix(UnityEngine.UI.ScrollRect __instance) {
             try {
-            Patch_MechLabPanel_PopulateInventory.index -= Convert.ToInt32(data.scrollDelta.y);
-            data.scrollDelta = new UnityEngine.Vector2(0, 0);
-            Patch_MechLabPanel_PopulateInventory.Refresh();
+                if (new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Field("inventoryWidget").Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() != __instance)
+                    return;
+                var newIndex = (int)((Patch_MechLabPanel_PopulateInventory.bound-7.0f) * (1.0f - __instance.verticalNormalizedPosition));
+                if (Patch_MechLabPanel_PopulateInventory.index != newIndex) {
+                    Patch_MechLabPanel_PopulateInventory.index = newIndex;
+                    Patch_MechLabPanel_PopulateInventory.Refresh();
+                }
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
