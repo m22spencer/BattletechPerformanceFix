@@ -28,7 +28,8 @@ namespace BattletechPerformanceFix
     [HarmonyPatch(typeof(MechLabInventoryWidget), "OnRemoveItem")]
     public static class Patch_OnRemoveItem {
         public static void Postfix(MechLabInventoryWidget __instance, IMechLabDraggableItem item) {
-            Control.mod.Logger.Log("Remove item");
+            if (Patch_MechLabPanel_PopulateInventory.Data == null) return;
+            Control.mod.Logger.Log("Remove");
             // Need to track this removal via storageItems
             //   *additionally* ensure that this item is not cleared from widget inventory
             //      while dragging, technically inventory should not be modified at all.
@@ -37,7 +38,6 @@ namespace BattletechPerformanceFix
                 .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID).Decr();
 
             //Patch_MechLabPanel_PopulateInventory.Refresh(true);
-            Control.mod.Logger.Log("and refresh");
         }
     }
 
@@ -45,9 +45,8 @@ namespace BattletechPerformanceFix
     public static class Patch_OnAddItem {
         public static bool guard = false;
         public static void Postfix(IMechLabDraggableItem item) {
-            Control.mod.Logger.Log("Add item");
-            if (guard) return;
-            Control.mod.Logger.Log("Legitimate add");
+            if (guard || Patch_MechLabPanel_PopulateInventory.Data == null) return;
+            Control.mod.Logger.Log("add & refresh");
             Patch_MechLabPanel_PopulateInventory
                 .Data
                 .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID).Incr();
@@ -72,6 +71,21 @@ namespace BattletechPerformanceFix
         }
     }
 
+    [HarmonyPatch(typeof(MechLabPanel), "OnRequestResourcesComplete")]
+    public static class Patch_ResetItemListHack {
+        public static void Prefix() {
+            Patch_MechLabPanel_PopulateInventory.Reset();
+        }
+    }
+    
+    [HarmonyPatch(typeof(MechLabPanel), "ConfirmRevertMech")]
+    
+    public static class Patch_ResetItemListHack2 {
+        public static void Prefix() {
+            Patch_MechLabPanel_PopulateInventory.Reset();
+        }
+    }
+
     [HarmonyPatch(typeof(MechLabPanel), "PopulateInventory")]
     public static class Patch_MechLabPanel_PopulateInventory {
         public static MechLabPanel inst;
@@ -84,12 +98,25 @@ namespace BattletechPerformanceFix
 
         public static List<DefAndCount> Data;
 
+        public static void Reset() {
+            Control.mod.Logger.Log("Reset");
+            Data = null;
+            if (DummyStart != null) UnityEngine.GameObject.Destroy(DummyStart);
+            if (DummyStart != null) UnityEngine.GameObject.Destroy(DummyEnd);
+            index = 0;
+            bound = 0;
+            lastIndex = 0;
+            inst = null;
+            Patch_OnAddItem.guard = false;
+        }
+
         public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
             // TODO:  On first run, cache a sorted (___storageInventory,some quantity)
             //     OnItemAdded/OnItemRemoved/ClearInventory modifies quantity
             //     Refresh simply filters and takes first 7 elements.
             //     Need to write our own PopulateInventory
             try {
+                inst = __instance;        
                 var iw = new Traverse(___inventoryWidget);
                 Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
             if (Data == null) {
@@ -124,7 +151,6 @@ namespace BattletechPerformanceFix
 
 
 
-            inst = __instance;        
 
             // Try to re-use as much as possible
             //   Note that this is a different filter than MechLabInventoryWidget uses.
