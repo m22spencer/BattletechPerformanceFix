@@ -3,6 +3,7 @@ using Harmony;
 using BattleTech;
 using BattleTech.UI;
 using System.Collections.Generic;
+using System.Collections;
 using System;
 using System.Linq;
 using System.Reflection;
@@ -10,12 +11,29 @@ using System.Diagnostics;
 
 namespace BattletechPerformanceFix
 {
+    [HarmonyPatch(typeof(MechLabInventoryWidget), "ApplyFiltering")]
+    public static class Patch_NoFiltering {
+        public static bool Prefix() {
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(MechLabInventoryWidget), "ApplySorting")]
+    public static class Patch_NoSorting {
+        public static bool Prefix() {
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(MechLabPanel), "PopulateInventory")]
 
     public static class Patch_MechLabPanel_PopulateInventory {
         public static MechLabPanel inst;
         public static int index = 0;
-        static int bound = 0;
+        public static int bound = 0;
+
+        public static UnityEngine.GameObject DummyStart;
+        public static UnityEngine.GameObject DummyEnd;
 
         public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
             try {
@@ -43,7 +61,6 @@ namespace BattletechPerformanceFix
 
             ListElementController_BASE tmpctl = new ListElementController_InventoryGear();
             var current = __state.Where(d => { 
-                var ty = d.ComponentDefType;
                 tmpctl.weaponDef = null;
                 tmpctl.ammoBoxDef = null;
                 tmpctl.componentDef = null;
@@ -94,10 +111,44 @@ namespace BattletechPerformanceFix
             foreach(InventoryItemElement_NotListView inventoryItemElement_NotListView in ___inventoryWidget.localInventory) {
                 inventoryItemElement_NotListView.gameObject.SetActive(true);
             }
+
+            try {
+            if (DummyStart == null) {
+                DummyStart = new UnityEngine.GameObject();
+                DummyStart.AddComponent<UnityEngine.RectTransform>()
+                    .SetParent(new Traverse(___inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
+            }
+            var itemsize = 60.0f;
+            var st = DummyStart.GetComponent<UnityEngine.RectTransform>();
+            st.sizeDelta = new UnityEngine.Vector2(100, itemsize * index);
+            st.SetAsFirstSibling();
+
+            if (DummyEnd == null) {
+                DummyEnd = new UnityEngine.GameObject();
+                DummyEnd.AddComponent<UnityEngine.RectTransform>()
+                    .SetParent(new Traverse(___inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
+            }
+            var ed = DummyEnd.GetComponent<UnityEngine.RectTransform>();
+            ed.sizeDelta = new UnityEngine.Vector2(100, itemsize * (bound - index - 7));
+            ed.SetAsLastSibling();
+
+            var sr = new Traverse(___inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
+            if (sr == null)
+                throw new System.Exception("sr is null");
+            
+            var pos = 1.0f - ((float)index / (float)(bound-7));
+
+            __instance.StartCoroutine(Go(sr, pos));
+            } catch(Exception e) {
+                Control.mod.Logger.Log(string.Format("Exn: {0}", e));
+            }
         }
 
-        public static T[] list<T>(params T[] items) {
-            return items;
+        public static IEnumerator Go(UnityEngine.UI.ScrollRect sr, float pos) {
+            yield return new UnityEngine.WaitForEndOfFrame();
+            UnityEngine.Canvas.ForceUpdateCanvases();
+            sr.verticalNormalizedPosition = pos;
+            yield break;
         }
     }
 
