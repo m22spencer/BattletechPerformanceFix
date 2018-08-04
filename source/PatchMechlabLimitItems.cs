@@ -41,7 +41,11 @@ namespace BattletechPerformanceFix
         public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
             try {
             inst = __instance;        
-            __state = ___storageInventory;
+            __state = ___storageInventory.Select(def => {
+                def.DataManager = __instance.dataManager;
+				def.RefreshComponentDef();
+                return def;
+            }).ToList();
 
             var iw = new Traverse(___inventoryWidget);
             Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
@@ -60,6 +64,8 @@ namespace BattletechPerformanceFix
                                             , iw.Field("mechTonnage").GetValue<float>()
                                             , f("filterEnabledUpgrade")
                                             , false );
+
+            Control.mod.Logger.Log(string.Format("SG: {0} {1} {2}", f("filteringWeapons"), f("filteringEquipment"), ___storageInventory.Count));
 
             ListElementController_BASE tmpctl = new ListElementController_InventoryGear();
             var current = __state.Where(d => { 
@@ -127,13 +133,14 @@ namespace BattletechPerformanceFix
         }
 
         public static void Postfix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
+            try {
             ___storageInventory = __state;
             // inventory filter may be different from filter used above, so go ahead and show all items always.
             foreach(InventoryItemElement_NotListView inventoryItemElement_NotListView in ___inventoryWidget.localInventory) {
                 inventoryItemElement_NotListView.gameObject.SetActive(true);
             }
 
-            try {
+            
             if (DummyStart == null) {
                 DummyStart = new UnityEngine.GameObject();
                 DummyStart.AddComponent<UnityEngine.RectTransform>()
@@ -154,8 +161,10 @@ namespace BattletechPerformanceFix
             ed.SetAsLastSibling();
 
             var sr = new Traverse(___inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
-            if (sr == null)
-                throw new System.Exception("sr is null");
+            if (sr == null) {
+                Control.mod.Logger.Log("Warning: sr is null");
+                return;
+            }
             
             var pos = 1.0f - ((float)index / (float)(bound-7));
 
