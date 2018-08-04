@@ -18,17 +18,56 @@ namespace BattletechPerformanceFix
         }
     }
 
-    /*
     [HarmonyPatch(typeof(MechLabInventoryWidget), "ApplySorting")]
     public static class Patch_NoSorting {
         public static bool Prefix() {
             return false;
         }
     }
-    */
+
+    [HarmonyPatch(typeof(MechLabInventoryWidget), "OnRemoveItem")]
+    public static class Patch_OnRemoveItem {
+        public static void Postfix(MechLabInventoryWidget __instance, IMechLabDraggableItem item) {
+            Control.mod.Logger.Log("Remove item");
+            // Need to track this removal via storageItems
+            //   *additionally* ensure that this item is not cleared from widget inventory
+            //      while dragging, technically inventory should not be modified at all.
+            Patch_MechLabPanel_PopulateInventory
+                .Data
+                .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID)
+                .Count--;
+
+            //Patch_MechLabPanel_PopulateInventory.Refresh(true);
+            Control.mod.Logger.Log("and refresh");
+        }
+    }
+
+    [HarmonyPatch(typeof(MechLabInventoryWidget), "OnAddItem")]
+    public static class Patch_OnAddItem {
+        public static bool guard = false;
+        public static void Postfix(IMechLabDraggableItem item) {
+            Control.mod.Logger.Log("Add item");
+            if (guard) return;
+            Control.mod.Logger.Log("Legitimate add");
+            Patch_MechLabPanel_PopulateInventory
+                .Data
+                .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID)
+                .Count++;
+            Patch_MechLabPanel_PopulateInventory.Refresh(false);    
+        }
+    }
+
+
+    public class DefAndCount {
+        public MechComponentRef ComponentRef;
+        public int Count;
+        public DefAndCount(MechComponentRef componentRef, int count) {
+            this.ComponentRef = componentRef;
+            this.Count = count;
+        }
+    }
 
     [HarmonyPatch(typeof(MechLabPanel), "PopulateInventory")]
-
     public static class Patch_MechLabPanel_PopulateInventory {
         public static MechLabPanel inst;
         public static int lastIndex = 0;
@@ -38,17 +77,49 @@ namespace BattletechPerformanceFix
         public static UnityEngine.GameObject DummyStart;
         public static UnityEngine.GameObject DummyEnd;
 
-        public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
-            try {
-            inst = __instance;        
-            __state = ___storageInventory.Select(def => {
-                def.DataManager = __instance.dataManager;
-				def.RefreshComponentDef();
-                return def;
-            }).ToList();
+        public static List<DefAndCount> Data;
 
-            var iw = new Traverse(___inventoryWidget);
-            Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
+        public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
+            // TODO:  On first run, cache a sorted (___storageInventory,some quantity)
+            //     OnItemAdded/OnItemRemoved/ClearInventory modifies quantity
+            //     Refresh simply filters and takes first 7 elements.
+            //     Need to write our own PopulateInventory
+            try {
+                var iw = new Traverse(___inventoryWidget);
+                Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
+            if (Data == null) {
+                // first run
+                var sw = new Stopwatch();
+                var tmp = ___storageInventory.Select(def => {
+                    def.DataManager = __instance.dataManager;
+                    def.RefreshComponentDef();
+                    var num = __instance.sim.GetItemCount(def.Def.Description, def.Def.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY); // Undamaged only is wrong, just for testing.
+                    return new DefAndCount(def, num);
+                }).ToList();
+
+                sw.Start();
+                
+                // re-use HBS sorting implementation, awful but less issues with mods that touch sorting.
+                var _a = new ListElementController_InventoryGear_NotListView();
+                var _b = new ListElementController_InventoryGear_NotListView();
+                var _ac = new InventoryItemElement_NotListView();
+                var _bc = new InventoryItemElement_NotListView();
+                _ac.controller = _a;
+                _bc.controller = _b;
+                var _cs = iw.Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+                tmp.Sort(new Comparison<DefAndCount>((l,r) => {
+                    _a.componentRef = l.ComponentRef;
+                    _b.componentRef = r.ComponentRef;
+                    return _cs.Invoke(_ac, _bc);
+                }));
+                Data = tmp;
+                Control.mod.Logger.Log(string.Format("Preprocess {0} ms", sw.Elapsed.TotalMilliseconds));
+            }
+
+
+
+
+            inst = __instance;        
 
             // Try to re-use as much as possible
             //   Note that this is a different filter than MechLabInventoryWidget uses.
@@ -66,7 +137,10 @@ namespace BattletechPerformanceFix
                                             , false );
 
             ListElementController_BASE tmpctl = new ListElementController_InventoryGear();
-            var current = __state.Where(d => { 
+
+            var current = Data.Where(dac => dac.Count == Int32.MinValue || dac.Count > 0)
+                              .Select(dac => dac.ComponentRef)
+                              .Where(d => { 
                 tmpctl.weaponDef = null;
                 tmpctl.ammoBoxDef = null;
                 tmpctl.componentDef = null;
@@ -91,53 +165,26 @@ namespace BattletechPerformanceFix
             index = index < 0 ? 0 : (index > (bound-7) ? (bound-7) : index);   
             var delta = index - lastIndex;
             lastIndex = index;
-
-            // re-use HBS sorting implementation, awful but less issues with mods that touch sorting.
-            var a = new ListElementController_InventoryGear_NotListView();
-            var b = new ListElementController_InventoryGear_NotListView();
-            var ac = new InventoryItemElement_NotListView();
-            var bc = new InventoryItemElement_NotListView();
-            ac.controller = a;
-            bc.controller = b;
-            var cs = iw.Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
-            current.Sort(new Comparison<MechComponentRef>((l,r) => {
-                a.componentRef = l;
-                b.componentRef = r;
-                return cs.Invoke(ac, bc);
-            }));
-        
-
+       
             ___storageInventory = current.Skip(index).Take(7).ToList();
 
-            if (delta != 0 && ___inventoryWidget.localInventory.Count() == 7) {
-                // Positive delta removes from front
-                // Negative delta removes from back
-                // Re-use
-                var inv = ___inventoryWidget.localInventory;
-                var remove = delta > 0 ? inv.Take(delta) : inv.Skip(7 - delta);
-                var keep   = inv.Where(i => !remove.Contains(i));
-                if (remove.Count() + keep.Count() != 7)
-                    throw new System.Exception("Remove+Keep mismatch of " + (remove.Count() + keep.Count()).ToString());
-                
-                ___inventoryWidget.localInventory = keep.ToList();
-                ___storageInventory = (delta > 0 ? ___storageInventory.Skip(7 - delta) : ___storageInventory.Take(delta)).ToList();
-            } else {
-                ___inventoryWidget.ClearInventory();
-            }
+            ___inventoryWidget.ClearInventory();
 
             } catch (Exception e) {
                 Control.mod.Logger.Log(string.Format("Exn: {0}", e));
             }
+            Patch_OnAddItem.guard = true;
         }
 
         public static void Postfix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
             try {
-            ___storageInventory = __state;
+            ___storageInventory = Data.Select(dac => dac.ComponentRef).ToList();
             // inventory filter may be different from filter used above, so go ahead and show all items always.
             foreach(InventoryItemElement_NotListView inventoryItemElement_NotListView in ___inventoryWidget.localInventory) {
                 inventoryItemElement_NotListView.gameObject.SetActive(true);
+                new Traverse(inventoryItemElement_NotListView).Field("quantity").SetValue(Data.Find(d => d.ComponentRef.ComponentDefID == inventoryItemElement_NotListView.ComponentRef.ComponentDefID).Count);
+                inventoryItemElement_NotListView.RefreshQuantity();
             }
-
             
             if (DummyStart == null) {
                 DummyStart = new UnityEngine.GameObject();
@@ -169,6 +216,8 @@ namespace BattletechPerformanceFix
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("Exn: {0}", e));
             }
+            
+            Patch_OnAddItem.guard = false;
         }
 
         public static IEnumerator Go(UnityEngine.UI.ScrollRect sr, float pos) {
@@ -178,10 +227,10 @@ namespace BattletechPerformanceFix
             yield break;
         }
 
-        public static void Refresh() {
+        public static void Refresh(bool wantClear) {
             try {
             var mlp = new Traverse(Patch_MechLabPanel_PopulateInventory.inst);
-            mlp.Field("inventoryWidget").Method("ClearInventory").GetValue();
+            //if (wantClear) mlp.Field("inventoryWidget").Method("ClearInventory").GetValue();
             mlp.Method("PopulateInventory").GetValue();
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("Exn: {0}", e));
@@ -194,7 +243,7 @@ namespace BattletechPerformanceFix
     public static class HookFilterButtonClicked {
         public static void Postfix() {
             try {
-                Patch_MechLabPanel_PopulateInventory.Refresh();
+                Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -205,7 +254,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersWeapons {
         public static void Postfix() {
             try {
-                Patch_MechLabPanel_PopulateInventory.Refresh();
+                Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -216,7 +265,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersEquipment {
         public static void Postfix() {
             try {
-                Patch_MechLabPanel_PopulateInventory.Refresh();
+                Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -227,7 +276,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersMechParts {
         public static void Postfix() {
             try {
-                Patch_MechLabPanel_PopulateInventory.Refresh();
+                Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -243,7 +292,8 @@ namespace BattletechPerformanceFix
                 var newIndex = (int)((Patch_MechLabPanel_PopulateInventory.bound-7.0f) * (1.0f - __instance.verticalNormalizedPosition));
                 if (Patch_MechLabPanel_PopulateInventory.index != newIndex) {
                     Patch_MechLabPanel_PopulateInventory.index = newIndex;
-                    Patch_MechLabPanel_PopulateInventory.Refresh();
+                    Control.mod.Logger.Log("Refresh with: " + newIndex.ToString());
+                    Patch_MechLabPanel_PopulateInventory.Refresh(false);
                 }
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
