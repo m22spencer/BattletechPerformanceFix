@@ -34,8 +34,7 @@ namespace BattletechPerformanceFix
             //      while dragging, technically inventory should not be modified at all.
             Patch_MechLabPanel_PopulateInventory
                 .Data
-                .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID)
-                .Count--;
+                .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID).Decr();
 
             //Patch_MechLabPanel_PopulateInventory.Refresh(true);
             Control.mod.Logger.Log("and refresh");
@@ -51,8 +50,7 @@ namespace BattletechPerformanceFix
             Control.mod.Logger.Log("Legitimate add");
             Patch_MechLabPanel_PopulateInventory
                 .Data
-                .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID)
-                .Count++;
+                .Find(d => d.ComponentRef.ComponentDefID == item.ComponentRef.ComponentDefID).Incr();
             Patch_MechLabPanel_PopulateInventory.Refresh(false);    
         }
     }
@@ -64,6 +62,13 @@ namespace BattletechPerformanceFix
         public DefAndCount(MechComponentRef componentRef, int count) {
             this.ComponentRef = componentRef;
             this.Count = count;
+        }
+
+        public void Decr() {
+            if (Count != int.MinValue) Count--;
+        }
+        public void Incr() {
+            if (Count != int.MinValue) Count++;
         }
     }
 
@@ -93,7 +98,7 @@ namespace BattletechPerformanceFix
                 var tmp = ___storageInventory.Select(def => {
                     def.DataManager = __instance.dataManager;
                     def.RefreshComponentDef();
-                    var num = __instance.sim.GetItemCount(def.Def.Description, def.Def.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY); // Undamaged only is wrong, just for testing.
+                    var num = !__instance.IsSimGame ? int.MinValue : __instance.sim.GetItemCount(def.Def.Description, def.Def.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY); // Undamaged only is wrong, just for testing.
                     return new DefAndCount(def, num);
                 }).ToList();
 
