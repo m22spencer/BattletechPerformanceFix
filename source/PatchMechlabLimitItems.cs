@@ -86,6 +86,15 @@ namespace BattletechPerformanceFix
         }
     }
 
+    [HarmonyPatch(typeof(MechLabPanel), "ExitMechLab")]
+    
+    public static class Patch_ResetItemListHack3 {
+        public static void Prefix() {
+            Patch_MechLabPanel_PopulateInventory.Reset();
+        }
+    }
+    
+
     [HarmonyPatch(typeof(MechLabPanel), "PopulateInventory")]
     public static class Patch_MechLabPanel_PopulateInventory {
         public static MechLabPanel inst;
@@ -102,12 +111,14 @@ namespace BattletechPerformanceFix
             Control.mod.Logger.Log("Reset");
             Data = null;
             if (DummyStart != null) UnityEngine.GameObject.Destroy(DummyStart);
-            if (DummyStart != null) UnityEngine.GameObject.Destroy(DummyEnd);
+            DummyStart = null;
+            if (DummyEnd != null) UnityEngine.GameObject.Destroy(DummyEnd);
+            DummyEnd = null;
             index = 0;
             bound = 0;
             lastIndex = 0;
             inst = null;
-            Patch_OnAddItem.guard = false;
+            Patch_OnAddItem.guard = false; 
         }
 
         public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
@@ -120,7 +131,6 @@ namespace BattletechPerformanceFix
                 var iw = new Traverse(___inventoryWidget);
                 Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
             if (Data == null) {
-                // first run
                 var sw = new Stopwatch();
                 var tmp = ___storageInventory.Select(def => {
                     def.DataManager = __instance.dataManager;
@@ -207,9 +217,10 @@ namespace BattletechPerformanceFix
             Patch_OnAddItem.guard = true;
         }
 
-        public static void Postfix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
+        public static void Postfix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, ref List<MechComponentRef> ___originalStorageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
             try {
             ___storageInventory = Data.Select(dac => dac.ComponentRef).ToList();
+            ___originalStorageInventory = Data.Select(dac => dac.ComponentRef).ToList();
             // inventory filter may be different from filter used above, so go ahead and show all items always.
             foreach(InventoryItemElement_NotListView inventoryItemElement_NotListView in ___inventoryWidget.localInventory) {
                 inventoryItemElement_NotListView.gameObject.SetActive(true);
@@ -274,6 +285,7 @@ namespace BattletechPerformanceFix
     public static class HookFilterButtonClicked {
         public static void Postfix() {
             try {
+                if (Patch_MechLabPanel_PopulateInventory.Data == null) return;
                 Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
@@ -285,6 +297,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersWeapons {
         public static void Postfix() {
             try {
+                if (Patch_MechLabPanel_PopulateInventory.Data == null) return;
                 Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
@@ -296,6 +309,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersEquipment {
         public static void Postfix() {
             try {
+                if (Patch_MechLabPanel_PopulateInventory.Data == null) return;
                 Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
@@ -307,6 +321,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersMechParts {
         public static void Postfix() {
             try {
+                if (Patch_MechLabPanel_PopulateInventory.Data == null) return;
                 Patch_MechLabPanel_PopulateInventory.Refresh(true);
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
@@ -318,6 +333,7 @@ namespace BattletechPerformanceFix
     public static class OnDragHook {
         public static void Postfix(UnityEngine.UI.ScrollRect __instance) {
             try {
+                if (Patch_MechLabPanel_PopulateInventory.Data == null) return;
                 if (new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Field("inventoryWidget").Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() != __instance)
                     return;
                 var newIndex = (int)((Patch_MechLabPanel_PopulateInventory.bound-7.0f) * (1.0f - __instance.verticalNormalizedPosition));
