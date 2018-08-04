@@ -18,17 +18,20 @@ namespace BattletechPerformanceFix
         }
     }
 
+    /*
     [HarmonyPatch(typeof(MechLabInventoryWidget), "ApplySorting")]
     public static class Patch_NoSorting {
         public static bool Prefix() {
             return false;
         }
     }
+    */
 
     [HarmonyPatch(typeof(MechLabPanel), "PopulateInventory")]
 
     public static class Patch_MechLabPanel_PopulateInventory {
         public static MechLabPanel inst;
+        public static int lastIndex = 0;
         public static int index = 0;
         public static int bound = 0;
 
@@ -38,7 +41,6 @@ namespace BattletechPerformanceFix
         public static void Prefix(MechLabPanel __instance, ref List<MechComponentRef> ___storageInventory, MechLabInventoryWidget ___inventoryWidget, ref List<MechComponentRef> __state) {
             try {
             inst = __instance;        
-            ___inventoryWidget.ClearInventory();
             __state = ___storageInventory;
 
             var iw = new Traverse(___inventoryWidget);
@@ -83,6 +85,8 @@ namespace BattletechPerformanceFix
 
             bound = current.Count;
             index = index < 0 ? 0 : (index > (bound-7) ? (bound-7) : index);   
+            var delta = index - lastIndex;
+            lastIndex = index;
 
             // re-use HBS sorting implementation, awful but less issues with mods that touch sorting.
             var a = new ListElementController_InventoryGear_NotListView();
@@ -100,6 +104,23 @@ namespace BattletechPerformanceFix
         
 
             ___storageInventory = current.Skip(index).Take(7).ToList();
+
+            if (delta != 0 && ___inventoryWidget.localInventory.Count() == 7) {
+                // Positive delta removes from front
+                // Negative delta removes from back
+                // Re-use
+                var inv = ___inventoryWidget.localInventory;
+                var remove = delta > 0 ? inv.Take(delta) : inv.Skip(7 - delta);
+                var keep   = inv.Where(i => !remove.Contains(i));
+                if (remove.Count() + keep.Count() != 7)
+                    throw new System.Exception("Remove+Keep mismatch of " + (remove.Count() + keep.Count()).ToString());
+                
+                ___inventoryWidget.localInventory = keep.ToList();
+                ___storageInventory = (delta > 0 ? ___storageInventory.Skip(7 - delta) : ___storageInventory.Take(delta)).ToList();
+            } else {
+                ___inventoryWidget.ClearInventory();
+            }
+
             } catch (Exception e) {
                 Control.mod.Logger.Log(string.Format("Exn: {0}", e));
             }
@@ -150,6 +171,16 @@ namespace BattletechPerformanceFix
             sr.verticalNormalizedPosition = pos;
             yield break;
         }
+
+        public static void Refresh() {
+            try {
+            var mlp = new Traverse(Patch_MechLabPanel_PopulateInventory.inst);
+            mlp.Field("inventoryWidget").Method("ClearInventory").GetValue();
+            mlp.Method("PopulateInventory").GetValue();
+            } catch(Exception e) {
+                Control.mod.Logger.Log(string.Format("Exn: {0}", e));
+            }
+        }
     }
 
     // sub category filters
@@ -157,7 +188,7 @@ namespace BattletechPerformanceFix
     public static class HookFilterButtonClicked {
         public static void Postfix() {
             try {
-            new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Method("PopulateInventory").GetValue();
+                Patch_MechLabPanel_PopulateInventory.Refresh();
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -168,7 +199,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersWeapons {
         public static void Postfix() {
             try {
-            new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Method("PopulateInventory").GetValue();
+                Patch_MechLabPanel_PopulateInventory.Refresh();
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -179,7 +210,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersEquipment {
         public static void Postfix() {
             try {
-            new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Method("PopulateInventory").GetValue();
+                Patch_MechLabPanel_PopulateInventory.Refresh();
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -190,7 +221,7 @@ namespace BattletechPerformanceFix
     public static class HookSetFiltersMechParts {
         public static void Postfix() {
             try {
-            new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Method("PopulateInventory").GetValue();
+                Patch_MechLabPanel_PopulateInventory.Refresh();
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
@@ -203,7 +234,7 @@ namespace BattletechPerformanceFix
             try {
             Patch_MechLabPanel_PopulateInventory.index -= Convert.ToInt32(data.scrollDelta.y);
             data.scrollDelta = new UnityEngine.Vector2(0, 0);
-            new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Method("PopulateInventory").GetValue();
+            Patch_MechLabPanel_PopulateInventory.Refresh();
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("exn {0}", e));
             }
