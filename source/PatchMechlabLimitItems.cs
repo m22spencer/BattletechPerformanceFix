@@ -235,8 +235,10 @@ namespace BattletechPerformanceFix
             }
             var itemsize = 60.0f;
             var st = DummyStart.GetComponent<UnityEngine.RectTransform>();
-            st.sizeDelta = new UnityEngine.Vector2(100, itemsize * index);
+            st.sizeDelta = new UnityEngine.Vector2(100, bound <= 7 ? 0.0f : itemsize * index);
             st.SetAsFirstSibling();
+
+            var itemsCt = ___inventoryWidget.localInventory.Count;
 
             if (DummyEnd == null) {
                 DummyEnd = new UnityEngine.GameObject();
@@ -244,7 +246,7 @@ namespace BattletechPerformanceFix
                     .SetParent(new Traverse(___inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
             }
             var ed = DummyEnd.GetComponent<UnityEngine.RectTransform>();
-            ed.sizeDelta = new UnityEngine.Vector2(100, itemsize * (bound - index - 7));
+            ed.sizeDelta = new UnityEngine.Vector2(100, bound <= 7 ? 0.0f : itemsize * (bound - index - itemsCt));
             ed.SetAsLastSibling();
 
             var sr = new Traverse(___inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
@@ -254,7 +256,7 @@ namespace BattletechPerformanceFix
             }
 
             // Something else keeps setting the normalizedPosition, so ensure we set it last.
-            __instance.StartCoroutine(Go(sr, sr.verticalNormalizedPosition));
+            __instance.StartCoroutine(Go(sr, bound <= 7 ? 1.0f : sr.verticalNormalizedPosition));
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("Exn: {0}", e));
             }
@@ -265,6 +267,7 @@ namespace BattletechPerformanceFix
         public static IEnumerator Go(UnityEngine.UI.ScrollRect sr, float pos) {
             yield return new UnityEngine.WaitForEndOfFrame();
             UnityEngine.Canvas.ForceUpdateCanvases();
+            Control.mod.Logger.Log("Pos: " + pos.ToString());
             sr.verticalNormalizedPosition = pos;
             yield break;
         }
@@ -337,6 +340,9 @@ namespace BattletechPerformanceFix
                 if (new Traverse(Patch_MechLabPanel_PopulateInventory.inst).Field("inventoryWidget").Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() != __instance)
                     return;
                 var newIndex = (int)((Patch_MechLabPanel_PopulateInventory.bound-7.0f) * (1.0f - __instance.verticalNormalizedPosition));
+                if (Patch_MechLabPanel_PopulateInventory.bound <= 7) {
+                    newIndex = 0;
+                }
                 if (Patch_MechLabPanel_PopulateInventory.index != newIndex) {
                     Patch_MechLabPanel_PopulateInventory.index = newIndex;
                     Control.mod.Logger.Log("Refresh with: " + newIndex.ToString());
