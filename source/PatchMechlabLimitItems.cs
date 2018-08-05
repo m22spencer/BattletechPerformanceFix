@@ -174,6 +174,7 @@ namespace BattletechPerformanceFix
             filteredInventory = Filter(rawInventory);
             endIndex = filteredInventory.Count - itemLimit;
             Refresh();
+            new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
         }
 
         void Refresh(bool wantClobber = true) {
