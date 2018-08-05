@@ -178,7 +178,9 @@ namespace BattletechPerformanceFix
         }
 
         void Refresh(bool wantClobber = true) {
+            #if VVV
             Control.mod.Logger.Log(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
+            #endif
             if (index > filteredInventory.Count - itemsOnScreen)
                 index = filteredInventory.Count - itemsOnScreen;
             if (filteredInventory.Count < itemsOnScreen)
