@@ -280,7 +280,7 @@ namespace BattletechPerformanceFix
             }).Method);
 
             var onApplySorting = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplySorting");
-            Hook.Prefix(onApplyFiltering, Fun.fun((MechLabInventoryWidget __instance) => {
+            Hook.Prefix(onApplySorting, Fun.fun((MechLabInventoryWidget __instance) => {
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     // it's a mechlab screen, we do our own sort.
                      return false;
