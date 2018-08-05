@@ -86,21 +86,16 @@ namespace BattletechPerformanceFix
             ielCache.ForEach(iw => li.Add(iw));
             
             var lp = new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>();
-            if (lp == null)
-                Control.mod.Logger.LogError("lp null");
 
             if (DummyStart == null) DummyStart = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
             if (DummyEnd   == null) DummyEnd   = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
-
-            if (DummyStart == null)
-                Control.mod.Logger.LogError("Dummy null");
 
             DummyStart.SetParent(lp, false);
             DummyEnd.SetParent(lp, false);
 
             FilterChanged();
             } catch(Exception e) {
-                Control.mod.Logger.Log(string.Format("exn: {0}", e));
+                Control.mod.Logger.Log(string.Format("[LimitItems] exn: {0}", e));
             }
         }
 
@@ -166,12 +161,12 @@ namespace BattletechPerformanceFix
         MechComponentRef GetRef(ListElementController_BASE_NotListView lec) {
             if (lec is ListElementController_InventoryWeapon_NotListView) return (lec as ListElementController_InventoryWeapon_NotListView).componentRef;
             if (lec is ListElementController_InventoryGear_NotListView) return (lec as ListElementController_InventoryGear_NotListView).componentRef;
-            Control.mod.Logger.LogError("lec is not gear or weapon: " + lec.GetId());
+            Control.mod.Logger.LogError("[LimitItems] lec is not gear or weapon: " + lec.GetId());
             return null;
         }
 
         public void FilterChanged() {
-            Control.mod.Logger.Log("Filter changed");
+            Control.mod.Logger.Log("[LimitItems] Filter changed");
             index = 0;
             filteredInventory = Filter(rawInventory);
             endIndex = filteredInventory.Count - itemLimit;
@@ -179,7 +174,7 @@ namespace BattletechPerformanceFix
         }
 
         void Refresh(bool wantClobber = true) {
-            Control.mod.Logger.Log(string.Format("Refresh: {0} {1} {2} ", index, filteredInventory.Count, itemLimit));
+            Control.mod.Logger.Log(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
             if (index > filteredInventory.Count - itemsOnScreen)
                 index = filteredInventory.Count - itemsOnScreen;
             if (filteredInventory.Count < itemsOnScreen)
@@ -188,12 +183,13 @@ namespace BattletechPerformanceFix
                 index = 0;
 
 
-            IEnumerable<ListElementController_BASE_NotListView> toShow = filteredInventory.Skip(index).Take(itemLimit);
+            var toShow = filteredInventory.Skip(index).Take(itemLimit).ToList();
 
             var icc = ielCache.ToList();
 
-            toShow.ToList().ForEach(lec => {
-                Control.mod.Logger.Log("Showing: " + lec.componentDef.Description.Name);
+            Control.mod.Logger.Log("[LimitItems] Showing: " + string.Join(",", toShow.Select(lec => lec.componentDef.Description.Name).ToArray()));
+
+            toShow.ForEach(lec => {
                 var iw = icc[0]; icc.RemoveAt(0);
                 var cref = GetRef(lec);
                 iw.ClearEverything();
@@ -205,18 +201,24 @@ namespace BattletechPerformanceFix
             });
             icc.ForEach(unused => unused.gameObject.SetActive(false));
 
+
+            var tsize = 60.0f;
+            
+            Control.mod.Logger.Log("[LimitItems] Items prefixing: " + index);
+            DummyStart.sizeDelta = new UnityEngine.Vector2(100, tsize * index);
             DummyStart.SetAsFirstSibling();
-            DummyStart.sizeDelta = new UnityEngine.Vector2(100, 60 * index);
-            DummyEnd.SetAsLastSibling();
 
             var itemsHanging = filteredInventory.Count - (index + itemsOnScreen);
-            Control.mod.Logger.Log("Items hanging: " + itemsHanging);
+            Control.mod.Logger.Log("[LimitItems] Items hanging: " + itemsHanging);
 
-            DummyEnd.sizeDelta = new UnityEngine.Vector2(100, 60.0f * itemsHanging);
+
+
+            DummyEnd.sizeDelta = new UnityEngine.Vector2(100, tsize * itemsHanging);
+            DummyEnd.SetAsLastSibling();
             
             
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
-            Control.mod.Logger.Log("RefreshDone");
+            Control.mod.Logger.Log(string.Format("[LimitItems] RefreshDone {0} {1}", DummyStart.anchoredPosition.y, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
         }
 
         static int itemsOnScreen = 7;
@@ -227,29 +229,28 @@ namespace BattletechPerformanceFix
         static MethodInfo PopulateInventory = AccessTools.Method(typeof(MechLabPanel), "PopulateInventory");
         static MethodInfo ConfirmRevertMech = AccessTools.Method(typeof(MechLabPanel), "ConfirmRevertMech");
         static MethodInfo ExitMechLab       = AccessTools.Method(typeof(MechLabPanel), "ExitMechLab");
-        static MethodInfo OnAddItem         = AccessTools.Method(typeof(MechLabInventoryWidget), "OnAddItem");
-        static MethodInfo OnRemoveItem      = AccessTools.Method(typeof(MechLabInventoryWidget), "OnRemoveItem");
         public static void Initialize() {
             var onSalvageScreen = AccessTools.Method(typeof(AAR_SalvageScreen), "BeginSalvageScreen");
             Hook.Prefix(onSalvageScreen, Fun.fun(() => {
                 // Only for logging purposes.
-                Control.mod.Logger.Log("Open Salvage screen");
+                Control.mod.Logger.Log("[LimitItems] Open Salvage screen");
             }).Method);
             Hook.Prefix(PopulateInventory, Fun.fun((MechLabPanel __instance) => { 
-                if (limitItems != null) Control.mod.Logger.LogError("PopulateInventory was not properly cleaned");
-                Control.mod.Logger.Log("PopulateInventory patching (Mechlab fix)");
+                if (limitItems != null) Control.mod.Logger.LogError("[LimitItems] PopulateInventory was not properly cleaned");
+                Control.mod.Logger.Log("[LimitItems] PopulateInventory patching (Mechlab fix)");
                 limitItems = new PatchMechlabLimitItems(__instance);
                 return false;
             }).Method);
 
             Hook.Prefix(ConfirmRevertMech, Fun.fun((MechLabPanel __instance) => { 
-                if (limitItems == null) Control.mod.Logger.LogError("Unhandled ConfirmRevertMech");
-                Control.mod.Logger.Log("Reverting mech");
+                if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ConfirmRevertMech");
+                Control.mod.Logger.Log("[LimitItems] Reverting mech");
                 limitItems = null;
             }).Method);
 
             Hook.Prefix(ExitMechLab, Fun.fun((MechLabPanel __instance) => { 
-                if (limitItems == null) Control.mod.Logger.LogError("Unhandled ExitMechLab");
+                if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ExitMechLab");
+                Control.mod.Logger.Log("[LimitItems] Exiting mechlab");
                 limitItems = null;
             }).Method);
 
@@ -262,7 +263,7 @@ namespace BattletechPerformanceFix
                     }
                     if (limitItems.index != newIndex) {
                         limitItems.index = newIndex;
-                        Control.mod.Logger.Log("Refresh with: " + newIndex.ToString());
+                        Control.mod.Logger.Log(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
                         limitItems.Refresh(false);
                     }
                 }        
