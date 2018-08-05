@@ -228,6 +228,7 @@ namespace BattletechPerformanceFix
             DummyEnd.SetAsLastSibling();
             
             
+            inventoryWidget.RefreshJumpJetOptions(new Traverse(inventoryWidget).Field("mechTonnage").GetValue<float>());
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
             #if VVV
             Control.mod.Logger.Log(string.Format("[LimitItems] RefreshDone {0} {1}", DummyStart.anchoredPosition.y, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
