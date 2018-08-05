@@ -43,6 +43,8 @@ namespace BattletechPerformanceFix
 
         PatchMechlabLimitItems(MechLabPanel instance) {
             try {
+                var sw = new Stopwatch();
+                sw.Start();
             this.instance = instance;
             this.inventoryWidget = new Traverse(instance).Field("inventoryWidget").GetValue<MechLabInventoryWidget>();
 
@@ -92,6 +94,7 @@ namespace BattletechPerformanceFix
 
             DummyStart.SetParent(lp, false);
             DummyEnd.SetParent(lp, false);
+            Control.mod.Logger.Log(string.Format("[LimitItems] inventory cached in {0} ms", sw.Elapsed.TotalMilliseconds));
 
             FilterChanged();
             } catch(Exception e) {
@@ -187,7 +190,9 @@ namespace BattletechPerformanceFix
 
             var icc = ielCache.ToList();
 
+            #if VVV
             Control.mod.Logger.Log("[LimitItems] Showing: " + string.Join(",", toShow.Select(lec => lec.componentDef.Description.Name).ToArray()));
+            #endif
 
             toShow.ForEach(lec => {
                 var iw = icc[0]; icc.RemoveAt(0);
@@ -204,12 +209,15 @@ namespace BattletechPerformanceFix
 
             var tsize = 60.0f;
             
-            Control.mod.Logger.Log("[LimitItems] Items prefixing: " + index);
             DummyStart.sizeDelta = new UnityEngine.Vector2(100, tsize * index);
             DummyStart.SetAsFirstSibling();
 
             var itemsHanging = filteredInventory.Count - (index + itemsOnScreen);
+
+            #if VVV
+            Control.mod.Logger.Log("[LimitItems] Items prefixing: " + index);
             Control.mod.Logger.Log("[LimitItems] Items hanging: " + itemsHanging);
+            #endif
 
 
 
@@ -218,7 +226,9 @@ namespace BattletechPerformanceFix
             
             
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
+            #if VVV
             Control.mod.Logger.Log(string.Format("[LimitItems] RefreshDone {0} {1}", DummyStart.anchoredPosition.y, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
+            #endif
         }
 
         static int itemsOnScreen = 7;
@@ -263,7 +273,9 @@ namespace BattletechPerformanceFix
                     }
                     if (limitItems.index != newIndex) {
                         limitItems.index = newIndex;
+                        #if VVV
                         Control.mod.Logger.Log(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
+                        #endif
                         limitItems.Refresh(false);
                     }
                 }        
