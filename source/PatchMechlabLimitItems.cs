@@ -33,9 +33,6 @@ namespace BattletechPerformanceFix
 
         List<DefAndCount> inventory;
 
-        List<ListElementController_InventoryWeapon_NotListView> weaponControllerCache;
-        List<ListElementController_InventoryGear_NotListView> gearControllerCache;
-
         List<InventoryItemElement_NotListView> ielCache;
 
         List<ListElementController_BASE_NotListView> rawInventory;
@@ -74,23 +71,6 @@ namespace BattletechPerformanceFix
             }).ToList();
             rawInventory = Sort(rawInventory);
 
-            // InitAndCreate looks for def, so this is to prevent npe.
-            var dummyref = new MechComponentRef();
-            Control.mod.Logger.Log(string.Format("dummref == null ? {0}", dummyref == null));
-            Control.mod.Logger.Log(string.Format("MLI == null ? {0}", inventoryWidget == null));
-            // InitAndCreate refreshes display information, which doesn't exist yet so drop this function.
-            var h = Hook.Prefix(AccessTools.Method(typeof(ListElementController_InventoryWeapon_NotListView), "RefreshInfoOnWidget"), Fun.fun(() => { Control.mod.Logger.Log("Drop ref on widget"); return false; }).Method);
-            var h2 = Hook.Prefix(AccessTools.Method(typeof(InventoryItemElement_NotListView), "RefreshInfo"), Fun.fun(() => { Control.mod.Logger.Log("Drop refresh info"); return false; }).Method);
-            var h3 = Hook.Prefix(AccessTools.Method(typeof(InventoryItemElement_NotListView), "SetTooltipData"), Fun.fun(() => false).Method);
-            var sw = new Stopwatch();
-            sw.Start();
-            weaponControllerCache = Enumerable.Repeat<Func<ListElementController_InventoryWeapon_NotListView>>(() => {
-                ListElementController_InventoryWeapon_NotListView controller = new ListElementController_InventoryWeapon_NotListView();
-				//controller.InitAndCreate(dummyref, instance.dataManager, inventoryWidget, 1, false);
-                controller.InitAndFillInSpecificWidget(dummyref, null, instance.dataManager, null, 1, false);
-                return controller;
-            }, 10000).Select(x => x()).ToList();
-            Control.mod.Logger.Log(string.Format("Created 10000 in {0}", sw.Elapsed.TotalMilliseconds));
             ielCache = Enumerable.Repeat<Func<InventoryItemElement_NotListView>>( () => {
                 var nlv = instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
                                                                                                                               , BattleTechResourceType.UIModulePrefabs, null, null, null)
@@ -117,10 +97,6 @@ namespace BattletechPerformanceFix
 
             DummyStart.SetParent(lp, false);
             DummyEnd.SetParent(lp, false);
-
-            h.Dispose();
-            h2.Dispose();
-            h3.Dispose();
 
             FilterChanged();
             } catch(Exception e) {
@@ -241,11 +217,6 @@ namespace BattletechPerformanceFix
             
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
             Control.mod.Logger.Log("RefreshDone");
-
-            //if (!wantClobber)
-            //    cbase.ToList().ForEach(nw => inventoryWidget.OnAddItem(nw.ItemWidget, false));
-            //new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
-            //*/
         }
 
         static int itemsOnScreen = 7;
@@ -259,9 +230,14 @@ namespace BattletechPerformanceFix
         static MethodInfo OnAddItem         = AccessTools.Method(typeof(MechLabInventoryWidget), "OnAddItem");
         static MethodInfo OnRemoveItem      = AccessTools.Method(typeof(MechLabInventoryWidget), "OnRemoveItem");
         public static void Initialize() {
+            var onSalvageScreen = AccessTools.Method(typeof(AAR_SalvageScreen), "BeginSalvageScreen");
+            Hook.Prefix(onSalvageScreen, Fun.fun(() => {
+                // Only for logging purposes.
+                Control.mod.Logger.Log("Open Salvage screen");
+            }).Method);
             Hook.Prefix(PopulateInventory, Fun.fun((MechLabPanel __instance) => { 
                 if (limitItems != null) Control.mod.Logger.LogError("PopulateInventory was not properly cleaned");
-                Control.mod.Logger.Log("PopulateInventory patching");
+                Control.mod.Logger.Log("PopulateInventory patching (Mechlab fix)");
                 limitItems = new PatchMechlabLimitItems(__instance);
                 return false;
             }).Method);
