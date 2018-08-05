@@ -20,8 +20,9 @@ namespace BattletechPerformanceFix
                 Control.harmony.RemovePatch(WaitForLoads_MoveNext, InterceptMoveNextMI);
                 
             } catch(Exception e) {
-                Control.mod.Logger.Log(string.Format("Not patched: {0}", e));
+                Control.mod.Logger.Log(string.Format("[MechLabLoadThrottling] Not patched: {0}", e));
             }
+            Control.mod.Logger.Log(string.Format("[MechLabLoadThrottling] Patching WaitForLoads"));
             Control.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
         }
 
@@ -49,6 +50,7 @@ namespace BattletechPerformanceFix
             }
             if (!hasItems) {
                 __result = false;
+                Control.mod.Logger.Log(string.Format("[MechLabLoadThrottling] WaitForLoads complete and unpatched"));
             } else {
                 Control.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
                 __result = true;
