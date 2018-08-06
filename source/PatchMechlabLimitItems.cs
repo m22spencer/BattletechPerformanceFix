@@ -441,7 +441,7 @@ namespace BattletechPerformanceFix
                         } else {
                             Control.mod.Logger.Log(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
                             existing.ModifyQuantity(-1);
-                            if (existing.quantity <= 0)
+                            if (existing.quantity < 1)
                                 limitItems.rawInventory.Remove(existing);
                             limitItems.FilterChanged();
                             limitItems.Refresh(false);
@@ -454,6 +454,9 @@ namespace BattletechPerformanceFix
                     return true;
                 }
             }).Method);
+
+            var onItemGrab = AccessTools.Method(typeof(MechLabInventoryWidget), "OnItemGrab");
+            Hook.Prefix(onItemGrab, AccessTools.Method(typeof(PatchMechlabLimitItems), "ItemGrabPrefix"));
 
             var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
             Hook.Prefix(onApplyFiltering, Fun.fun((MechLabInventoryWidget __instance) => {
@@ -479,6 +482,31 @@ namespace BattletechPerformanceFix
                     return true;
                 }
             }).Method);            
+        }
+
+        public static void ItemGrabPrefix(MechLabInventoryWidget __instance, ref IMechLabDraggableItem item) {
+            if (limitItems != null && limitItems.inventoryWidget == __instance) {
+                try {
+                    Control.mod.Logger.Log(string.Format("OnItemGrab"));
+                    var nlv = item as InventoryItemElement_NotListView;
+                    var nlvtmp = limitItems.instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
+                                                                                                                              , BattleTechResourceType.UIModulePrefabs, null, null, null)
+                                                                                                            .GetComponent<InventoryItemElement_NotListView>();
+                    var lec = nlv.controller;
+                    var iw = nlvtmp;
+                    var cref = limitItems.GetRef(lec);
+                    iw.ClearEverything();
+                    iw.ComponentRef = cref;
+                    lec.ItemWidget = iw;
+                    iw.SetData(lec, limitItems.inventoryWidget, lec.quantity, false, null);
+                    lec.SetupLook(iw);
+                    iw.gameObject.SetActive(true);
+                    item = iw;
+                    Control.mod.Logger.Log(string.Format("OnItemGrab faked"));
+                } catch(Exception e) {
+                    Control.mod.Logger.Log(string.Format("[LimitItems] exn onadditem-override: {0}", e));
+                }
+            }
         }
     }
 }
