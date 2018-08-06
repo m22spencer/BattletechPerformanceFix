@@ -56,6 +56,12 @@ namespace BattletechPerformanceFix
             Control.harmony.Patch(target, new HarmonyMethod(mi), null);
             return h;
         }
+
+        public static Hook Postfix(MethodBase target, MethodInfo mi) {
+            var h = new Hook(target, mi);
+            Control.harmony.Patch(target, null, new HarmonyMethod(mi));
+            return h;
+        }
     }
 
     public static class Fun {

@@ -11,7 +11,8 @@ using System.Diagnostics;
 
 namespace BattletechPerformanceFix
 {
-      public class DefAndCount {
+    // Deprecated, will be removed.
+    public class DefAndCount {
         public MechComponentRef ComponentRef;
         public int Count;
         public DefAndCount(MechComponentRef componentRef, int count) {
@@ -27,10 +28,22 @@ namespace BattletechPerformanceFix
         }
     }
 
+    /* This patch fixes the slow inventory list creation within the mechlab. Without the fix, it manifests as a very long loadscreen where the indicator is frozen.
+       
+       The core of the problem is a lack of separation between Data & Visuals.
+       Most of the logic requires operating on visual elements, which come from the asset pool (or a prefab if not in pool)
+          additionally, the creation or modification of data causes preperation for re-render of the assets. (UpdateTooltips, UpdateDescription, Update....)
+    
+       Solution:
+         Separate the data & visual elements entirely.
+         Always process the data first, and then only create or re-use a couple of visual elements to display it.
+         The user only sees 8 items at once, and they're expensive to create, so only make 8 of them.
+     */
     public class PatchMechlabLimitItems {
         MechLabPanel instance;
         MechLabInventoryWidget inventoryWidget;
 
+        // Deprecated, will be removed.
         List<DefAndCount> inventory;
 
         List<InventoryItemElement_NotListView> ielCache;
@@ -38,8 +51,13 @@ namespace BattletechPerformanceFix
         List<ListElementController_BASE_NotListView> rawInventory;
         List<ListElementController_BASE_NotListView> filteredInventory;
 
+        // Index of current item element at the top of scrollrect
         int index = 0;
+
         int endIndex = 0;
+
+        // Temporary visual element used in the filter process.
+        InventoryItemElement_NotListView iieTmp;
 
         PatchMechlabLimitItems(MechLabPanel instance) {
             try {
@@ -60,6 +78,7 @@ namespace BattletechPerformanceFix
                 return new DefAndCount(mcr, num);
             }).ToList();
 
+            /* Build a list of data only for all components. */
             rawInventory = inventory.Select<DefAndCount, ListElementController_BASE_NotListView>(dac => {
                 if (dac.ComponentRef.ComponentDefType == ComponentType.Weapon) {
                     ListElementController_InventoryWeapon_NotListView controller = new ListElementController_InventoryWeapon_NotListView();
@@ -73,22 +92,37 @@ namespace BattletechPerformanceFix
             }).ToList();
             rawInventory = Sort(rawInventory);
 
-            ielCache = Enumerable.Repeat<Func<InventoryItemElement_NotListView>>( () => {
+            Func<bool, InventoryItemElement_NotListView> mkiie = (bool nonexistant) => {
                 var nlv = instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
                                                                                                                               , BattleTechResourceType.UIModulePrefabs, null, null, null)
                                                                                                             .GetComponent<InventoryItemElement_NotListView>();
-				nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>());
-				nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
-				nlv.gameObject.transform.localScale = UnityEngine.Vector3.one;
-                return nlv; }
-                                                                                , itemLimit)
+				if (!nonexistant) {
+                    nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>());
+				    nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
+				    nlv.gameObject.transform.localScale = UnityEngine.Vector3.one;
+                }
+                return nlv;
+            };
+
+            iieTmp = mkiie(true);
+
+            /* Allocate very few visual elements, as this is extremely slow for both allocation and deallocation.
+               It's the difference between a couple of milliseconds and several seconds for many unique items in inventory 
+               This is the core of the fix, the rest is just to make it work within HBS's existing code.
+               */
+            ielCache = Enumerable.Repeat<Func<InventoryItemElement_NotListView>>( () => mkiie(false), itemLimit)
                                  .Select(thunk => thunk())
                                  .ToList();
             var li = new Traverse(inventoryWidget).Field("localInventory").GetValue<List<InventoryItemElement_NotListView>>();
             ielCache.ForEach(iw => li.Add(iw));
-            
+            // End
+
+
+
             var lp = new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>();
 
+            // DummyStart&End are blank rects stored at the beginning and end of the list so that unity knows how big the scrollrect should be
+            // "placeholders"
             if (DummyStart == null) DummyStart = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
             if (DummyEnd   == null) DummyEnd   = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
 
@@ -102,6 +136,9 @@ namespace BattletechPerformanceFix
             }
         }
 
+        /* Fast sort, which works off data, rather than visual elements. 
+           Since only 7 visual elements are allocated, this is required.
+        */
         List<ListElementController_BASE_NotListView> Sort(List<ListElementController_BASE_NotListView> items) {
             var _a = new ListElementController_InventoryGear_NotListView();
             var _b = new ListElementController_InventoryGear_NotListView();
@@ -119,6 +156,8 @@ namespace BattletechPerformanceFix
             return tmp;
         }
 
+        /* Fast filtering code which works off the data, rather than the visual elements.
+           Suboptimal due to potential desyncs with normal filter proceedure, but simply required for performance */
         List<ListElementController_BASE_NotListView> Filter(List<ListElementController_BASE_NotListView> items) {
             var iw = new Traverse(inventoryWidget);
             Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
@@ -161,6 +200,48 @@ namespace BattletechPerformanceFix
             return current;
         }
 
+        /* Most mods hook the visual element code to filter. This function will do that as quickly as possible
+           by re-using a single visual element.
+        */
+        List<ListElementController_BASE_NotListView> FilterUsingHBSCode(List<ListElementController_BASE_NotListView> items) {
+            try {
+                var sw = new Stopwatch();
+                sw.Start();
+            var tmp = inventoryWidget.localInventory;
+            var iw = iieTmp;
+            inventoryWidget.localInventory = Enumerable.Repeat(iw, 1).ToList();
+
+            // Filter items once using the faster code, then again to handle mods.
+            var okItems = Filter(items).Where(lec => {
+                var cref = GetRef(lec);
+                lec.ItemWidget = iw;
+                iw.ComponentRef = cref;
+                // Not using SetData here still works, but is much slower
+                // TODO: Figure out why.
+                iw.SetData(lec, inventoryWidget, lec.quantity, false, null);
+                if (!iw.gameObject.activeSelf) { 
+                    // Set active is very very slow, only call if absolutely needed
+                    // It would be preferable to hook SetActive, but it's an external function.
+                    iw.gameObject.SetActive(true); 
+                }
+                filterGuard = true;
+                // Let the main game or any mods filter if needed
+                // filter guard is to prevent us from infinitely recursing here, as this is also our triggering patch.
+                inventoryWidget.ApplyFiltering(false);
+                filterGuard = false;
+                lec.ItemWidget = null;
+                return iw.gameObject.activeSelf == true;
+            }).ToList();
+            inventoryWidget.localInventory = tmp;
+            Control.mod.Logger.Log(string.Format("Filter took {0} ms and resulted in {1} items", sw.Elapsed.TotalMilliseconds, okItems.Count));
+
+            return okItems;
+            } catch (Exception e) {
+                Control.mod.Logger.Log(string.Format("[LimitItems] exn filter2: {0}", e));
+                return null;
+            }
+        }
+
         MechComponentRef GetRef(ListElementController_BASE_NotListView lec) {
             if (lec is ListElementController_InventoryWeapon_NotListView) return (lec as ListElementController_InventoryWeapon_NotListView).componentRef;
             if (lec is ListElementController_InventoryGear_NotListView) return (lec as ListElementController_InventoryGear_NotListView).componentRef;
@@ -168,13 +249,18 @@ namespace BattletechPerformanceFix
             return null;
         }
 
+        /* The user has changed a filter, and we rebuild the item cache. */
         public void FilterChanged() {
+            try {
             Control.mod.Logger.Log("[LimitItems] Filter changed");
             index = 0;
-            filteredInventory = Filter(rawInventory);
+            filteredInventory = FilterUsingHBSCode(rawInventory);
             endIndex = filteredInventory.Count - itemLimit;
             Refresh();
             new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
+             } catch (Exception e) {
+                Control.mod.Logger.Log(string.Format("[LimitItems] exn filterchanged: {0}", e));
+            }
         }
 
         void Refresh(bool wantClobber = true) {
@@ -236,6 +322,8 @@ namespace BattletechPerformanceFix
         }
 
         static int itemsOnScreen = 7;
+
+        // Maximum # of visual elements to allocate (will be used for slightly off screen elements.)
         static int itemLimit = 7;
         public static UnityEngine.RectTransform DummyStart; 
         public static UnityEngine.RectTransform DummyEnd;
@@ -243,6 +331,8 @@ namespace BattletechPerformanceFix
         static MethodInfo PopulateInventory = AccessTools.Method(typeof(MechLabPanel), "PopulateInventory");
         static MethodInfo ConfirmRevertMech = AccessTools.Method(typeof(MechLabPanel), "ConfirmRevertMech");
         static MethodInfo ExitMechLab       = AccessTools.Method(typeof(MechLabPanel), "ExitMechLab");
+
+        static bool filterGuard = false;
         public static void Initialize() {
             var onSalvageScreen = AccessTools.Method(typeof(AAR_SalvageScreen), "BeginSalvageScreen");
             Hook.Prefix(onSalvageScreen, Fun.fun(() => {
@@ -287,13 +377,18 @@ namespace BattletechPerformanceFix
 
             var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
             Hook.Prefix(onApplyFiltering, Fun.fun((MechLabInventoryWidget __instance) => {
-                if (limitItems != null && limitItems.inventoryWidget == __instance) {
+                if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
                     limitItems.FilterChanged();
                     return false;
                 } else {
                     return true;
                 }
             }).Method);
+
+            /* FIXME: It's possible for some elements to be in an improper state to this function call. Drop if so.
+             */
+            Hook.Prefix( AccessTools.Method(typeof(MechLabPanel), "MechCanEquipItem")
+                       , Fun.fun((InventoryItemElement_NotListView item) => item.ComponentRef == null ? false : true).Method);
 
             var onApplySorting = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplySorting");
             Hook.Prefix(onApplySorting, Fun.fun((MechLabInventoryWidget __instance) => {
