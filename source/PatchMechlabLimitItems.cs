@@ -250,14 +250,17 @@ namespace BattletechPerformanceFix
         }
 
         /* The user has changed a filter, and we rebuild the item cache. */
-        public void FilterChanged() {
+        public void FilterChanged(bool resetIndex = true) {
             try {
             Control.mod.Logger.Log("[LimitItems] Filter changed");
-            index = 0;
+            if (resetIndex) {
+                new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
+                index = 0;
+            }
+
             filteredInventory = FilterUsingHBSCode(rawInventory);
             endIndex = filteredInventory.Count - itemLimit;
             Refresh();
-            new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
              } catch (Exception e) {
                 Control.mod.Logger.Log(string.Format("[LimitItems] exn filterchanged: {0}", e));
             }
@@ -267,12 +270,15 @@ namespace BattletechPerformanceFix
             #if !VVV
             Control.mod.Logger.Log(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
             #endif
-            if (index > filteredInventory.Count - itemsOnScreen)
+            if (index > filteredInventory.Count - itemsOnScreen) {
                 index = filteredInventory.Count - itemsOnScreen;
-            if (filteredInventory.Count < itemsOnScreen)
+            }
+            if (filteredInventory.Count < itemsOnScreen) {
                 index = 0;
-            if (index < 0)
+            }
+            if (index < 0) {
                 index = 0;
+            }
             #if !VVV
             Control.mod.Logger.Log(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
             #endif
@@ -336,8 +342,6 @@ namespace BattletechPerformanceFix
             DummyEnd.sizeDelta = new UnityEngine.Vector2(100, tsize * itemsHanging);
             DummyEnd.SetAsLastSibling();
             
-            
-            //inventoryWidget.RefreshJumpJetOptions(new Traverse(inventoryWidget).Field("mechTonnage").GetValue<float>());
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
             #if !VVV
             var sr = new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
@@ -429,7 +433,7 @@ namespace BattletechPerformanceFix
                             }
                             limitItems.rawInventory.Add(controller);
                             limitItems.rawInventory = limitItems.Sort(limitItems.rawInventory);
-                            limitItems.FilterChanged();
+                            limitItems.FilterChanged(false);
                         } else {
                             Control.mod.Logger.Log(string.Format("OnAddItem existing {0}", quantity));
                             existing.ModifyQuantity(quantity);
@@ -458,7 +462,7 @@ namespace BattletechPerformanceFix
                             existing.ModifyQuantity(-1);
                             if (existing.quantity < 1)
                                 limitItems.rawInventory.Remove(existing);
-                            limitItems.FilterChanged();
+                            limitItems.FilterChanged(false);
                             limitItems.Refresh(false);
                         }            
                     } catch(Exception e) {
@@ -476,7 +480,7 @@ namespace BattletechPerformanceFix
             var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
             Hook.Prefix(onApplyFiltering, Fun.fun((MechLabInventoryWidget __instance) => {
                 if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
-                    limitItems.FilterChanged();
+                    limitItems.FilterChanged(false);
                     return false;
                 } else {
                     return true;
