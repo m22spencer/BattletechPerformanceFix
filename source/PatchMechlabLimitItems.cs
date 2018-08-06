@@ -409,15 +409,30 @@ namespace BattletechPerformanceFix
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
-                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == nlv.controller.componentDef).FirstOrDefault();
+                        if (nlv == null)
+                            Control.mod.Logger.Log(string.Format("nlv is not a NotListView its {0}", item.GetType().Name));
+                        var quantity = nlv == null ? 1 : nlv.controller.quantity;
+                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == item.ComponentRef.Def).FirstOrDefault();
                         if (existing == null) {
-                            Control.mod.Logger.Log(string.Format("OnAddItem new {0}", nlv.controller.quantity));
-                            limitItems.rawInventory.Add(nlv.controller);
+                            Control.mod.Logger.Log(string.Format("OnAddItem new {0}", quantity));
+                            var controller = nlv == null ? null : nlv.controller;
+                            if (controller == null) {
+                                if (item.ComponentRef.ComponentDefType == ComponentType.Weapon) {
+                                    var ncontroller = new ListElementController_InventoryWeapon_NotListView();
+                                    ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
+                                    controller = ncontroller;
+                                } else {
+                                    var ncontroller = new ListElementController_InventoryGear_NotListView();
+                                    ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
+                                    controller = ncontroller;
+                                }
+                            }
+                            limitItems.rawInventory.Add(controller);
                             limitItems.rawInventory = limitItems.Sort(limitItems.rawInventory);
                             limitItems.FilterChanged();
                         } else {
-                            Control.mod.Logger.Log(string.Format("OnAddItem existing {0}", nlv.controller.quantity));
-                            existing.ModifyQuantity(nlv.controller.quantity);
+                            Control.mod.Logger.Log(string.Format("OnAddItem existing {0}", quantity));
+                            existing.ModifyQuantity(quantity);
                             limitItems.Refresh(false);
                         }            
                     } catch(Exception e) {
