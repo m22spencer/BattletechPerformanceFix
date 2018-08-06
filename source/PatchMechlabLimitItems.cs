@@ -76,7 +76,7 @@ namespace BattletechPerformanceFix
                 mcr.RefreshComponentDef();
                 var num = !instance.IsSimGame ? int.MinValue : instance.sim.GetItemCount(mcr.Def.Description, mcr.Def.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY); // Undamaged only is wrong, just for testing.
                 return new DefAndCount(mcr, num);
-            }).Where(dac => instance.sim.GetItemCountDamageType(dac.ComponentRef) == SimGameState.ItemCountType.UNDAMAGED_ONLY).ToList();
+            }).Where(dac => !instance.IsSimGame ? true : instance.sim.GetItemCountDamageType(dac.ComponentRef) == SimGameState.ItemCountType.UNDAMAGED_ONLY).ToList();
 
             /* Build a list of data only for all components. */
             rawInventory = inventory.Select<DefAndCount, ListElementController_BASE_NotListView>(dac => {
@@ -428,7 +428,9 @@ namespace BattletechPerformanceFix
                             limitItems.FilterChanged(false);
                         } else {
                             Control.mod.Logger.LogDebug(string.Format("OnAddItem existing {0}", quantity));
-                            existing.ModifyQuantity(quantity);
+                            if (existing.quantity != Int32.MinValue) {
+                                existing.ModifyQuantity(quantity);
+                            }
                             limitItems.Refresh(false);
                         }            
                     } catch(Exception e) {
@@ -451,9 +453,11 @@ namespace BattletechPerformanceFix
                             Control.mod.Logger.LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
                         } else {
                             Control.mod.Logger.LogDebug(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
-                            existing.ModifyQuantity(-1);
-                            if (existing.quantity < 1)
-                                limitItems.rawInventory.Remove(existing);
+                            if (existing.quantity != Int32.MinValue) {
+                                existing.ModifyQuantity(-1);
+                                if (existing.quantity < 1)
+                                    limitItems.rawInventory.Remove(existing);
+                            }
                             limitItems.FilterChanged(false);
                             limitItems.Refresh(false);
                         }            
