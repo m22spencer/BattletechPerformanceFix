@@ -74,6 +74,7 @@
     <Compile Include="Control.cs" />
     <Compile Include="PatchAddShopInventory.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />  
+    <Compile Include="PatchCheckDependencies.cs" />    
     <Compile Include="PatchMechLabPanelLoadThrottling.cs" />    
   </ItemGroup>
   <ItemGroup>

@@ -32,6 +32,7 @@ namespace BattletechPerformanceFix
             harmony.PatchAll(Assembly.GetExecutingAssembly());
 
             PatchMechlabLimitItems.Initialize();
+            Patch_DependencySpam.Initialize();
             
             // logging output can be found under BATTLETECH\BattleTech_Data\output_log.txt
             // or also under yourmod/log.txt
