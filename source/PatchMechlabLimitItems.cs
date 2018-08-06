@@ -404,6 +404,57 @@ namespace BattletechPerformanceFix
                 }        
             }).Method); 
 
+            var onAddItem = AccessTools.Method(typeof(MechLabInventoryWidget), "OnAddItem");
+            Hook.Prefix(onAddItem, Fun.fun((MechLabInventoryWidget __instance, IMechLabDraggableItem item) => {
+                if (limitItems != null && limitItems.inventoryWidget == __instance) {
+                    try {
+                        var nlv = item as InventoryItemElement_NotListView;
+                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == nlv.controller.componentDef).FirstOrDefault();
+                        if (existing == null) {
+                            Control.mod.Logger.Log(string.Format("OnAddItem new {0}", nlv.controller.quantity));
+                            limitItems.rawInventory.Add(nlv.controller);
+                            limitItems.rawInventory = limitItems.Sort(limitItems.rawInventory);
+                            limitItems.FilterChanged();
+                        } else {
+                            Control.mod.Logger.Log(string.Format("OnAddItem existing {0}", nlv.controller.quantity));
+                            existing.ModifyQuantity(nlv.controller.quantity);
+                            limitItems.Refresh(false);
+                        }            
+                    } catch(Exception e) {
+                        Control.mod.Logger.Log(string.Format("[LimitItems] exn onadditem-override: {0}", e));
+                    }
+                    return false;
+                } else {
+                    return true;
+                }
+            }).Method); 
+
+            var onRemoveItem = AccessTools.Method(typeof(MechLabInventoryWidget), "OnRemoveItem");
+            Hook.Prefix(onRemoveItem, Fun.fun((MechLabInventoryWidget __instance, IMechLabDraggableItem item) => {
+                if (limitItems != null && limitItems.inventoryWidget == __instance) {
+                    try {
+                        var nlv = item as InventoryItemElement_NotListView;
+
+                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == nlv.controller.componentDef).FirstOrDefault();
+                        if (existing == null) {
+                            Control.mod.Logger.Log(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
+                        } else {
+                            Control.mod.Logger.Log(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
+                            existing.ModifyQuantity(-1);
+                            if (existing.quantity <= 0)
+                                limitItems.rawInventory.Remove(existing);
+                            limitItems.FilterChanged();
+                            limitItems.Refresh(false);
+                        }            
+                    } catch(Exception e) {
+                        Control.mod.Logger.Log(string.Format("[LimitItems] exn onadditem-override: {0}", e));
+                    }
+                    return false;
+                } else {
+                    return true;
+                }
+            }).Method);
+
             var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
             Hook.Prefix(onApplyFiltering, Fun.fun((MechLabInventoryWidget __instance) => {
                 if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {

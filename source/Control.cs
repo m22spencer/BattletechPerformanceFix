@@ -71,5 +71,6 @@ namespace BattletechPerformanceFix
         
         public static Func<A> fun<A>(this Func<A> a) { return a; }
         public static Func<A,B> fun<A,B>(this Func<A,B> a) { return a; }
+        public static Func<A,B,C> fun<A,B,C>(this Func<A,B,C> a) { return a; }
     }
 }
