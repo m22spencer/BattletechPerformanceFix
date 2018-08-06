@@ -264,7 +264,7 @@ namespace BattletechPerformanceFix
         }
 
         void Refresh(bool wantClobber = true) {
-            #if VVV
+            #if !VVV
             Control.mod.Logger.Log(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
             #endif
             if (index > filteredInventory.Count - itemsOnScreen)
@@ -273,15 +273,28 @@ namespace BattletechPerformanceFix
                 index = 0;
             if (index < 0)
                 index = 0;
+            #if !VVV
+            Control.mod.Logger.Log(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
+            #endif
 
 
             var toShow = filteredInventory.Skip(index).Take(itemLimit).ToList();
 
             var icc = ielCache.ToList();
 
-            #if VVV
-            Control.mod.Logger.Log("[LimitItems] Showing: " + string.Join(",", toShow.Select(lec => lec.componentDef.Description.Name).ToArray()));
+            Func<ListElementController_BASE_NotListView,string> pp = lec => {
+                return string.Format( "[id:{0},damage:{1},quantity:{2},id:{3}]"
+                                    , GetRef(lec).ComponentDefID
+                                    , GetRef(lec).DamageLevel
+                                    , lec.quantity
+                                    , lec.GetId());
+            };
+
+            #if !VVV
+            Control.mod.Logger.Log("[LimitItems] Showing: " + string.Join(", ", toShow.Select(pp).ToArray()));
             #endif
+
+            var details = new List<string>();
 
             toShow.ForEach(lec => {
                 var iw = icc[0]; icc.RemoveAt(0);
@@ -292,9 +305,20 @@ namespace BattletechPerformanceFix
                 iw.SetData(lec, inventoryWidget, lec.quantity, false, null);
                 lec.SetupLook(iw);
                 iw.gameObject.SetActive(true);
+                details.Insert(0, string.Format("enabled {0} {1}", iw.ComponentRef.ComponentDefID, iw.GetComponent<UnityEngine.RectTransform>().anchoredPosition));
             });
             icc.ForEach(unused => unused.gameObject.SetActive(false));
 
+            var iw_corrupted_add = inventoryWidget.localInventory.Where(x => !ielCache.Contains(x)).ToList();
+            if (iw_corrupted_add.Count > 0) {
+                Control.mod.Logger.LogError("inventoryWidget has been corrupted, items were added: " + string.Join(", ", iw_corrupted_add.Select(c => c.controller).Select(pp).ToArray()));
+                ExitMechLab.Invoke(instance, new object[] {});
+            }
+            var iw_corrupted_remove = ielCache.Where(x => !inventoryWidget.localInventory.Contains(x)).ToList();
+            if (iw_corrupted_remove.Count > 0) {
+                Control.mod.Logger.LogError("inventoryWidget has been corrupted, items were removed");
+                ExitMechLab.Invoke(instance, new object[] {});
+            }
 
             var tsize = 60.0f;
             
@@ -303,9 +327,8 @@ namespace BattletechPerformanceFix
 
             var itemsHanging = filteredInventory.Count - (index + itemsOnScreen);
 
-            #if VVV
-            Control.mod.Logger.Log("[LimitItems] Items prefixing: " + index);
-            Control.mod.Logger.Log("[LimitItems] Items hanging: " + itemsHanging);
+            #if !VVV
+            Control.mod.Logger.Log(string.Format("[LimitItems] Items prefixing {0} hanging {1}", index, itemsHanging));
             #endif
 
 
@@ -314,10 +337,16 @@ namespace BattletechPerformanceFix
             DummyEnd.SetAsLastSibling();
             
             
-            inventoryWidget.RefreshJumpJetOptions(new Traverse(inventoryWidget).Field("mechTonnage").GetValue<float>());
+            //inventoryWidget.RefreshJumpJetOptions(new Traverse(inventoryWidget).Field("mechTonnage").GetValue<float>());
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
-            #if VVV
-            Control.mod.Logger.Log(string.Format("[LimitItems] RefreshDone {0} {1}", DummyStart.anchoredPosition.y, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
+            #if !VVV
+            var sr = new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
+            Control.mod.Logger.Log(string.Format( "[LimitItems] RefreshDone dummystart {0} dummyend {1} vnp {2} lli {3}"
+                                                , DummyStart.anchoredPosition.y
+                                                , DummyEnd.anchoredPosition.y
+                                                , sr.verticalNormalizedPosition
+                                                , "(" + string.Join(", ", details.ToArray()) + ")"
+                                                ));
             #endif
         }
 
