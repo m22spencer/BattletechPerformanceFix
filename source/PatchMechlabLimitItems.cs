@@ -76,7 +76,7 @@ namespace BattletechPerformanceFix
                 mcr.RefreshComponentDef();
                 var num = !instance.IsSimGame ? int.MinValue : instance.sim.GetItemCount(mcr.Def.Description, mcr.Def.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY); // Undamaged only is wrong, just for testing.
                 return new DefAndCount(mcr, num);
-            }).ToList();
+            }).Where(dac => instance.sim.GetItemCountDamageType(dac.ComponentRef) == SimGameState.ItemCountType.UNDAMAGED_ONLY).ToList();
 
             /* Build a list of data only for all components. */
             rawInventory = inventory.Select<DefAndCount, ListElementController_BASE_NotListView>(dac => {
