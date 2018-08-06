@@ -24,9 +24,10 @@ namespace BattletechPerformanceFix
         public static void Start(string modDirectory, string json)
         {
             mod = new Mod(modDirectory);
-            Logger.SetLoggerLevel(mod.Logger.Name, LogLevel.Log);
-
             mod.LoadSettings(settings);
+
+            mod.Logger.Log(settings.logLevel);
+            mod.Logger.LogDebug("Debug enabled");
 			
 			harmony = HarmonyInstance.Create(mod.Name);
             harmony.PatchAll(Assembly.GetExecutingAssembly());

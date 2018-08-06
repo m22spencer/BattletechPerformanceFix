@@ -132,7 +132,7 @@ namespace BattletechPerformanceFix
 
             FilterChanged();
             } catch(Exception e) {
-                Control.mod.Logger.Log(string.Format("[LimitItems] exn: {0}", e));
+                Control.mod.Logger.LogException(e);
             }
         }
 
@@ -237,7 +237,7 @@ namespace BattletechPerformanceFix
 
             return okItems;
             } catch (Exception e) {
-                Control.mod.Logger.Log(string.Format("[LimitItems] exn filter2: {0}", e));
+                Control.mod.Logger.LogException(e);
                 return null;
             }
         }
@@ -262,14 +262,12 @@ namespace BattletechPerformanceFix
             endIndex = filteredInventory.Count - itemLimit;
             Refresh();
              } catch (Exception e) {
-                Control.mod.Logger.Log(string.Format("[LimitItems] exn filterchanged: {0}", e));
+                Control.mod.Logger.LogException(e);
             }
         }
 
         void Refresh(bool wantClobber = true) {
-            #if !VVV
-            Control.mod.Logger.Log(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
-            #endif
+            Control.mod.Logger.LogDebug(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
             if (index > filteredInventory.Count - itemsOnScreen) {
                 index = filteredInventory.Count - itemsOnScreen;
             }
@@ -280,7 +278,7 @@ namespace BattletechPerformanceFix
                 index = 0;
             }
             #if !VVV
-            Control.mod.Logger.Log(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
+            Control.mod.Logger.LogDebug(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
             #endif
 
 
@@ -297,7 +295,7 @@ namespace BattletechPerformanceFix
             };
 
             #if !VVV
-            Control.mod.Logger.Log("[LimitItems] Showing: " + string.Join(", ", toShow.Select(pp).ToArray()));
+            Control.mod.Logger.LogDebug("[LimitItems] Showing: " + string.Join(", ", toShow.Select(pp).ToArray()));
             #endif
 
             var details = new List<string>();
@@ -333,9 +331,7 @@ namespace BattletechPerformanceFix
 
             var itemsHanging = filteredInventory.Count - (index + itemsOnScreen);
 
-            #if !VVV
-            Control.mod.Logger.Log(string.Format("[LimitItems] Items prefixing {0} hanging {1}", index, itemsHanging));
-            #endif
+            Control.mod.Logger.LogDebug(string.Format("[LimitItems] Items prefixing {0} hanging {1}", index, itemsHanging));
 
 
 
@@ -345,7 +341,7 @@ namespace BattletechPerformanceFix
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
             #if !VVV
             var sr = new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
-            Control.mod.Logger.Log(string.Format( "[LimitItems] RefreshDone dummystart {0} dummyend {1} vnp {2} lli {3}"
+            Control.mod.Logger.LogDebug(string.Format( "[LimitItems] RefreshDone dummystart {0} dummyend {1} vnp {2} lli {3}"
                                                 , DummyStart.anchoredPosition.y
                                                 , DummyEnd.anchoredPosition.y
                                                 , sr.verticalNormalizedPosition
@@ -400,9 +396,7 @@ namespace BattletechPerformanceFix
                     }
                     if (limitItems.index != newIndex) {
                         limitItems.index = newIndex;
-                        #if VVV
-                        Control.mod.Logger.Log(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
-                        #endif
+                        Control.mod.Logger.LogDebug(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
                         limitItems.Refresh(false);
                     }
                 }        
@@ -413,12 +407,10 @@ namespace BattletechPerformanceFix
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
-                        if (nlv == null)
-                            Control.mod.Logger.Log(string.Format("nlv is not a NotListView its {0}", item.GetType().Name));
                         var quantity = nlv == null ? 1 : nlv.controller.quantity;
                         var existing = limitItems.rawInventory.Where(ri => ri.componentDef == item.ComponentRef.Def).FirstOrDefault();
                         if (existing == null) {
-                            Control.mod.Logger.Log(string.Format("OnAddItem new {0}", quantity));
+                            Control.mod.Logger.LogDebug(string.Format("OnAddItem new {0}", quantity));
                             var controller = nlv == null ? null : nlv.controller;
                             if (controller == null) {
                                 if (item.ComponentRef.ComponentDefType == ComponentType.Weapon) {
@@ -435,12 +427,12 @@ namespace BattletechPerformanceFix
                             limitItems.rawInventory = limitItems.Sort(limitItems.rawInventory);
                             limitItems.FilterChanged(false);
                         } else {
-                            Control.mod.Logger.Log(string.Format("OnAddItem existing {0}", quantity));
+                            Control.mod.Logger.LogDebug(string.Format("OnAddItem existing {0}", quantity));
                             existing.ModifyQuantity(quantity);
                             limitItems.Refresh(false);
                         }            
                     } catch(Exception e) {
-                        Control.mod.Logger.Log(string.Format("[LimitItems] exn onadditem-override: {0}", e));
+                        Control.mod.Logger.LogException(e);
                     }
                     return false;
                 } else {
@@ -456,9 +448,9 @@ namespace BattletechPerformanceFix
 
                         var existing = limitItems.rawInventory.Where(ri => ri.componentDef == nlv.controller.componentDef).FirstOrDefault();
                         if (existing == null) {
-                            Control.mod.Logger.Log(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
+                            Control.mod.Logger.LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
                         } else {
-                            Control.mod.Logger.Log(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
+                            Control.mod.Logger.LogDebug(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
                             existing.ModifyQuantity(-1);
                             if (existing.quantity < 1)
                                 limitItems.rawInventory.Remove(existing);
@@ -466,7 +458,7 @@ namespace BattletechPerformanceFix
                             limitItems.Refresh(false);
                         }            
                     } catch(Exception e) {
-                        Control.mod.Logger.Log(string.Format("[LimitItems] exn onadditem-override: {0}", e));
+                        Control.mod.Logger.LogException(e);
                     }
                     return false;
                 } else {
@@ -506,7 +498,7 @@ namespace BattletechPerformanceFix
         public static void ItemGrabPrefix(MechLabInventoryWidget __instance, ref IMechLabDraggableItem item) {
             if (limitItems != null && limitItems.inventoryWidget == __instance) {
                 try {
-                    Control.mod.Logger.Log(string.Format("OnItemGrab"));
+                    Control.mod.Logger.LogDebug(string.Format("OnItemGrab"));
                     var nlv = item as InventoryItemElement_NotListView;
                     var nlvtmp = limitItems.instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
                                                                                                                               , BattleTechResourceType.UIModulePrefabs, null, null, null)
@@ -521,9 +513,8 @@ namespace BattletechPerformanceFix
                     lec.SetupLook(iw);
                     iw.gameObject.SetActive(true);
                     item = iw;
-                    Control.mod.Logger.Log(string.Format("OnItemGrab faked"));
                 } catch(Exception e) {
-                    Control.mod.Logger.Log(string.Format("[LimitItems] exn onadditem-override: {0}", e));
+                    Control.mod.Logger.LogException(e);
                 }
             }
         }
