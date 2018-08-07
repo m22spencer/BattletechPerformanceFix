@@ -259,7 +259,7 @@ namespace BattletechPerformanceFix
             }
 
             filteredInventory = FilterUsingHBSCode(rawInventory);
-            endIndex = filteredInventory.Count - itemLimit;
+            endIndex = filteredInventory.Count - itemsOnScreen;
             Refresh();
              } catch (Exception e) {
                 Control.mod.Logger.LogException(e);
@@ -324,18 +324,28 @@ namespace BattletechPerformanceFix
                 ExitMechLab.Invoke(instance, new object[] {});
             }
 
-            var tsize = 60.0f;
+            var listElemSize = 64.0f;
+            var spacerTotal  = 16.0f; // IEL elements are 64 tall, but have a total of 80 pixels between each when considering spacing.
+            var spacerHalf   = spacerTotal * .5f;
+            var tsize        = listElemSize + spacerTotal;
             
-            DummyStart.sizeDelta = new UnityEngine.Vector2(100, tsize * index);
+            var virtualStartSize = tsize * index - spacerHalf;
+            DummyStart.gameObject.SetActive(index > 0); //If nothing prefixing, must disable to prevent halfspacer offset.
+            DummyStart.sizeDelta = new UnityEngine.Vector2(100, virtualStartSize);
             DummyStart.SetAsFirstSibling();
 
-            var itemsHanging = filteredInventory.Count - (index + itemsOnScreen);
+            var itemsHanging = filteredInventory.Count - (index + ielCache.Count(ii => ii.gameObject.activeSelf));
 
-            Control.mod.Logger.LogDebug(string.Format("[LimitItems] Items prefixing {0} hanging {1}", index, itemsHanging));
+            var ap1 = ielCache[0].GetComponent<UnityEngine.RectTransform>().anchoredPosition;
+            var ap2 = ielCache[1].GetComponent<UnityEngine.RectTransform>().anchoredPosition;
+
+            Control.mod.Logger.LogDebug(string.Format("[LimitItems] Items prefixing {0} hanging {1} total {2} {3}/{4}", index, itemsHanging, filteredInventory.Count, ap1, ap2));
 
 
 
-            DummyEnd.sizeDelta = new UnityEngine.Vector2(100, tsize * itemsHanging);
+            var virtualEndSize = tsize * itemsHanging - spacerHalf;
+            DummyEnd.gameObject.SetActive(itemsHanging > 0); //If nothing postfixing, must disable to prevent halfspacer offset.
+            DummyEnd.sizeDelta = new UnityEngine.Vector2(100, virtualEndSize);
             DummyEnd.SetAsLastSibling();
             
 			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
@@ -353,7 +363,7 @@ namespace BattletechPerformanceFix
         static int itemsOnScreen = 7;
 
         // Maximum # of visual elements to allocate (will be used for slightly off screen elements.)
-        static int itemLimit = 7;
+        static int itemLimit = 8;
         public static UnityEngine.RectTransform DummyStart; 
         public static UnityEngine.RectTransform DummyEnd;
         public static PatchMechlabLimitItems limitItems = null;
