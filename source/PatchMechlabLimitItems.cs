@@ -486,7 +486,7 @@ namespace BattletechPerformanceFix
             var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
             Hook.Prefix(onApplyFiltering, Fun.fun((MechLabInventoryWidget __instance) => {
                 if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
-                    limitItems.FilterChanged(false);
+                    limitItems.FilterChanged(true);
                     return false;
                 } else {
                     return true;
