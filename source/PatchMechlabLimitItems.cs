@@ -360,6 +360,10 @@ namespace BattletechPerformanceFix
             #endif
         }
 
+        void Dispose() {
+            inventoryWidget.localInventory.ForEach(ii => ii.controller = null);
+        }
+
         static int itemsOnScreen = 7;
 
         // Maximum # of visual elements to allocate (will be used for slightly off screen elements.)
@@ -388,12 +392,14 @@ namespace BattletechPerformanceFix
             Hook.Prefix(ConfirmRevertMech, Fun.fun((MechLabPanel __instance) => { 
                 if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ConfirmRevertMech");
                 Control.mod.Logger.Log("[LimitItems] Reverting mech");
+                limitItems.Dispose();
                 limitItems = null;
             }).Method);
 
             Hook.Prefix(ExitMechLab, Fun.fun((MechLabPanel __instance) => { 
                 if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ExitMechLab");
                 Control.mod.Logger.Log("[LimitItems] Exiting mechlab");
+                limitItems.Dispose();
                 limitItems = null;
             }).Method);
 
