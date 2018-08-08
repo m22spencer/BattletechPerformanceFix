@@ -28,15 +28,39 @@ namespace BattletechPerformanceFix
 
             mod.Logger.Log(settings.logLevel);
             mod.Logger.LogDebug("Debug enabled");
-			
+
 			harmony = HarmonyInstance.Create(mod.Name);
+
             harmony.PatchAll(Assembly.GetExecutingAssembly());
 
             PatchMechlabLimitItems.Initialize();
-            
+
             // logging output can be found under BATTLETECH\BattleTech_Data\output_log.txt
             // or also under yourmod/log.txt
             mod.Logger.Log("Loaded " + mod.Name);
+        }
+    }
+
+    /* Backtracking backtracking backtracking regex is not a good way to strip comments from a string. */
+    [HarmonyPatch(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")]
+    public class DontStripComments {
+        // TODO: Is this function always called from main thread? We need to patch loadJSON, but it's generic
+        public static bool guard = false;
+        public static bool Prefix(string json, ref string __result) {
+            if (guard == true) return true;
+            try {
+            // Try to parse the json, if it doesn't work, use HBS comment stripping code.
+            try { fastJSON.JSON.Parse(json);
+                __result = json;
+            } catch (Exception e) {
+                guard = true;
+                __result = new Traverse(typeof(HBS.Util.JSONSerializationUtility)).Method("StripHBSCommentsFromJSON").GetValue<string>(json);
+                guard = false;
+            }
+            } catch(Exception e) {
+                Control.mod.Logger.LogException(e);
+            }
+            return false;
         }
     }
 
