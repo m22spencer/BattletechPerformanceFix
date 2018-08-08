@@ -3,7 +3,7 @@
 	"Author": "m22spencer",
 	"Website": "https://github.com/m22spencer/BattletechPerformanceFix",
 
-	"DependsOn": ["DynModLib"],
+	"DependsOn": [],
 	"DLL": "BattletechPerformanceFix.dll",
 	"DLLEntryPoint": "BattletechPerformanceFix.Control.Start"
 }

@@ -1,15 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{a87b849e-cc97-4e88-8bae-33ebaa438453}</ProjectGuid>
+    <ProjectGuid>{A87B849E-CC97-4E88-8BAE-33EBAA438453}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>BattletechPerformanceFix</RootNamespace>
     <AssemblyName>BattletechPerformanceFix</AssemblyName>
-    <TargetFrameworkVersion>v3.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -40,13 +40,15 @@
       <HintPath>..\..\..\BattleTech_Data\Managed\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="DynModLib, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\DynModLib\DynModLib.dll</HintPath>
-    </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>..\..\..\BattleTech_Data\Managed\Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
+    </Reference>
+    <Reference Include="ModTek">
+      <HintPath>..\..\ModTek.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\..\..\BattleTech_Data\Managed\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System">
       <HintPath>..\..\..\BattleTech_Data\Managed\System.dll</HintPath>
@@ -72,9 +74,11 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Control.cs" />
+    <Compile Include="HarmonyExt.cs" />
+    <Compile Include="LoadFixes.cs" />
     <Compile Include="PatchAddShopInventory.cs" />
-    <Compile Include="PatchMechLabLimitItems.cs" />  
-    <Compile Include="PatchMechLabPanelLoadThrottling.cs" />    
+    <Compile Include="PatchMechLabLimitItems.cs" />
+    <Compile Include="PatchMechLabPanelLoadThrottling.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />

@@ -316,12 +316,12 @@ namespace BattletechPerformanceFix
             var iw_corrupted_add = inventoryWidget.localInventory.Where(x => !ielCache.Contains(x)).ToList();
             if (iw_corrupted_add.Count > 0) {
                 Control.mod.Logger.LogError("inventoryWidget has been corrupted, items were added: " + string.Join(", ", iw_corrupted_add.Select(c => c.controller).Select(pp).ToArray()));
-                ExitMechLab.Invoke(instance, new object[] {});
+                OnExitMechLab.Invoke(instance, new object[] {});
             }
             var iw_corrupted_remove = ielCache.Where(x => !inventoryWidget.localInventory.Contains(x)).ToList();
             if (iw_corrupted_remove.Count > 0) {
                 Control.mod.Logger.LogError("inventoryWidget has been corrupted, items were removed");
-                ExitMechLab.Invoke(instance, new object[] {});
+                OnExitMechLab.Invoke(instance, new object[] {});
             }
 
             var listElemSize = 64.0f;
@@ -371,55 +371,91 @@ namespace BattletechPerformanceFix
         public static UnityEngine.RectTransform DummyStart; 
         public static UnityEngine.RectTransform DummyEnd;
         public static PatchMechlabLimitItems limitItems = null;
-        static MethodInfo PopulateInventory = AccessTools.Method(typeof(MechLabPanel), "PopulateInventory");
-        static MethodInfo ConfirmRevertMech = AccessTools.Method(typeof(MechLabPanel), "ConfirmRevertMech");
-        static MethodInfo ExitMechLab       = AccessTools.Method(typeof(MechLabPanel), "ExitMechLab");
+        static MethodInfo OnPopulateInventory = AccessTools.Method(typeof(MechLabPanel), "PopulateInventory");
+        static MethodInfo OnConfirmRevertMech = AccessTools.Method(typeof(MechLabPanel), "ConfirmRevertMech");
+        static MethodInfo OnExitMechLab       = AccessTools.Method(typeof(MechLabPanel), "ExitMechLab");
 
         static bool filterGuard = false;
         public static void Initialize() {
-            var onSalvageScreen = AccessTools.Method(typeof(AAR_SalvageScreen), "BeginSalvageScreen");
-            Hook.Prefix(onSalvageScreen, Fun.fun(() => {
-                // Only for logging purposes.
-                Control.mod.Logger.Log("[LimitItems] Open Salvage screen");
-            }).Method);
-            Hook.Prefix(PopulateInventory, Fun.fun((MechLabPanel __instance) => { 
-                if (limitItems != null) Control.mod.Logger.LogError("[LimitItems] PopulateInventory was not properly cleaned");
-                Control.mod.Logger.Log("[LimitItems] PopulateInventory patching (Mechlab fix)");
-                limitItems = new PatchMechlabLimitItems(__instance);
-                return false;
-            }).Method);
+            var self = typeof(PatchMechlabLimitItems);
+            Hook.Prefix( AccessTools.Method(typeof(AAR_SalvageScreen), "BeginSalvageScreen")
+                       , self.GetMethod("OpenSalvageScreen"));
+            Hook.Prefix(OnPopulateInventory, self.GetMethod("PopulateInventory"));
 
-            Hook.Prefix(ConfirmRevertMech, Fun.fun((MechLabPanel __instance) => { 
-                if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ConfirmRevertMech");
-                Control.mod.Logger.Log("[LimitItems] Reverting mech");
-                limitItems.Dispose();
-                limitItems = null;
-            }).Method);
+            Hook.Prefix(OnConfirmRevertMech, self.GetMethod("ConfirmRevertMech"));
 
-            Hook.Prefix(ExitMechLab, Fun.fun((MechLabPanel __instance) => { 
-                if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ExitMechLab");
-                Control.mod.Logger.Log("[LimitItems] Exiting mechlab");
-                limitItems.Dispose();
-                limitItems = null;
-            }).Method);
+            Hook.Prefix(OnExitMechLab, self.GetMethod("ExitMechLab"));
 
             var onLateUpdate = AccessTools.Method(typeof(UnityEngine.UI.ScrollRect), "LateUpdate");
-            Hook.Prefix(onLateUpdate, Fun.fun((UnityEngine.UI.ScrollRect __instance) => {
-                if (limitItems != null && new Traverse(limitItems.inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() == __instance) {
-                    var newIndex = (int)((limitItems.endIndex) * (1.0f - __instance.verticalNormalizedPosition));
-                    if (limitItems.filteredInventory.Count < itemsOnScreen) {
-                        newIndex = 0;
-                    }
-                    if (limitItems.index != newIndex) {
-                        limitItems.index = newIndex;
-                        Control.mod.Logger.LogDebug(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
-                        limitItems.Refresh(false);
-                    }
-                }        
-            }).Method); 
+            Hook.Prefix(onLateUpdate, self.GetMethod("LateUpdate"));
 
             var onAddItem = AccessTools.Method(typeof(MechLabInventoryWidget), "OnAddItem");
-            Hook.Prefix(onAddItem, Fun.fun((MechLabInventoryWidget __instance, IMechLabDraggableItem item) => {
+            Hook.Prefix(onAddItem, self.GetMethod("OnAddItem"));
+
+            var onRemoveItem = AccessTools.Method(typeof(MechLabInventoryWidget), "OnRemoveItem");
+            Hook.Prefix(onRemoveItem, self.GetMethod("OnRemoveItem"));
+
+            var onItemGrab = AccessTools.Method(typeof(MechLabInventoryWidget), "OnItemGrab");
+            Hook.Prefix(onItemGrab, AccessTools.Method(typeof(PatchMechlabLimitItems), "ItemGrabPrefix"));
+
+            var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
+            Hook.Prefix(onApplyFiltering, self.GetMethod("OnApplyFiltering"));
+
+            /* FIXME: It's possible for some elements to be in an improper state to this function call. Drop if so.
+             */
+            Hook.Prefix(AccessTools.Method(typeof(MechLabPanel), "MechCanEquipItem"), self.GetMethod("MechCanEquipItem"));
+
+            var onApplySorting = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplySorting");
+            Hook.Prefix(onApplySorting, self.GetMethod("OnApplySorting"));
+        }
+
+        public static bool PopulateInventory(MechLabPanel __instance)
+        {
+            if (limitItems != null) Control.mod.Logger.LogError("[LimitItems] PopulateInventory was not properly cleaned");
+            Control.mod.Logger.Log("[LimitItems] PopulateInventory patching (Mechlab fix)");
+            limitItems = new PatchMechlabLimitItems(__instance);
+            return false;
+        }
+
+        public static void OpenSalvageScreen()
+        {
+            // Only for logging purposes.
+            Control.mod.Logger.Log("[LimitItems] Open Salvage screen");
+        }
+
+        public static void ConfirmRevertMech()
+        {
+            if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ConfirmRevertMech");
+            Control.mod.Logger.Log("[LimitItems] Reverting mech");
+            limitItems.Dispose();
+            limitItems = null;
+        }
+
+        public static void ExitMechLab(MechLabPanel __instance)
+        {
+            if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ExitMechLab");
+            Control.mod.Logger.Log("[LimitItems] Exiting mechlab");
+            limitItems.Dispose();
+            limitItems = null;
+        }
+
+        public static void LateUpdate(UnityEngine.UI.ScrollRect __instance)
+        {
+            if (limitItems != null && new Traverse(limitItems.inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() == __instance) {
+                var newIndex = (int)((limitItems.endIndex) * (1.0f - __instance.verticalNormalizedPosition));
+                if (limitItems.filteredInventory.Count < itemsOnScreen) {
+                    newIndex = 0;
+                }
+                if (limitItems.index != newIndex) {
+                    limitItems.index = newIndex;
+                    Control.mod.Logger.LogDebug(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
+                    limitItems.Refresh(false);
+                }
+            }        
+        }
+
+        public static bool OnAddItem(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
+        {
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
@@ -456,10 +492,10 @@ namespace BattletechPerformanceFix
                 } else {
                     return true;
                 }
-            }).Method); 
+        }
 
-            var onRemoveItem = AccessTools.Method(typeof(MechLabInventoryWidget), "OnRemoveItem");
-            Hook.Prefix(onRemoveItem, Fun.fun((MechLabInventoryWidget __instance, IMechLabDraggableItem item) => {
+        public static bool OnRemoveItem(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
+        {
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
@@ -484,37 +520,34 @@ namespace BattletechPerformanceFix
                 } else {
                     return true;
                 }
-            }).Method);
+        }
 
-            var onItemGrab = AccessTools.Method(typeof(MechLabInventoryWidget), "OnItemGrab");
-            Hook.Prefix(onItemGrab, AccessTools.Method(typeof(PatchMechlabLimitItems), "ItemGrabPrefix"));
-
-            var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
-            Hook.Prefix(onApplyFiltering, Fun.fun((MechLabInventoryWidget __instance) => {
+        public static bool OnApplyFiltering(MechLabInventoryWidget __instance)
+        {
                 if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
                     limitItems.FilterChanged(true);
                     return false;
                 } else {
                     return true;
                 }
-            }).Method);
+        }
 
-            /* FIXME: It's possible for some elements to be in an improper state to this function call. Drop if so.
-             */
-            Hook.Prefix( AccessTools.Method(typeof(MechLabPanel), "MechCanEquipItem")
-                       , Fun.fun((InventoryItemElement_NotListView item) => item.ComponentRef == null ? false : true).Method);
+        public static bool OnApplySorting(MechLabInventoryWidget __instance)
+        {
 
-            var onApplySorting = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplySorting");
-            Hook.Prefix(onApplySorting, Fun.fun((MechLabInventoryWidget __instance) => {
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     // it's a mechlab screen, we do our own sort.
                      return false;
                 } else {
                     return true;
                 }
-            }).Method);            
         }
 
+        public static bool MechCanEquipItem(InventoryItemElement_NotListView item)
+        {
+            return item.ComponentRef == null ? false : true;
+        }
+        
         public static void ItemGrabPrefix(MechLabInventoryWidget __instance, ref IMechLabDraggableItem item) {
             if (limitItems != null && limitItems.inventoryWidget == __instance) {
                 try {

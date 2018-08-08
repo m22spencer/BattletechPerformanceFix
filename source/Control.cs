@@ -1,7 +1,6 @@
 using HBS.Logging;
 using Harmony;
 using System.Reflection;
-using DynModLib;
 using BattleTech;
 using BattleTech.UI;
 using BattleTech.Data;
@@ -10,11 +9,16 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Text;
+using System.Reflection.Emit;
+using System.IO;
+using HBS.Util;
 
 namespace BattletechPerformanceFix
 {
     public static class Control
     {
+        public static Mod lib;
         public static Mod mod;
 
         public static ModSettings settings = new ModSettings();
@@ -23,7 +27,8 @@ namespace BattletechPerformanceFix
 
         public static void Start(string modDirectory, string json)
         {
-            mod = new Mod(modDirectory);
+            lib = mod = new Mod(modDirectory);
+            lib.SetupLogging();
             mod.LoadSettings(settings);
 
             mod.Logger.Log(settings.logLevel);
@@ -41,61 +46,145 @@ namespace BattletechPerformanceFix
         }
     }
 
-    /* Backtracking backtracking backtracking regex is not a good way to strip comments from a string. */
-    [HarmonyPatch(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")]
-    public class DontStripComments {
-        // TODO: Is this function always called from main thread? We need to patch loadJSON, but it's generic
-        public static bool guard = false;
-        public static bool Prefix(string json, ref string __result) {
-            if (guard == true) return true;
-            try {
-            // Try to parse the json, if it doesn't work, use HBS comment stripping code.
-            try { fastJSON.JSON.Parse(json);
-                __result = json;
-            } catch (Exception e) {
-                guard = true;
-                __result = new Traverse(typeof(HBS.Util.JSONSerializationUtility)).Method("StripHBSCommentsFromJSON").GetValue<string>(json);
-                guard = false;
+    public class Mod
+    {
+        public Mod(string directory)
+        {
+            Directory = directory;
+            Name = Path.GetFileName(directory);
+        }
+
+        public string Name { get; }
+        public string Directory { get; }
+
+        public string SourcePath => Path.Combine(Directory, "source");
+        public string SettingsPath => Path.Combine(Directory, "Settings.json");
+        public string ModsPath => Path.GetDirectoryName(Directory);
+        public string InfoPath => Path.Combine(Directory, "mod.json");
+
+        public ILog Logger => HBS.Logging.Logger.GetLogger(Name);
+        private FileLogAppender logAppender;
+
+        public void LoadSettings<T>(T settings) where T : ModSettings
+        {
+            if (!File.Exists(SettingsPath))
+            {
+                return;
             }
-            } catch(Exception e) {
-                Control.mod.Logger.LogException(e);
+            
+            using (var reader = new StreamReader(SettingsPath))
+            {
+                var json = reader.ReadToEnd();
+                JSONSerializationUtility.FromJSON(settings, json);
             }
-            return false;
-        }
-    }
 
-    public class Hook : IDisposable {
-        readonly MethodBase orig;
-        readonly MethodInfo act;
-        public void Dispose() {
-            Control.harmony.RemovePatch(orig, act);
-        }
-
-        Hook(MethodBase target, MethodInfo mi) {
-            orig = target;
-            act = mi;
+            var logLevelString = settings.logLevel;
+            DebugBridge.StringToLogLevel(logLevelString, out var level);
+            if (level == null)
+            {
+                level = LogLevel.Debug;
+            }
+            HBS.Logging.Logger.SetLoggerLevel(Name, level);
         }
 
-        public static Hook Prefix(MethodBase target, MethodInfo mi) {
-            var h = new Hook(target, mi);
-            Control.harmony.Patch(target, new HarmonyMethod(mi), null);
-            return h;
+        public void SaveSettings<T>(T settings) where T : ModSettings
+        {
+            using (var writer = new StreamWriter(SettingsPath))
+            {
+                var json = JSONSerializationUtility.ToJSON(settings);
+                writer.Write(json);
+            }
         }
-
-        public static Hook Postfix(MethodBase target, MethodInfo mi) {
-            var h = new Hook(target, mi);
-            Control.harmony.Patch(target, null, new HarmonyMethod(mi));
-            return h;
-        }
-    }
-
-    public static class Fun {
-        public static Action fun (this Action a) { return a; }
-        public static Action<A> fun<A>(this Action<A> a) { return a; }
-
         
-        public static Func<A> fun<A>(this Func<A> a) { return a; }
-        public static Func<A,B> fun<A,B>(this Func<A,B> a) { return a; }
-        public static Func<A,B,C> fun<A,B,C>(this Func<A,B,C> a) { return a; }
+        internal string AssemblyPath => string.IsNullOrEmpty(ModTekInfo.DLL) ? null : Path.Combine(Directory, ModTekInfo.DLL);
+
+        private ModTekInfo _modTekInfo;
+        internal ModTekInfo ModTekInfo
+        {
+            get
+            {
+                if (_modTekInfo == null)
+                {
+                    using (var reader = new StreamReader(InfoPath))
+                    {
+                        var info = new ModTekInfo();
+                        var json = reader.ReadToEnd();
+                        JSONSerializationUtility.FromJSON(info, json);
+                        _modTekInfo = info;
+                    }
+                }
+
+                return _modTekInfo;
+            }
+        }
+
+        internal void SetupLogging()
+        {
+            var logFilePath = Path.Combine(Directory, "log.txt");
+            try
+            {
+                ShutdownLogging();
+                AddLogFileForLogger(Name, logFilePath);
+            }
+            catch (Exception e)
+            {
+                Logger.Log("BattletechPerformanceFixe: can't create log file", e);
+            }
+        }
+
+        internal void ShutdownLogging()
+        {
+            if (logAppender == null)
+            {
+                return;
+            }
+
+            try
+            {
+                HBS.Logging.Logger.ClearAppender(Name);
+                logAppender.Flush();
+                logAppender.Close();
+            }
+            catch
+            {
+            }
+
+            logAppender = null;
+        }
+
+        private void AddLogFileForLogger(string name, string logFilePath)
+        {
+            logAppender = new FileLogAppender(logFilePath, FileLogAppender.WriteMode.INSTANT);
+
+            HBS.Logging.Logger.AddAppender(name, logAppender);
+        }
+
+        public override string ToString()
+        {
+            return $"{Name} ({Directory})";
+        }
+    }
+
+    public class ModSettings
+    {
+        public string logLevel = "Log";
+    }
+
+    internal class ModTekInfo
+    {
+        public string[] DependsOn = { };
+        public string DLL = null;
+    }
+
+    public class Adapter<T>
+    {
+        public readonly T instance;
+        public readonly Traverse traverse;
+
+        protected Adapter(T instance)
+        {
+            this.instance = instance;
+            traverse = Traverse.Create(instance);
+        }
     }
 }
