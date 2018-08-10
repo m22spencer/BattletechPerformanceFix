@@ -25,8 +25,37 @@ namespace BattletechPerformanceFix
 
         public static HarmonyInstance harmony;
 
+        public static readonly string ModName = "BattletechPerformanceFix";
+        public static readonly string ModPack = "com.github.m22spencer";
+        public static readonly string ModFullName = string.Format("{0}.{1}", ModPack, ModName);
+        public static readonly string ModDir = "./Mods/BattletechPerformanceFix";
+
+        private static StreamWriter LogStream;
+
+        public static void Log(string msg, params object[] values)
+        {
+            LogStream.WriteLine(string.Format(msg, values));
+            LogStream.Flush();
+        }
+
+        public static void Trap(Action f)
+        {
+            try { f(); } catch (Exception e) { Log("Exception {0}", e); }
+        }
+
+        public static T Trap<T>(Func<T> f)
+        {
+            try { return f(); } catch (Exception e) { Log("Exception {0}", e); return default(T);  }
+        }
+
         public static void Start(string modDirectory, string json)
         {
+            var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
+            File.Delete(logFile);
+            LogStream = File.AppendText(logFile);
+            LogStream.AutoFlush = true;
+            Log("Initialized {0}", ModFullName);
+
             lib = mod = new Mod(modDirectory);
             lib.SetupLogging();
             mod.LoadSettings(settings);
@@ -35,6 +64,25 @@ namespace BattletechPerformanceFix
             mod.Logger.LogDebug("Debug enabled");
 
 			harmony = HarmonyInstance.Create(mod.Name);
+
+            
+
+            var specnames = new List<string> { "LeaveRoom", "InitWidgets" };
+            var meths = AccessTools.GetDeclaredMethods(typeof(SGRoomController_MechBay));
+            foreach(MethodBase meth in meths)
+            {
+                try
+                {
+                    Control.mod.Logger.Log(meth.Name);
+                    var sn = specnames.Where(x => meth.Name == x).ToList();
+                    var patchfun = sn.Any() ? sn[0] : "Other";
+                    mod.Logger.Log(string.Format("methname {0}, patchfun {1}", meth.Name, patchfun));
+                    Control.harmony.Patch(meth, new HarmonyMethod(typeof(SGRoomController_MechBay_MakeLazy), patchfun), null);
+                } catch (Exception e)
+                {
+                    Control.mod.Logger.LogException(e);
+                }
+            }
 
             harmony.PatchAll(Assembly.GetExecutingAssembly());
 
@@ -85,9 +133,11 @@ namespace BattletechPerformanceFix
                 level = LogLevel.Debug;
             }
             HBS.Logging.Logger.SetLoggerLevel(Name, level);
+
+            
         }
 
-        public void SaveSettings<T>(T settings) where T : ModSettings
+                public void SaveSettings<T>(T settings) where T : ModSettings
         {
             using (var writer = new StreamWriter(SettingsPath))
             {
@@ -185,6 +235,59 @@ namespace BattletechPerformanceFix
         {
             this.instance = instance;
             traverse = Traverse.Create(instance);
+        }
+    }
+
+    /*
+    [HarmonyPatch(typeof(SGRoomController_MechBay), nameof(SGRoomController_MechBay.Init))]
+    public static class SGRoomController_MechBay_GuardInitWidgets
+    {
+        public static bool Prefix()
+        {
+            //Control.mod.Logger.Log("SGRoomController_MechBayDROP");
+            return false;
+        }
+    }
+    */
+
+    public static class SGRoomController_MechBay_MakeLazy
+    {
+        public static bool allowInit = false;
+        public static bool InitWidgets()
+        {
+            return Control.Trap(() =>
+            {
+                Control.Log("SGRoomController_MechBay.InitWidgets (want initialize? {0})", allowInit);
+                if (!allowInit)
+                    return false;
+                return true;
+            });
+        }
+
+        public static bool LeaveRoom(bool ___roomActive, MechBayPanel ___mechBay)
+        {
+            return Control.Trap(() =>
+            {
+                Control.Log("SGRoomController_MechBay_LeaveRoom");
+                if (___roomActive)
+                    return true;
+                return false;
+            });
+        }
+        public static void Other(SGRoomController_MechBay __instance, MethodBase __originalMethod, MechBayPanel ___mechBay)
+        {
+            Control.Trap(() =>
+            {
+                Control.Log("SGRoomController_MechBay_Log {0}", __originalMethod.Name);
+
+                if (___mechBay == null)
+                {
+                    Control.Log("Initialize Widgets");
+                    allowInit = true;
+                    new Traverse(__instance).Method(nameof(SGRoomController_MechBay.InitWidgets)).GetValue();
+                    allowInit = false;
+                }
+            });
         }
     }
 }
