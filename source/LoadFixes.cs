@@ -20,7 +20,7 @@ namespace BattletechPerformanceFix {
     {
         public static bool Prefix(string jsonText, JObject __result)
         {
-            Control.mod.Logger.Log("Intercept modtek json: " + jsonText.Length);
+            Control.Log("Intercept modtek json: {0}", jsonText.Length);
 
             var stripped = DontStripComments.StripComments(jsonText);
 
