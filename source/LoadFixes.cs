@@ -19,14 +19,6 @@ namespace BattletechPerformanceFix {
     {
         public void Activate()
         {
-            /*
-            Control.TrapAndTerminate("Patch ModTek.ModTek.ParseGameJOSN", () =>
-            {
-                Control.harmony.Patch(AccessTools.Method(typeof(ModTek.ModTek), "ParseGameJSON")
-                                     , new HarmonyMethod(typeof(MakeModtekUseFasterParse).GetMethod(nameof(MakeModtekUseFasterParse.Prefix)))
-                                     , null);
-            });
-            */
             Control.TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () => {
                 Control.harmony.Patch(AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
                                      , new HarmonyMethod(typeof(DontStripComments).GetMethod(nameof(DontStripComments.Prefix)))
@@ -35,28 +27,7 @@ namespace BattletechPerformanceFix {
         }
     }
 
-    public class MakeModtekUseFasterParse
-    {
-        public static bool Prefix(string jsonText, ref JObject __result)
-        {
-            var res = Control.TrapAndTerminate("MakeModtekUseFasterParse.Prefix", () =>
-            {
-                Control.Log("Intercept modtek json: {0}", jsonText.Length);
-
-                var stripped = DontStripComments.HBSStripCommentsMirror(jsonText);
-                Control.Log("Stripped: {0}", stripped);
-
-                return JObject.Parse(new Regex("(\\]|\\}|\"|[A-Za-z0-9])\\s*\\n\\s*(\\[|\\{|\")", RegexOptions.Singleline).Replace(stripped, "$1,\n$2"));
-            });
-            __result = res;
-            return false;
-        }
-    }
-
     public class DontStripComments {
-        // TODO: Is this function always called from main thread? We need to patch loadJSON, but it's generic
-        public static bool guard = false;
-
         // Copied from HBS.Utils.JSONSerializationUtility temporarily
         public static string HBSStripCommentsMirror(string json)
         {
