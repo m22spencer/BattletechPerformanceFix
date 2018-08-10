@@ -15,7 +15,7 @@ using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
 
 namespace BattletechPerformanceFix {
-    [HarmonyPatch(typeof(ModTek.ModTek), "ParseGameJSON")]
+    //[HarmonyPatch(typeof(ModTek.ModTek), "ParseGameJSON")]
     public class MakeModtekUseFasterParse
     {
         public static bool Prefix(string jsonText, JObject __result)
@@ -31,7 +31,7 @@ namespace BattletechPerformanceFix {
     }
 
 
-    [HarmonyPatch(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")]
+    //[HarmonyPatch(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")]
     public class DontStripComments {
         // TODO: Is this function always called from main thread? We need to patch loadJSON, but it's generic
         public static bool guard = false;

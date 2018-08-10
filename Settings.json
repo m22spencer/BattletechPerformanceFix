@@ -1,2 +1,3 @@
 { "logLevel" : "Debug" 
+, "experimentalLazyRoomInitialization": true
 }

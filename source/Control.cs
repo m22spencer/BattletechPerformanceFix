@@ -34,8 +34,14 @@ namespace BattletechPerformanceFix
 
         public static void Log(string msg, params object[] values)
         {
-            LogStream.WriteLine(string.Format(msg, values));
+            var omsg = string.Format(msg, values);
+            LogStream.WriteLine(omsg);
             LogStream.Flush();
+            try
+            {
+                // It's possible to log during a patch that can't access HBS logging tools
+                mod.Logger.Log(omsg);
+            } catch { }
         }
 
         public static void Trap(Action f)
@@ -56,41 +62,29 @@ namespace BattletechPerformanceFix
             LogStream.AutoFlush = true;
             Log("Initialized {0}", ModFullName);
 
-            lib = mod = new Mod(modDirectory);
-            lib.SetupLogging();
-            mod.LoadSettings(settings);
-
-            mod.Logger.Log(settings.logLevel);
-            mod.Logger.LogDebug("Debug enabled");
-
-			harmony = HarmonyInstance.Create(mod.Name);
-
-            
-
-            var specnames = new List<string> { "LeaveRoom", "InitWidgets" };
-            var meths = AccessTools.GetDeclaredMethods(typeof(SGRoomController_MechBay));
-            foreach(MethodBase meth in meths)
+            Trap(() =>
             {
-                try
-                {
-                    Control.mod.Logger.Log(meth.Name);
-                    var sn = specnames.Where(x => meth.Name == x).ToList();
-                    var patchfun = sn.Any() ? sn[0] : "Other";
-                    mod.Logger.Log(string.Format("methname {0}, patchfun {1}", meth.Name, patchfun));
-                    Control.harmony.Patch(meth, new HarmonyMethod(typeof(SGRoomController_MechBay_MakeLazy), patchfun), null);
-                } catch (Exception e)
-                {
-                    Control.mod.Logger.LogException(e);
-                }
-            }
 
-            harmony.PatchAll(Assembly.GetExecutingAssembly());
+                lib = mod = new Mod(modDirectory);
+                lib.SetupLogging();
+                mod.LoadSettings(settings);
 
-            PatchMechlabLimitItems.Initialize();
+                mod.Logger.Log(settings.logLevel);
+                mod.Logger.LogDebug("Debug enabled");
 
-            // logging output can be found under BATTLETECH\BattleTech_Data\output_log.txt
-            // or also under yourmod/log.txt
-            mod.Logger.Log("Loaded " + mod.Name);
+                harmony = HarmonyInstance.Create(mod.Name);
+
+                if (settings.experimentalLazyRoomInitialization) LazyRoomInitialization.Activate();
+                else Log("ExperimentalLazyRoomInitialization is OFF", settings.experimentalLazyRoomInitialization);
+
+                harmony.PatchAll(Assembly.GetExecutingAssembly());
+
+                PatchMechlabLimitItems.Initialize();
+
+                // logging output can be found under BATTLETECH\BattleTech_Data\output_log.txt
+                // or also under yourmod/log.txt
+                mod.Logger.Log("Loaded " + mod.Name);
+            });
         }
     }
 
@@ -170,16 +164,6 @@ namespace BattletechPerformanceFix
 
         internal void SetupLogging()
         {
-            var logFilePath = Path.Combine(Directory, "log.txt");
-            try
-            {
-                ShutdownLogging();
-                AddLogFileForLogger(Name, logFilePath);
-            }
-            catch (Exception e)
-            {
-                Logger.Log("BattletechPerformanceFixe: can't create log file", e);
-            }
         }
 
         internal void ShutdownLogging()
@@ -218,6 +202,7 @@ namespace BattletechPerformanceFix
     public class ModSettings
     {
         public string logLevel = "Log";
+        public bool experimentalLazyRoomInitialization = false;
     }
 
     internal class ModTekInfo
@@ -250,44 +235,5 @@ namespace BattletechPerformanceFix
     }
     */
 
-    public static class SGRoomController_MechBay_MakeLazy
-    {
-        public static bool allowInit = false;
-        public static bool InitWidgets()
-        {
-            return Control.Trap(() =>
-            {
-                Control.Log("SGRoomController_MechBay.InitWidgets (want initialize? {0})", allowInit);
-                if (!allowInit)
-                    return false;
-                return true;
-            });
-        }
-
-        public static bool LeaveRoom(bool ___roomActive, MechBayPanel ___mechBay)
-        {
-            return Control.Trap(() =>
-            {
-                Control.Log("SGRoomController_MechBay_LeaveRoom");
-                if (___roomActive)
-                    return true;
-                return false;
-            });
-        }
-        public static void Other(SGRoomController_MechBay __instance, MethodBase __originalMethod, MechBayPanel ___mechBay)
-        {
-            Control.Trap(() =>
-            {
-                Control.Log("SGRoomController_MechBay_Log {0}", __originalMethod.Name);
-
-                if (___mechBay == null)
-                {
-                    Control.Log("Initialize Widgets");
-                    allowInit = true;
-                    new Traverse(__instance).Method(nameof(SGRoomController_MechBay.InitWidgets)).GetValue();
-                    allowInit = false;
-                }
-            });
-        }
-    }
+    
 }

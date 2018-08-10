@@ -75,6 +75,7 @@
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Control.cs" />
     <Compile Include="HarmonyExt.cs" />
+    <Compile Include="LazyRoomInitialization.cs" />
     <Compile Include="LoadFixes.cs" />
     <Compile Include="PatchAddShopInventory.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
