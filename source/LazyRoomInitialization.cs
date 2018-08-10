@@ -13,7 +13,7 @@ namespace BattletechPerformanceFix
         public static void Activate()
         {
             Log("LazyRoomInitialization is activated");
-            var specnames = new List<string> { "LeaveRoom", "InitWidgets", "EnterRoom" };
+            var specnames = new List<string> { "LeaveRoom", "InitWidgets" };
             Assembly
                 .GetAssembly(typeof(SGRoomControllerBase))
                 .GetTypes()
@@ -28,10 +28,10 @@ namespace BattletechPerformanceFix
                         try
                         {
                             var sn = specnames.Where(x => meth.Name == x).ToList();
-                            var patchfun = sn.Any() ? sn[0] : null;
+                            var patchfun = sn.Any() ? sn[0] : "Other";
                             if (patchfun != null)
                             {
-                                mod.Logger.Log(string.Format("LazyRoomInitialization methname {0}, patchfun {1}", meth.Name, patchfun));
+                                Control.Log("LazyRoomInitialization methname {0}, patchfun {1}", meth.Name, patchfun);
                                 Control.harmony.Patch(meth, new HarmonyMethod(typeof(LazyRoomInitialization), patchfun), null);
                             }
                         }
@@ -70,7 +70,7 @@ namespace BattletechPerformanceFix
                 return false;
             });
         }
-        public static void EnterRoom(SGRoomControllerBase __instance, MethodBase __originalMethod)
+        public static void Other(SGRoomControllerBase __instance, MethodBase __originalMethod)
         {
             Control.Trap(() =>
             {
