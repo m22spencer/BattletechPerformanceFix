@@ -19,12 +19,14 @@ namespace BattletechPerformanceFix {
     {
         public void Activate()
         {
+            /*
             Control.TrapAndTerminate("Patch ModTek.ModTek.ParseGameJOSN", () =>
             {
                 Control.harmony.Patch(AccessTools.Method(typeof(ModTek.ModTek), "ParseGameJSON")
                                      , new HarmonyMethod(typeof(MakeModtekUseFasterParse).GetMethod(nameof(MakeModtekUseFasterParse.Prefix)))
                                      , null);
             });
+            */
             Control.TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () => {
                 Control.harmony.Patch(AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
                                      , new HarmonyMethod(typeof(DontStripComments).GetMethod(nameof(DontStripComments.Prefix)))
@@ -35,30 +37,60 @@ namespace BattletechPerformanceFix {
 
     public class MakeModtekUseFasterParse
     {
-        public static bool Prefix(string jsonText, JObject __result)
+        public static bool Prefix(string jsonText, ref JObject __result)
         {
-            return Control.TrapAndTerminate("MakeModtekUseFasterParse.Prefix", () =>
+            var res = Control.TrapAndTerminate("MakeModtekUseFasterParse.Prefix", () =>
             {
                 Control.Log("Intercept modtek json: {0}", jsonText.Length);
 
-                var stripped = (string)DontStripComments.stripMeth.Invoke(null, new object[] { jsonText });
+                var stripped = DontStripComments.HBSStripCommentsMirror(jsonText);
+                Control.Log("Stripped: {0}", stripped);
 
-                __result = JObject.Parse(new Regex("(\\]|\\}|\"|[A-Za-z0-9])\\s*\\n\\s*(\\[|\\{|\")", RegexOptions.Singleline).Replace(stripped, "$1,\n$2"));
-                if (__result == null)
-                    throw new System.Exception("StripComments result is null");
-
-                return false;
+                return JObject.Parse(new Regex("(\\]|\\}|\"|[A-Za-z0-9])\\s*\\n\\s*(\\[|\\{|\")", RegexOptions.Singleline).Replace(stripped, "$1,\n$2"));
             });
+            __result = res;
+            return false;
         }
     }
 
     public class DontStripComments {
         // TODO: Is this function always called from main thread? We need to patch loadJSON, but it's generic
         public static bool guard = false;
-        public static MethodBase stripMeth = null;
 
-        public static string StripComments(MethodBase __originalMethod, string json)
+        // Copied from HBS.Utils.JSONSerializationUtility temporarily
+        public static string HBSStripCommentsMirror(string json)
         {
+            return Control.TrapAndTerminate("HBSStripCommentsMirror", () =>
+            {
+                var self = new Traverse(typeof(HBS.Util.JSONSerializationUtility));
+                var csp = self.Field("commentSurroundPairs").GetValue<Dictionary<string,string>>();
+
+                string str = string.Empty;
+                string format = "{0}(.*?)\\{1}";
+                foreach (KeyValuePair<string, string> keyValuePair in csp)
+                {
+                    str = str + string.Format(format, keyValuePair.Key, keyValuePair.Value) + "|";
+                }
+                string str2 = "\"((\\\\[^\\n]|[^\"\\n])*)\"|";
+                string str3 = "@(\"[^\"]*\")+";
+                string pattern = str + str2 + str3;
+                return Regex.Replace(json, pattern, delegate (Match me)
+                {
+                    foreach (KeyValuePair<string, string> keyValuePair2 in csp)
+                    {
+                        if (me.Value.StartsWith(keyValuePair2.Key) || me.Value.EndsWith(keyValuePair2.Value))
+                        {
+                            return string.Empty;
+                        }
+                    }
+                    return me.Value;
+                }, RegexOptions.Singleline);
+            });
+        }
+
+        public static string StripComments(string json)
+        {
+            
             // Try to parse the json, if it doesn't work, use HBS comment stripping code.
             try
             {
@@ -67,23 +99,20 @@ namespace BattletechPerformanceFix {
             }
             catch (Exception e)
             {
-                guard = true;
-                var res = (string)__originalMethod.Invoke(null, new object[] { json });
-                guard = false;
-                return res;
+                return HBSStripCommentsMirror(json);
             }
         }
 
-        public static bool Prefix(MethodBase __originalMethod, string json, string __result) {
-            return Control.TrapAndTerminate("DontStripComments.Prefix", () =>
+        public static bool Prefix(string json, ref string __result) {
+            var res =  Control.TrapAndTerminate("DontStripComments.Prefix", () =>
             {
-                stripMeth = __originalMethod;
-                if (guard) return true;
-                __result = StripComments(__originalMethod, json);
-                if (__result == null)
+                var sc = StripComments(json);
+                if (sc == null)
                     throw new System.Exception("StripComments result is null");
-                return false;
+                return sc;
             });
+            __result = res;
+            return false;
         }
     }
 }
