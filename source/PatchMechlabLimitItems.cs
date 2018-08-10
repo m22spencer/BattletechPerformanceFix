@@ -425,15 +425,12 @@ namespace BattletechPerformanceFix
 
         public static void ConfirmRevertMech()
         {
-            if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ConfirmRevertMech");
-            Control.mod.Logger.Log("[LimitItems] Reverting mech");
-            limitItems.Dispose();
-            limitItems = null;
+            Control.mod.Logger.Log("[LimitItems] RevertMech");
         }
 
         public static void ExitMechLab(MechLabPanel __instance)
         {
-            if (limitItems == null) Control.mod.Logger.LogError("[LimitItems] Unhandled ExitMechLab");
+            if (limitItems == null) { Control.mod.Logger.LogError("[LimitItems] Unhandled ExitMechLab"); return; }
             Control.mod.Logger.Log("[LimitItems] Exiting mechlab");
             limitItems.Dispose();
             limitItems = null;
