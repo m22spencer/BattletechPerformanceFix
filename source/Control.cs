@@ -78,6 +78,7 @@ namespace BattletechPerformanceFix
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
             Log("Initialized {0}", ModFullName);
+            Feature.Initialize();
 
             Trap(() =>
             {
@@ -97,7 +98,8 @@ namespace BattletechPerformanceFix
                 var loadFixes = new LoadFixes();
                 if (settings.experimentalLoadFixes) {
                     Log("experimentalLoadFixes is ON");
-                    loadFixes.Activate();
+                    //loadFixes.Activate();
+                    loadFixes.TryAndActivateFeature();
                 } else
                 {
                     Log("experimentalLoadFixes is OFF");
@@ -120,9 +122,151 @@ namespace BattletechPerformanceFix
         }
     }
 
-    public interface Feature
+    abstract public class Feature
     {
-        void Activate();
+        public static bool WantGenerate;
+        public static Dictionary<string, int> CRCCache;
+
+        public static void Initialize()
+        {
+            if (CRCCache == null)
+            {
+                var crcstore_path = Path.Combine(Control.ModDir, "PATCHCRC");
+                if (File.Exists(crcstore_path))
+                {
+                    // Confirm crc mode
+                    var json = new StreamReader(crcstore_path).ReadToEnd();
+                    CRCCache = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, int>>(json);
+                    WantGenerate = false;
+                } else
+                {
+                    // Generate crc mode
+                    CRCCache = new Dictionary<string, int>();
+                    WantGenerate = true;
+                }
+            }
+        }
+
+        public static void WriteCRCData()
+        {
+            var crcstore_path = Path.Combine(Control.ModDir, "PATCHCRC");
+            File.WriteAllText(crcstore_path, Newtonsoft.Json.JsonConvert.SerializeObject(CRCCache));
+        }
+
+        public static bool AddHash(MethodBase meth)
+        {
+            var details = ""
+                + meth.ContainsGenericParameters.ToString()
+                + meth.IsGenericMethod.ToString()
+                + meth.IsGenericMethodDefinition.ToString()
+                + meth.IsVirtual.ToString()
+                + meth.IsStatic.ToString()
+                + meth.IsSpecialName.ToString()
+                + meth.IsFinal.ToString()
+                + meth.IsAssembly.ToString()
+                + meth.IsFamily.ToString()
+                + string.Join("", meth.GetParameters().Select(pi => pi.ToString()).ToArray())
+                + (meth.GetMethodBody().GetILAsByteArray() == null
+                ? ""
+                : string.Join("", meth.GetMethodBody().GetILAsByteArray().Select(b => b.ToString()).ToArray()));
+
+            var hash = details.GetHashCode();
+            var fullName = meth.DeclaringType.FullName + ":" + meth.Name;
+            if (WantGenerate)
+            {
+                // If exists, needs to compare hash
+                CRCCache.Add(fullName, hash);
+                WriteCRCData();
+                return true;
+            } else
+            {
+                if (CRCCache.TryGetValue(fullName, out var known) && known == hash) { }
+                else 
+                {
+                    Control.Log("Unable to patch {0} as the method does not match the DB crc", fullName);
+                    return false;
+                } 
+            }
+            return true;
+        }
+
+        public abstract void Activate(Patcher patcher);
+
+        public void TryAndActivateFeature()
+        {
+            var p = new Patcher(this.GetType());
+            Activate(p);
+            //Here need to check if p is valid.
+            if (p.Valid)
+            {
+                Control.Log("Activating feature");
+                new Traverse(p).Field("patchable").GetValue<List<Patchable>>()
+                    .ForEach(pb => new Traverse(pb).Field("thunks").GetValue<List<Action>>().ForEach(act => act()));
+            } else
+            {
+                Control.Log("Invalid feature will not activate");
+            }
+        }
+    }
+
+    public class Patcher
+    {
+        private Type feature;
+        public bool Valid { get; private set; }
+        private List<Patchable> patchable = new List<Patchable>();
+        public Patcher(Type feature)
+        {
+            this.feature = feature;
+            this.Valid = true;
+        }
+        public Patchable GetPatchableMethod(Type t, string methodName)
+        {
+            var meth = AccessTools.Method(t, methodName);
+            var validcrc = Feature.AddHash(meth);
+            if (!validcrc) Valid = false;
+            var p = new Patchable(feature, meth);
+            patchable.Add(p);
+            return p;
+        }
+
+        public void OnSuccessfulActivation(Action f)
+        {
+            throw new System.Exception("NYI");
+        }
+    }
+
+    public class Patchable
+    {
+        Type feature;
+        MethodBase method;
+        private List<Action> thunks = new List<Action>();
+        public Patchable(Type feature, MethodBase method)
+        {
+            this.feature = feature;
+            this.method = method;
+        }
+
+        HarmonyMethod ResolvePatch(string name)
+        {
+            var method = AccessTools.Method(feature, name);
+            if (method == null)
+                Control.Log("Failed to resolve patch {0}", name);
+            return new HarmonyMethod(method);
+        }
+        public Patchable Prefix(string methodName)
+        {
+            var patch = ResolvePatch(methodName);
+            // Do checks for public/static, and ensure harmony doesn't crash
+            thunks.Add(() => { Control.Log("Apply prefix {0}.{1}", feature.FullName, methodName); Control.harmony.Patch(method, patch, null); });
+            return this;
+        }
+
+        public Patchable Postfix(string methodName) {
+            var patch = ResolvePatch(methodName);
+            // Do checks for public/static, and ensure harmony doesn't crash
+            thunks.Add(() => Control.harmony.Patch(method, null, patch));
+            return this;
+        }
     }
 
     public class Mod
@@ -260,5 +404,6 @@ namespace BattletechPerformanceFix
             traverse = Traverse.Create(instance);
         }
     }
+
 }
  

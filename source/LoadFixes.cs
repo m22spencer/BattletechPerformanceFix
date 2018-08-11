@@ -17,17 +17,13 @@ using System.Text.RegularExpressions;
 namespace BattletechPerformanceFix {
     public class LoadFixes : Feature
     {
-        public void Activate()
+        public string FeatureName = "DoNotStripCommentsFix";
+        public override void Activate(Patcher p)
         {
-            Control.TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () => {
-                Control.harmony.Patch(AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
-                                     , new HarmonyMethod(typeof(DontStripComments).GetMethod(nameof(DontStripComments.Prefix)))
-                                     , null);
-            });
+            p.GetPatchableMethod(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
+                .Prefix(nameof(Prefix));
         }
-    }
 
-    public class DontStripComments {
         // Copied from HBS.Utils.JSONSerializationUtility temporarily
         public static string HBSStripCommentsMirror(string json)
         {
@@ -77,6 +73,7 @@ namespace BattletechPerformanceFix {
         public static bool Prefix(string json, ref string __result) {
             var res =  Control.TrapAndTerminate("DontStripComments.Prefix", () =>
             {
+                Control.Log("Stripping: {0}", json.Length);
                 var sc = StripComments(json);
                 if (sc == null)
                     throw new System.Exception("StripComments result is null");
