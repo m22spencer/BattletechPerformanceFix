@@ -37,6 +37,8 @@ namespace BattletechPerformanceFix
 
         private static StreamWriter LogStream;
 
+        private static string LogLevel = "Log";
+
         public static void Log(string msg, params object[] values)
         {
             try { 
@@ -47,6 +49,22 @@ namespace BattletechPerformanceFix
                 // It's possible to log during a patch that can't access HBS logging tools
                 mod.Logger.Log(omsg);
             } catch { }
+        }
+
+        public static void LogDebug(string msg, params object[] values)
+        {
+            if (LogLevel == "Debug")
+                Log("[Debug] " + msg, values);
+        }
+
+        public static void LogError(string msg, params object[] values)
+        {
+            Log("[Error] " + msg, values);
+        }
+
+        public static void LogException(params object[] values)
+        {
+            Log("[Exception] {0}", values);
         }
 
         public static void Trap(Action f)
@@ -87,6 +105,7 @@ namespace BattletechPerformanceFix
                 mod.LoadSettings(settings);
 
                 mod.Logger.Log(settings.logLevel);
+                LogLevel = settings.logLevel;
                 mod.Logger.LogDebug("Debug enabled");
 
                 harmony = HarmonyInstance.Create(mod.Name);
