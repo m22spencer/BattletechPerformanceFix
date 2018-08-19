@@ -263,7 +263,7 @@ namespace BattletechPerformanceFix
                 var iw = new Traverse(inventoryWidget);
                 Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
 
-                Control.Log("[LimitItems] Filter changed:\n  :weapons {0}\n  :equip {1}\n  :ballistic {2}\n  :energy {3}\n  :missile {4}\n  :small {5}\n  :heatsink {6}\n  :jumpjet {7}\n  :upgrade {8}"
+                Control.Log("[LimitItems] Filter changed (reset? {9}):\n  :weapons {0}\n  :equip {1}\n  :ballistic {2}\n  :energy {3}\n  :missile {4}\n  :small {5}\n  :heatsink {6}\n  :jumpjet {7}\n  :upgrade {8}"
                            , f("filteringWeapons")
                            , f("filteringEquipment")
                            , f("filterEnabledWeaponBallistic")
@@ -272,7 +272,8 @@ namespace BattletechPerformanceFix
                            , f("filterEnabledWeaponSmall")
                            , f("filterEnabledHeatsink")
                            , f("filterEnabledJumpjet")
-                           , f("filterEnabledUpgrade"));
+                           , f("filterEnabledUpgrade")
+                           , resetIndex);
             if (resetIndex) {
                 new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
                 index = 0;
@@ -539,10 +540,11 @@ namespace BattletechPerformanceFix
                 }
         }
 
-        public static bool OnApplyFiltering(MechLabInventoryWidget __instance)
+        public static bool OnApplyFiltering(MechLabInventoryWidget __instance, bool refreshPositioning)
         {
                 if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
-                    limitItems.FilterChanged(true);
+                    Control.LogDebug("OnApplyFiltering (refresh-pos? {0})", refreshPositioning);
+                    limitItems.FilterChanged(refreshPositioning);
                     return false;
                 } else {
                     return true;
