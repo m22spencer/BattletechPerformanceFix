@@ -72,22 +72,14 @@ namespace BattletechPerformanceFix
 
             Control.Log("Mechbay Patch initialized :simGame? {0}", instance.IsSimGame);
 
-            inventory = instance.storageInventory.Select(mcr => {
-                mcr.DataManager = instance.dataManager;
-                mcr.RefreshComponentDef();
-                var num = !instance.IsSimGame ? int.MinValue : instance.sim.GetItemCount(mcr.Def.Description, mcr.Def.GetType(), SimGameState.ItemCountType.UNDAMAGED_ONLY); // Undamaged only is wrong, just for testing.
-                return new DefAndCount(mcr, num);
-            }).Where(dac => {
-                if (!instance.IsSimGame) return true;
-                else
+                inventory = instance.storageInventory.Select(mcr =>
                 {
-                    var ict = instance.sim.GetItemCountDamageType(dac.ComponentRef);
-                    var yes = ict == SimGameState.ItemCountType.UNDAMAGED_ONLY;
-                    if (!yes)
-                        Control.LogDebug("[DAC-Filter] Removing {0}, {1}", dac.ComponentRef.ComponentDefID, ict.ToString());
-
-                    return yes;
-                }
+                    mcr.DataManager = instance.dataManager;
+                    mcr.RefreshComponentDef();
+                    var num = !instance.IsSimGame
+                        ? int.MinValue
+                        : instance.sim.GetItemCount(mcr.Def.Description, mcr.Def.GetType(), instance.sim.GetItemCountDamageType(mcr));
+                    return new DefAndCount(mcr, num);
                 }).ToList();
 
             /* Build a list of data only for all components. */
