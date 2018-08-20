@@ -122,6 +122,15 @@ namespace BattletechPerformanceFix
                     Log("experimentalLoadFixes is OFF");
                 }
 
+                var noSalvageSoftlock = new NoSalvageSoftlock();
+                if (settings.experimentalSalvageSoftlockFix) {
+                    Log("experimentalSalvageSoftlockFix is ON");
+                    noSalvageSoftlock.Activate();
+                } else
+                {
+                    Log("experimentalSalvageSoftlockFix is OFF");
+                }
+
 
                 harmony.PatchAll(Assembly.GetExecutingAssembly());
 
@@ -260,6 +269,7 @@ namespace BattletechPerformanceFix
         public string logLevel = "Log";
         public bool experimentalLazyRoomInitialization = false;
         public bool experimentalLoadFixes = false;
+        public bool experimentalSalvageSoftlockFix = false;
     }
 
     internal class ModTekInfo
