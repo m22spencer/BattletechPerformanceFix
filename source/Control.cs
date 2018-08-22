@@ -100,6 +100,14 @@ namespace BattletechPerformanceFix
             Trap(() =>
             {
 
+                var WantHarmonyVersion = "1.2";
+                var harmonyVersion = Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version;
+                if (!harmonyVersion.ToString().StartsWith(WantHarmonyVersion))
+                {
+                    LogError("BattletechPerformanceFix requires harmony version {0}.*, but found {1}", WantHarmonyVersion, harmonyVersion);
+                    return;
+                }
+
                 var WantVersion = "1.2.0";
                 if (VersionInfo.ProductVersion != WantVersion)
                 {

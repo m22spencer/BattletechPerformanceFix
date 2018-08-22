@@ -17,7 +17,7 @@ namespace BattletechPerformanceFix
                     .Field("requestsPerFrame")
                     .SetValue(3);
             try {
-                Control.harmony.RemovePatch(WaitForLoads_MoveNext, InterceptMoveNextMI);
+                Control.harmony.Unpatch(WaitForLoads_MoveNext, InterceptMoveNextMI);
                 
             } catch(Exception e) {
                 Control.mod.Logger.Log(string.Format("[MechLabLoadThrottling] Not patched: {0}", e));
@@ -35,7 +35,7 @@ namespace BattletechPerformanceFix
                                             , MethodBase __originalMethod
                                             , ref bool __result
                                             ) {
-            Control.harmony.RemovePatch(__originalMethod, InterceptMoveNextMI);
+            Control.harmony.Unpatch(__originalMethod, InterceptMoveNextMI);
             var hasItems = true;
             Stopwatch sw = new Stopwatch();
             sw.Start();

@@ -9,7 +9,7 @@ namespace BattletechPerformanceFix
         readonly MethodBase orig;
         readonly MethodInfo act;
         public void Dispose() {
-            Control.harmony.RemovePatch(orig, act);
+            Control.harmony.Unpatch(orig, act);
         }
 
         Hook(MethodBase target, MethodInfo mi) {
