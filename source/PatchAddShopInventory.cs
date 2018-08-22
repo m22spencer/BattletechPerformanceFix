@@ -23,11 +23,11 @@ namespace BattletechPerformanceFix
     // Perform only the necessary data changes, ignore all UI fixup.
     [HarmonyPatch(typeof(MechLabInventoryWidget_ListView), "AddItemToInventory")]
     public static class Patch_AddItemToInventory {
-        public static bool Prefix(MechLabInventoryWidget_ListView __instance, ListElementController_BASE ItemData) {
+        public static bool Prefix(MechLabInventoryWidget_ListView __instance, InventoryDataObject_BASE ItemData) {
             var _this = __instance;
-            var _items = (List<ListElementController_BASE>)Traverse.Create(__instance).Field("ListView").Property("Items").GetValue();
-            ListElementController_BASE listElementController_BASE = null;
-            foreach (ListElementController_BASE listElementController_BASE2 in _this.inventoryData)
+            var _items = (List<InventoryDataObject_BASE>)Traverse.Create(__instance).Field("ListView").Property("Items").GetValue();
+            InventoryDataObject_BASE listElementController_BASE = null;
+            foreach (InventoryDataObject_BASE listElementController_BASE2 in _this.inventoryData)
             {
                 if (listElementController_BASE2.GetItemType() == ItemData.GetItemType() && listElementController_BASE2.IsDuplicateContent(ItemData) && _this.ParentDropTarget != null && _this.StackQuantities)
                 {

@@ -100,6 +100,16 @@ namespace BattletechPerformanceFix
             Trap(() =>
             {
 
+                var WantVersion = "1.2.0";
+                if (VersionInfo.ProductVersion != WantVersion)
+                {
+                    LogError("BattletechPerformanceFix expected BattleTech {0}, but found {1}", WantVersion, VersionInfo.ProductVersion);
+                    return;
+                } else
+                {
+                    Log("BattletechPerformanceFix found BattleTech {0} and will now load", WantVersion);
+                }
+
                 lib = mod = new Mod(modDirectory);
                 lib.SetupLogging();
                 mod.LoadSettings(settings);

@@ -178,7 +178,7 @@ namespace BattletechPerformanceFix
                                             , f("filterEnabledUpgrade")
                                             , false );
 
-            ListElementController_BASE tmpctl = new ListElementController_InventoryGear();
+            InventoryDataObject_BASE tmpctl = new InventoryDataObject_InventoryWeapon();
 
             var current = items.Where(item => { 
                 tmpctl.weaponDef = null;
