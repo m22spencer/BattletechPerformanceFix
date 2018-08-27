@@ -144,6 +144,7 @@ namespace BattletechPerformanceFix
            Since only 7 visual elements are allocated, this is required.
         */
         List<ListElementController_BASE_NotListView> Sort(List<ListElementController_BASE_NotListView> items) {
+            var sw = Stopwatch.StartNew();
             var _a = new ListElementController_InventoryGear_NotListView();
             var _b = new ListElementController_InventoryGear_NotListView();
             var _ac = new InventoryItemElement_NotListView();
@@ -157,12 +158,17 @@ namespace BattletechPerformanceFix
                 _b.componentRef = GetRef(r);
                 return _cs.Invoke(_ac, _bc);
             }));
+            var delta = sw.Elapsed.TotalMilliseconds;
+            Control.LogDebug("Sorted in {0} ms", delta);
+
             return tmp;
         }
 
         /* Fast filtering code which works off the data, rather than the visual elements.
            Suboptimal due to potential desyncs with normal filter proceedure, but simply required for performance */
-        List<ListElementController_BASE_NotListView> Filter(List<ListElementController_BASE_NotListView> items) {
+        List<ListElementController_BASE_NotListView> Filter(List<ListElementController_BASE_NotListView> _items) {
+            var items = Sort(_items);
+
             var iw = new Traverse(inventoryWidget);
             Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
             var filter = new InventoryFilter( false //this.filteringAll
@@ -551,12 +557,14 @@ namespace BattletechPerformanceFix
                 }
         }
 
+        [HarmonyPriority(Priority.Last)]
         public static bool OnApplySorting(MechLabInventoryWidget __instance)
         {
 
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     // it's a mechlab screen, we do our own sort.
-                     return false;
+                    limitItems.FilterChanged(false);
+                    return false;
                 } else {
                     return true;
                 }

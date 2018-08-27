@@ -108,14 +108,14 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var WantVersion = "1.2.0";
-                if (VersionInfo.ProductVersion != WantVersion)
+                var WantVersions = new string[] { "1.2." };
+                if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
                 {
-                    LogError("BattletechPerformanceFix expected BattleTech {0}, but found {1}", WantVersion, VersionInfo.ProductVersion);
-                    return;
+                    Log("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion);
                 } else
                 {
-                    Log("BattletechPerformanceFix found BattleTech {0} and will now load", WantVersion);
+                    LogError("BattletechPerformanceFix expected BattleTech ({0}), but found {1}", string.Join(",", WantVersions), VersionInfo.ProductVersion);
+                    return;
                 }
 
                 lib = mod = new Mod(modDirectory);
