@@ -157,8 +157,8 @@ namespace BattletechPerformanceFix
 
             var tmp = items.ToList();
             tmp.Sort(new Comparison<ListElementController_BASE_NotListView>((l,r) => {
-                _a.componentRef = GetRef(l);
-                _b.componentRef = GetRef(r);
+                _ac.ComponentRef = _a.componentRef = GetRef(l);
+                _bc.ComponentRef = _b.componentRef = GetRef(r);
                 return _cs.Invoke(_ac, _bc);
             }));
             var delta = sw.Elapsed.TotalMilliseconds;
