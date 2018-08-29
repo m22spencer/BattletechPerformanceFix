@@ -140,6 +140,11 @@ namespace BattletechPerformanceFix
             }
         }
 
+        ListElementController_BASE_NotListView FetchItem(MechComponentRef mcr)
+        {
+            return rawInventory.Where(ri => ri.componentDef == mcr.Def && mcr.DamageLevel == GetRef(ri).DamageLevel).FirstOrDefault();
+        }
+
         /* Fast sort, which works off data, rather than visual elements. 
            Since only 7 visual elements are allocated, this is required.
         */
@@ -487,7 +492,7 @@ namespace BattletechPerformanceFix
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
                         var quantity = nlv == null ? 1 : nlv.controller.quantity;
-                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == item.ComponentRef.Def).FirstOrDefault();
+                        var existing = limitItems.FetchItem(item.ComponentRef);
                         if (existing == null) {
                             Control.LogDebug(string.Format("OnAddItem new {0}", quantity));
                             var controller = nlv == null ? null : nlv.controller;
@@ -527,8 +532,8 @@ namespace BattletechPerformanceFix
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
 
-                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == nlv.controller.componentDef).FirstOrDefault();
-                        if (existing == null) {
+                    var existing = limitItems.FetchItem(item.ComponentRef);
+                    if (existing == null) {
                             Control.LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
                         } else {
                             Control.LogDebug(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
