@@ -140,11 +140,6 @@ namespace BattletechPerformanceFix
             }
         }
 
-        ListElementController_BASE_NotListView FetchItem(MechComponentRef mcr)
-        {
-            return rawInventory.Where(ri => ri.componentDef == mcr.Def && mcr.DamageLevel == GetRef(ri).DamageLevel).FirstOrDefault();
-        }
-
         /* Fast sort, which works off data, rather than visual elements. 
            Since only 7 visual elements are allocated, this is required.
         */
@@ -157,6 +152,9 @@ namespace BattletechPerformanceFix
             _ac.controller = _a;
             _bc.controller = _b;
             var _cs = new Traverse(inventoryWidget).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+            var cst = _cs.Method;
+            Control.LogDebug("Sort using {0}", cst.DeclaringType.FullName);
+
             var tmp = items.ToList();
             tmp.Sort(new Comparison<ListElementController_BASE_NotListView>((l,r) => {
                 _a.componentRef = GetRef(l);
@@ -438,7 +436,7 @@ namespace BattletechPerformanceFix
             Hook.Prefix(AccessTools.Method(typeof(MechLabPanel), "MechCanEquipItem"), self.GetMethod("MechCanEquipItem"));
 
             var onApplySorting = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplySorting");
-            Hook.Prefix(onApplySorting, self.GetMethod("OnApplySorting"));
+            Hook.Prefix(onApplySorting, self.GetMethod("OnApplySorting"), Priority.Last);
         }
 
         public static bool PopulateInventory(MechLabPanel __instance)
@@ -489,7 +487,7 @@ namespace BattletechPerformanceFix
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
                         var quantity = nlv == null ? 1 : nlv.controller.quantity;
-                        var existing = limitItems.FetchItem(item.ComponentRef);
+                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == item.ComponentRef.Def).FirstOrDefault();
                         if (existing == null) {
                             Control.LogDebug(string.Format("OnAddItem new {0}", quantity));
                             var controller = nlv == null ? null : nlv.controller;
@@ -529,7 +527,7 @@ namespace BattletechPerformanceFix
                     try {
                         var nlv = item as InventoryItemElement_NotListView;
 
-                        var existing = limitItems.FetchItem(item.ComponentRef);
+                        var existing = limitItems.rawInventory.Where(ri => ri.componentDef == nlv.controller.componentDef).FirstOrDefault();
                         if (existing == null) {
                             Control.LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
                         } else {
@@ -562,10 +560,8 @@ namespace BattletechPerformanceFix
                 }
         }
 
-        [HarmonyPriority(Priority.Last)]
         public static bool OnApplySorting(MechLabInventoryWidget __instance)
         {
-
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     // it's a mechlab screen, we do our own sort.
                     limitItems.FilterChanged(false);
