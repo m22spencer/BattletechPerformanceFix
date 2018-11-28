@@ -108,7 +108,7 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var WantVersions = new string[] { "1.2." };
+                var WantVersions = new string[] { "1.2.", "1.3." };
                 if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
                 {
                     Log("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion);
