@@ -12,7 +12,6 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            Log("LazyRoomInitialization is activated");
             var specnames = new List<string> { "LeaveRoom", "InitWidgets" };
             Assembly
                 .GetAssembly(typeof(SGRoomControllerBase))
@@ -41,6 +40,22 @@ namespace BattletechPerformanceFix
                         }
                     }
                 });
+            Control.harmony.Patch(AccessTools.Method(typeof(BattleTech.SimGameState), nameof(CompleteLanceConfigurationPrep))
+            , new HarmonyMethod(typeof(LazyRoomInitialization), nameof(CompleteLanceConfigurationPrep), null));
+
+        }
+
+        public static void CompleteLanceConfigurationPrep(BattleTech.SimGameState __instance)
+        {
+            Control.Log("New game ensure CmdCenterRoom is initialized");
+            InitializeRoom(__instance.RoomManager.CmdCenterRoom);
+        }
+
+        public static void InitializeRoom(SGRoomControllerBase room)
+        {
+            allowInit = true;
+            room.InitWidgets();
+            allowInit = false;
         }
 
         public static Dictionary<SGRoomControllerBase, bool> DB = new Dictionary<SGRoomControllerBase, bool>();
@@ -79,9 +94,7 @@ namespace BattletechPerformanceFix
                 if (DB[__instance] == false)
                 {
                     Control.Log("Initialize Widgets");
-                    allowInit = true;
-                    new Traverse(__instance).Method(nameof(SGRoomControllerBase.InitWidgets)).GetValue();
-                    allowInit = false;
+                    InitializeRoom(__instance);
                 }
             });
         }
