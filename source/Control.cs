@@ -149,6 +149,9 @@ namespace BattletechPerformanceFix
                     Log("experimentalSalvageSoftlockFix is OFF");
                 }
 
+                new MissingAssetsContinueLoad()
+                .Activate();
+
 
                 harmony.PatchAll(Assembly.GetExecutingAssembly());
 
