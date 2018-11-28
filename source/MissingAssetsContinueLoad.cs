@@ -15,8 +15,11 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
+            var m = new HarmonyMethod(typeof(MissingAssetsContinueLoad), nameof(MissingAssetsContinueLoad.RequestResource_Internal));
+            m.prioritiy = Priority.First;
             Control.harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal")
-                                 , new HarmonyMethod(typeof(MissingAssetsContinueLoad), nameof(MissingAssetsContinueLoad.RequestResource_Internal)), null);
+                                 , m
+                                 , null);
         }
         
         public static void RequestResource_Internal(DataManager __instance, BattleTechResourceType resourceType, ref string identifier)
