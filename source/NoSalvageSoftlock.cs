@@ -13,8 +13,6 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            Control.Log("NoSalvageSoftLock is activated");
-
             Control.harmony.Patch(AccessTools.Method(typeof(AAR_SalvageChosen), nameof(AAR_SalvageChosen.HasAllPriority))
                                  , new HarmonyMethod(typeof(NoSalvageSoftlock), nameof(NoSalvageSoftlock.HasAllPriority)), null);
         }

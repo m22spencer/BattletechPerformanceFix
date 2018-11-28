@@ -8,9 +8,9 @@ using static BattletechPerformanceFix.Control;
 
 namespace BattletechPerformanceFix
 {
-    public static class LazyRoomInitialization
+    public class LazyRoomInitialization : Feature
     {
-        public static void Activate()
+        public void Activate()
         {
             Log("LazyRoomInitialization is activated");
             var specnames = new List<string> { "LeaveRoom", "InitWidgets" };

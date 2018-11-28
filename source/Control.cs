@@ -18,6 +18,7 @@ using HBS.Collections;
 using HBS.Threading.Coroutine;
 using HBS.Threading;
 using BattleTech.Save.Core;
+using Newtonsoft.Json;
 
 namespace BattletechPerformanceFix
 {
@@ -121,6 +122,7 @@ namespace BattletechPerformanceFix
                 lib = mod = new Mod(modDirectory);
                 lib.SetupLogging();
                 mod.LoadSettings(settings);
+                settings = JsonConvert.DeserializeObject<ModSettings>(File.ReadAllText(mod.SettingsPath));
 
                 mod.Logger.Log(settings.logLevel);
                 LogLevel = settings.logLevel;
@@ -128,30 +130,27 @@ namespace BattletechPerformanceFix
 
                 harmony = HarmonyInstance.Create(mod.Name);
 
-                if (settings.experimentalLazyRoomInitialization) LazyRoomInitialization.Activate();
-                else Log("ExperimentalLazyRoomInitialization is OFF", settings.experimentalLazyRoomInitialization);
+                var allFeatures = new Dictionary<Type, bool> {
+                    { typeof(LazyRoomInitialization), false },
+                    { typeof(LoadFixes), false },
+                    { typeof(NoSalvageSoftlock), true },
+                    { typeof(MissingAssetsContinueLoad), true }
+                };
 
-                var loadFixes = new LoadFixes();
-                if (settings.experimentalLoadFixes) {
-                    Log("experimentalLoadFixes is ON");
-                    loadFixes.Activate();
-                } else
+
+
+                Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
+                settings.features = want.ToDictionary(kv => kv.Key.Name, kv => kv.Value);
+                File.WriteAllText(mod.SettingsPath, JsonConvert.SerializeObject(settings, Formatting.Indented));
+
+                foreach (var feature in want)
                 {
-                    Log("experimentalLoadFixes is OFF");
+                    Log("Feature {0} is {1}", feature.Key.Name, feature.Value ? "ON" : "OFF");
+                    if (feature.Value) {
+                        var f = (Feature)AccessTools.CreateInstance(feature.Key);
+                        f.Activate();
+                    }
                 }
-
-                var noSalvageSoftlock = new NoSalvageSoftlock();
-                if (settings.experimentalSalvageSoftlockFix) {
-                    Log("experimentalSalvageSoftlockFix is ON");
-                    noSalvageSoftlock.Activate();
-                } else
-                {
-                    Log("experimentalSalvageSoftlockFix is OFF");
-                }
-
-                new MissingAssetsContinueLoad()
-                .Activate();
-
 
                 harmony.PatchAll(Assembly.GetExecutingAssembly());
 
@@ -203,7 +202,7 @@ namespace BattletechPerformanceFix
             using (var reader = new StreamReader(SettingsPath))
             {
                 var json = reader.ReadToEnd();
-                JSONSerializationUtility.FromJSON(settings, json);
+                settings = JsonConvert.DeserializeObject<T>(json);
             }
 
             var logLevelString = settings.logLevel;
@@ -217,11 +216,11 @@ namespace BattletechPerformanceFix
             
         }
 
-                public void SaveSettings<T>(T settings) where T : ModSettings
+        public void SaveSettings<T>(T settings) where T : ModSettings
         {
             using (var writer = new StreamWriter(SettingsPath))
             {
-                var json = JSONSerializationUtility.ToJSON(settings);
+                var json = JsonConvert.SerializeObject(settings, Formatting.Indented);
                 writer.Write(json);
             }
         }
@@ -288,9 +287,7 @@ namespace BattletechPerformanceFix
     public class ModSettings
     {
         public string logLevel = "Log";
-        public bool experimentalLazyRoomInitialization = false;
-        public bool experimentalLoadFixes = false;
-        public bool experimentalSalvageSoftlockFix = false;
+        public Dictionary<string, bool> features = new Dictionary<string, bool>();
     }
 
     internal class ModTekInfo

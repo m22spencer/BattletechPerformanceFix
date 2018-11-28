@@ -1,5 +1,9 @@
-{ "logLevel" : "Debug" 
-, "experimentalLazyRoomInitialization": false
-, "experimentalLoadFixes": false
-, "experimentalSalvageSoftlockFix" : true
+{
+  "logLevel": "Debug",
+  "features": {
+    "LazyRoomInitialization": false,
+    "LoadFixes": true,
+    "NoSalvageSoftlock": true,
+    "MissingAssetsContinueLoad": true
+  }
 }

@@ -15,8 +15,6 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            Control.Log("MissingAssetsContinueLoad is activated");
-
             Control.harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal")
                                  , new HarmonyMethod(typeof(MissingAssetsContinueLoad), nameof(MissingAssetsContinueLoad.RequestResource_Internal)), null);
         }
