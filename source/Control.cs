@@ -143,17 +143,23 @@ namespace BattletechPerformanceFix
                 settings.features = want.ToDictionary(kv => kv.Key.Name, kv => kv.Value);
                 File.WriteAllText(mod.SettingsPath, JsonConvert.SerializeObject(settings, Formatting.Indented));
 
+                Log("Features ----------");
                 foreach (var feature in want)
                 {
                     Log("Feature {0} is {1}", feature.Key.Name, feature.Value ? "ON" : "OFF");
+                }
+                Log("Patches ----------");
+                foreach (var feature in want)
+                {
                     if (feature.Value) {
                         var f = (Feature)AccessTools.CreateInstance(feature.Key);
                         f.Activate();
                     }
                 }
+                Log("Runtime ----------");
 
                 harmony.PatchAll(Assembly.GetExecutingAssembly());
-
+                
                 PatchMechlabLimitItems.Initialize();
 
                 // logging output can be found under BATTLETECH\BattleTech_Data\output_log.txt

@@ -19,11 +19,20 @@ namespace BattletechPerformanceFix {
     {
         public void Activate()
         {
-            Control.TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () => {
-                Control.harmony.Patch(AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
-                                     , new HarmonyMethod(typeof(DontStripComments).GetMethod(nameof(DontStripComments.Prefix)))
-                                     , null);
-            });
+            if (AppDomain.CurrentDomain.GetAssemblies()
+                         .Any(asm => asm.GetName().Name == "Turbine"))
+            {
+                Control.Log("LoadFixes disabled (Turbine is installed, and faster than LoadFixes)");
+            }
+            else
+            {
+                Control.TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () =>
+                {
+                    Control.harmony.Patch(AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
+                                         , new HarmonyMethod(typeof(DontStripComments).GetMethod(nameof(DontStripComments.Prefix)))
+                                         , null);
+                });
+            }
         }
     }
 

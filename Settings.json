@@ -4,7 +4,6 @@
     "LazyRoomInitialization": true,
     "LoadFixes": true,
     "NoSalvageSoftlock": true,
-    "MissingAssetsContinueLoad": true,
-    "VersionManifestDictionary": true
+    "MissingAssetsContinueLoad": true
   }
 }
