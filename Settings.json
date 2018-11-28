@@ -1,9 +1,10 @@
 {
   "logLevel": "Debug",
   "features": {
-    "LazyRoomInitialization": false,
+    "LazyRoomInitialization": true,
     "LoadFixes": true,
     "NoSalvageSoftlock": true,
-    "MissingAssetsContinueLoad": true
+    "MissingAssetsContinueLoad": true,
+    "VersionManifestDictionary": true
   }
 }
