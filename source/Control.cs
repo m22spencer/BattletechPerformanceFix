@@ -134,7 +134,8 @@ namespace BattletechPerformanceFix
                     { typeof(LazyRoomInitialization), false },
                     { typeof(LoadFixes), false },
                     { typeof(NoSalvageSoftlock), true },
-                    { typeof(MissingAssetsContinueLoad), true }
+                    { typeof(MissingAssetsContinueLoad), true },
+                    { typeof(DataLoaderGetEntryCheck), false }
                 };
 
 
