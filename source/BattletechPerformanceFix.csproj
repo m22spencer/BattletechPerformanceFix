@@ -85,6 +85,7 @@
     <Compile Include="PatchAddShopInventory.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
     <Compile Include="PatchMechLabPanelLoadThrottling.cs" />
+    <Compile Include="DynamicTagsFix.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />

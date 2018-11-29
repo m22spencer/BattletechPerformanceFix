@@ -135,7 +135,8 @@ namespace BattletechPerformanceFix
                     { typeof(LoadFixes), false },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
-                    { typeof(DataLoaderGetEntryCheck), false }
+                    { typeof(DataLoaderGetEntryCheck), false },
+                    { typeof(DynamicTagsFix), true }
                 };
 
 
