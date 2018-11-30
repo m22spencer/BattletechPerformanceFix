@@ -19,6 +19,7 @@ using HBS.Threading.Coroutine;
 using HBS.Threading;
 using BattleTech.Save.Core;
 using Newtonsoft.Json;
+using HBS.Data;
 
 namespace BattletechPerformanceFix
 {
@@ -136,8 +137,8 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "TagsFix2");
-
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            
             Trap(() =>
             {
 
@@ -171,18 +172,17 @@ namespace BattletechPerformanceFix
                 harmony = HarmonyInstance.Create(mod.Name);
 
                 var allFeatures = new Dictionary<Type, bool> {
-                    { typeof(LazyRoomInitialization), false },
+                    //{ typeof(LazyRoomInitialization), false },
                     { typeof(LoadFixes), false },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
                     //{ typeof(DataLoaderGetEntryCheck), false },  // A bit too dangerous to enable at the moment.
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
-                    { typeof(ShopTabLagFix), true }
+                    { typeof(ShopTabLagFix), true },
+                    { typeof(MDDB_InMemoryCache), false }
                 };
-
-
-
+                               
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
                 settings.features = want.ToDictionary(kv => kv.Key.Name, kv => kv.Value);
                 File.WriteAllText(mod.SettingsPath, JsonConvert.SerializeObject(settings, Formatting.Indented));
