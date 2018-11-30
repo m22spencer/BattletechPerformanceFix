@@ -18,8 +18,12 @@ namespace BattletechPerformanceFix
         public void Activate()
         {
             var p = nameof(GetEntry);
+
+            var getentry = Control.CheckPatch( AccessTools.Method(typeof(DataLoader), p)
+                                             , "17104bca745ea14636548c5a2647770edfdeb28808986dafcd721ae0b6971e54");
+
             var m = new HarmonyMethod(typeof(DataLoaderGetEntryCheck), p);
-            Control.harmony.Patch(AccessTools.Method(typeof(DataLoader), p)
+            Control.harmony.Patch( getentry
                                  , null
                                  , null
                                  , m);

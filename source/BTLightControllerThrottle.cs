@@ -18,8 +18,10 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            Control.Log("Activate BTLightControllerThrottle");
-            Control.harmony.Patch(AccessTools.Method(typeof(BTCustomRenderer), "OnPreCull")
+            var precull = Control.CheckPatch( AccessTools.Method(typeof(BTCustomRenderer), "OnPreCull")
+                                            , "2d4664901a7bde11ee58911347847642c51dd41958b7b57bf08caa9a821f017f");
+
+            Control.harmony.Patch( precull
                                  , null
                                  , null
                                  , new HarmonyMethod(typeof(BTLightControllerThrottle), "OnPreCullPatch")

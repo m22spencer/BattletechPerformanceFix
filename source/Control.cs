@@ -50,6 +50,34 @@ namespace BattletechPerformanceFix
                 // It's possible to log during a patch that can't access HBS logging tools
                 mod.Logger.Log(omsg);
             } catch { }
+        } 
+
+        public static string HashMethod(MethodBase meth)
+        {
+            var body = meth.GetMethodBody();
+            var ilbytes = body.GetILAsByteArray();
+            var methsig = meth.ToString();
+            var lvs = string.Join(":", body.LocalVariables.Select(lvi => lvi.ToString()).ToArray());
+
+            var allbytes = Encoding.UTF8.GetBytes(methsig + ":" + lvs + ":").Concat(ilbytes).ToArray();
+
+            var s = System.Security.Cryptography.SHA256.Create();
+            return string.Join("", s.ComputeHash(allbytes).Select(b => b.ToString("x2")).ToArray());
+        }
+
+        public static MethodBase CheckPatch(MethodBase meth, params string[] sha256s)
+        {
+            if (meth == null)
+            {
+                LogError("A CheckPatch recieved a null method, this is fatal");
+            }
+            var h = HashMethod(meth);
+            if (!sha256s.Contains(h))
+            {
+                LogWarning(":method {0}::{1} :hash {2} does not match any specified :hash ({3})", meth.DeclaringType.FullName, meth.ToString(), h, string.Join(" ", sha256s));
+            }
+
+            return meth;
         }
 
         public static void LogDebug(string msg, params object[] values)
@@ -61,6 +89,11 @@ namespace BattletechPerformanceFix
         public static void LogError(string msg, params object[] values)
         {
             Log("[Error] " + msg, values);
+        }
+
+        public static void LogWarning(string msg, params object[] values)
+        {
+            Log("[Warning] " + msg, values);
         }
 
         public static void LogException(params object[] values)

@@ -13,7 +13,9 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            Control.harmony.Patch(AccessTools.Method(typeof(AAR_SalvageChosen), nameof(AAR_SalvageChosen.HasAllPriority))
+            var hap = Control.CheckPatch(AccessTools.Method(typeof(AAR_SalvageChosen), nameof(AAR_SalvageChosen.HasAllPriority))
+                                        , "80d43f27b8537a10099fd1ebceb4b6961549f30518c00de53fcf38c27623f7ec");
+            Control.harmony.Patch(hap
                                  , new HarmonyMethod(typeof(NoSalvageSoftlock), nameof(NoSalvageSoftlock.HasAllPriority)), null);
         }
 
