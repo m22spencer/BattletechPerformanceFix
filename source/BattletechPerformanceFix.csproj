@@ -35,41 +35,50 @@
   <PropertyGroup>
     <RunPostBuildEvent>Always</RunPostBuildEvent>
   </PropertyGroup>
+  <PropertyGroup>
+    <IsWindows Condition="'$(OS)' == 'Windows_NT'">true</IsWindows>
+    <IsOSX Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">true</IsOSX>
+    <IsLinux Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinux>
+
+    <BTechData Condition="$(IsOSX) == true">../../../data/Managed/</BTechData>
+    <BTechData Condition="$(IsWindows) == true">../../../BattleTech_Data/Managed/</BTechData>
+    <BTechData Condition="$(IsLinux) == true">../../../BattleTech_Data/Managed/</BTechData>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\BattleTech_Data\Managed\0Harmony.dll</HintPath>
+      <HintPath>$(BTechData)0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>..\..\..\BattleTech_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(BTechData)Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="ModTek">
-      <HintPath>..\..\ModTek.dll</HintPath>
+      <HintPath>../../ModTek.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\..\BattleTech_Data\Managed\Newtonsoft.Json.dll</HintPath>
+      <HintPath>$(BTechData)Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System">
-      <HintPath>..\..\..\BattleTech_Data\Managed\System.dll</HintPath>
+      <HintPath>$(BTechData)System.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Core">
-      <HintPath>..\..\..\BattleTech_Data\Managed\System.Core.dll</HintPath>
+      <HintPath>$(BTechData)System.Core.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Data">
-      <HintPath>..\..\..\BattleTech_Data\Managed\System.Data.dll</HintPath>
+      <HintPath>$(BTechData)System.Data.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>..\..\..\BattleTech_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(BTechData)UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>..\..\..\BattleTech_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>$(BTechData)UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -95,6 +104,8 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>REM copy /Y "$(TargetDir)$(TargetName).dll" "$(SolutionDir)..\$(TargetName).dll"</PostBuildEvent>
+    <PostBuildEvent Condition="$(IsWindows) == true">REM copy /Y "$(TargetDir)$(TargetName).dll" "$(SolutionDir)..\$(TargetName).dll"</PostBuildEvent>
+    <PostBuildEvent Condition="$(IsLinux) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../$(TargetName).dll"</PostBuildEvent>
+    <PostBuildEvent Condition="$(IsOSX) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../$(TargetName).dll"</PostBuildEvent>
   </PropertyGroup>
 </Project>
