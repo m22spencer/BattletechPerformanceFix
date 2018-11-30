@@ -76,6 +76,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Control.cs" />
+    <Compile Include="BTLightControllerThrottle.cs" />
     <Compile Include="HarmonyExt.cs" />
     <Compile Include="DataLoaderGetEntryCheck.cs" />
     <Compile Include="MissingAssetsContinueLoad.cs" />

@@ -4,6 +4,9 @@
     "LazyRoomInitialization": true,
     "LoadFixes": true,
     "NoSalvageSoftlock": true,
-    "MissingAssetsContinueLoad": true
+    "MissingAssetsContinueLoad": true,
+    "DataLoaderGetEntryCheck": true,
+    "DynamicTagsFix": true,
+    "BTLightControllerThrottle": true,
   }
 }

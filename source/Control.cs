@@ -96,7 +96,7 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
-            Log("Initialized {0}", ModFullName);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
 
             Trap(() =>
             {
@@ -136,7 +136,8 @@ namespace BattletechPerformanceFix
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
                     { typeof(DataLoaderGetEntryCheck), false },
-                    { typeof(DynamicTagsFix), true }
+                    { typeof(DynamicTagsFix), true },
+                    { typeof(BTLightControllerThrottle), false },
                 };
 
 
