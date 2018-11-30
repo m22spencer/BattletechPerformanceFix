@@ -33,7 +33,6 @@ namespace BattletechPerformanceFix
         public static BTLight.LightStruct[] GetLightArray(Camera camera, bool simGame, ComputeBuffer cullBuffer, ComputeBuffer lightMatricies, out Vector4 numLights, bool isPortrait)
         {
             Control.Trap(() => { 
-                // transpile the light compute and put a guard at the top + memo here. Like the GEC
                 if (last == null || Time.unscaledTime > lastRender + renderEveryXS)
                 {
                     lastRender = Time.unscaledTime;
