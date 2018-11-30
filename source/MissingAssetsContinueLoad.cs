@@ -28,7 +28,7 @@ namespace BattletechPerformanceFix
         {
             try
             {
-                var versionManifestEntry = __instance.ResourceLocator.EntryByID(identifier, resourceType, false);
+                var versionManifestEntry = __instance.ResourceLocator.EntryByID(identifier, resourceType);
                 if (versionManifestEntry == null)
                 {
                     // Game wants asset, game doesn't know how to load asset

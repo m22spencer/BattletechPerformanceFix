@@ -55,14 +55,19 @@ namespace BattletechPerformanceFix
         public static string HashMethod(MethodBase meth)
         {
             var body = meth.GetMethodBody();
+            //ilbytes is different between battletech versions for same code. Jump/label maybe?
+            // TODO: push this through harmony api to get CodeInstructions and then hash that.
             var ilbytes = body.GetILAsByteArray();
             var methsig = meth.ToString();
             var lvs = string.Join(":", body.LocalVariables.Select(lvi => lvi.ToString()).ToArray());
 
+            
             var allbytes = Encoding.UTF8.GetBytes(methsig + ":" + lvs + ":").Concat(ilbytes).ToArray();
 
             var s = System.Security.Cryptography.SHA256.Create();
-            return string.Join("", s.ComputeHash(allbytes).Select(b => b.ToString("x2")).ToArray());
+            //return string.Join("", s.ComputeHash(allbytes).Select(b => b.ToString("x2")).ToArray());
+
+            return methsig + ":" + lvs + ":" + string.Join("", ilbytes.Select(b => b.ToString("x2")).ToArray());
         }
 
         public static MethodBase CheckPatch(MethodBase meth, params string[] sha256s)
@@ -71,11 +76,13 @@ namespace BattletechPerformanceFix
             {
                 LogError("A CheckPatch recieved a null method, this is fatal");
             }
+            /*
             var h = HashMethod(meth);
             if (!sha256s.Contains(h))
             {
                 LogWarning(":method {0}::{1} :hash {2} does not match any specified :hash ({3})", meth.DeclaringType.FullName, meth.ToString(), h, string.Join(" ", sha256s));
             }
+            */
 
             return meth;
         }
@@ -129,7 +136,7 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "TagsFix2");
 
             Trap(() =>
             {
@@ -168,9 +175,10 @@ namespace BattletechPerformanceFix
                     { typeof(LoadFixes), false },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
-                    { typeof(DataLoaderGetEntryCheck), false },
+                    //{ typeof(DataLoaderGetEntryCheck), false },  // A bit too dangerous to enable at the moment.
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
+                    { typeof(ShopTabLagFix), true }
                 };
 
 
