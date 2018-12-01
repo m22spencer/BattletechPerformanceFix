@@ -53,8 +53,13 @@ namespace BattletechPerformanceFix
         {
             Control.Trap(() =>
             {
+                if (ConnectionURI != null && ConnectionURI != __instance.ConnectionURI)
+                {
+                    Control.LogException("MDDB_InMemoryCache: Expected {0} but got {1}", ConnectionURI, __instance.ConnectionURI);
+                }
                 if (memoryStore == null)
                 {
+
                     ConnectionURI = __instance.ConnectionURI;
                     Control.Log("MDDB_InMemoryCache Open {0} -> :memory:", ConnectionURI);
                     mstore = new SQLiteConnection("Data Source=:memory:");

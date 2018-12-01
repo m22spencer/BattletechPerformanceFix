@@ -129,6 +129,11 @@ namespace BattletechPerformanceFix
                 return default(T);
             }
         }
+
+        public static T[] Array<T>(params T[] p) => p;
+        public static List<T> List<T>(params T[] p) => p.ToList();
+        public static IEnumerable<T> Sequence<T>(params T[] p) => p;
+
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         public static void Start(string modDirectory, string json)
@@ -173,14 +178,15 @@ namespace BattletechPerformanceFix
 
                 var allFeatures = new Dictionary<Type, bool> {
                     //{ typeof(LazyRoomInitialization), false },
-                    { typeof(LoadFixes), false },
+                    { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
                     //{ typeof(DataLoaderGetEntryCheck), false },  // A bit too dangerous to enable at the moment.
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
-                    { typeof(MDDB_InMemoryCache), false }
+                    { typeof(MDDB_InMemoryCache), false },
+                    //{ typeof(RemoveMDDB), false }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
@@ -203,7 +209,11 @@ namespace BattletechPerformanceFix
                 Log("Runtime ----------");
 
                 harmony.PatchAll(Assembly.GetExecutingAssembly());
-                
+
+                Log("Patch out sensitive data log dumps");
+                new DisableSensitiveDataLogDump().Activate();
+
+
                 PatchMechlabLimitItems.Initialize();
 
                 // logging output can be found under BATTLETECH\BattleTech_Data\output_log.txt
