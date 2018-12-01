@@ -185,8 +185,9 @@ namespace BattletechPerformanceFix
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
-                    { typeof(MDDB_InMemoryCache), false },
-                    //{ typeof(RemoveMDDB), false }
+                    //{ typeof(MDDB_InMemoryCache), true },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
+                    //{ typeof(RemoveMDDB), true },
+                    { typeof(ContractLagFix), true }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
@@ -202,8 +203,14 @@ namespace BattletechPerformanceFix
                 foreach (var feature in want)
                 {
                     if (feature.Value) {
-                        var f = (Feature)AccessTools.CreateInstance(feature.Key);
-                        f.Activate();
+                        try
+                        {
+                            var f = (Feature)AccessTools.CreateInstance(feature.Key);
+                            f.Activate();
+                        } catch (Exception e)
+                        {
+                            LogError("Failed to activate feature {0} with:\n {1}\n", feature.Key, e);
+                        }
                     }
                 }
                 Log("Runtime ----------");
