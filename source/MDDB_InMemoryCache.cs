@@ -41,41 +41,30 @@ namespace BattletechPerformanceFix
             Control.harmony.Patch(AccessTools.Method(typeof(MapsAndEncounters_MDDExtensions), "GetMapByPath")
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), "GetMapByPath"));
 
-        }
-
-        public static void GetMapByPath(string path)
-        {
-            Control.Log("GetMapByPath: {0}", path);
+            Control.harmony.Patch(AccessTools.Method(typeof(ModTek.ModTek), "WriteJsonFile")
+                                 , null
+                                 , new HarmonyMethod(typeof(MDDB_InMemoryCache), nameof(MDDB_InMemoryCache.SaveToDisk)));
+            Control.harmony.Patch(AccessTools.Method(typeof(BattleTech.OnGameShutdown), "ShutdownFileIO")
+                                 , null
+                                 , new HarmonyMethod(typeof(MDDB_InMemoryCache), nameof(MDDB_InMemoryCache.SaveToDisk)));
         }
 
         public static bool Open(FileBackedSQLiteDB __instance, ref IDbConnection ___connection)
         {
-            var stack = new StackTrace().ToString();
             Control.Trap(() =>
             {
-               
-                Control.Log("Open {0} (:type-avail {1} :stack {2}", __instance.ConnectionURI, typeof(SQLiteConnection), stack);
                 if (memoryStore == null)
                 {
-                    Control.Log("Init in-memory store");
-                    var mstore = new SQLiteConnection("Data Source=:memory:");
-                    Control.Log("Open mstore");
+                    ConnectionURI = __instance.ConnectionURI;
+                    Control.Log("MDDB_InMemoryCache Open {0} -> :memory:", ConnectionURI);
+                    mstore = new SQLiteConnection("Data Source=:memory:");
                     mstore.Open();
-                    Control.Log("sqlconn disk");
                     var disk = new SQLiteConnection(__instance.ConnectionURI);
-                    Control.Log("open disk");
                     disk.Open();
-                    Control.Log("backup db");
                     disk.BackupDatabase(mstore, mstore.Database, disk.Database, -1, null, -1);
-
-                    Control.Log("make proxy");
-                    memoryStore = new SQLProxy(mstore);
-
-                    Control.Log("Try fetch data");
-                    var res = memoryStore.ExecuteScalar("SELECT * FROM WeaponDef");
-                    Control.Log("dbfresres {0}", res);
+                    disk.Close();
                     
-                    Control.Log("Done");
+                    memoryStore = new SQLProxy(mstore);
                 }
             });
 
@@ -84,14 +73,33 @@ namespace BattletechPerformanceFix
             return false;
         }
 
+        public static void SaveToDisk()
+        {
+            Control.Trap(() =>
+            {
+                if (ConnectionURI == null)
+                {
+                    Control.LogWarning("Tried to save MDDB but no connection info");
+                    return;
+                }
+                
+                Control.Log("MDDB_InMemoryCache Write :memory: {0}", ConnectionURI);
+                var disk = new SQLiteConnection(ConnectionURI);
+                disk.Open();
+                
+                mstore.BackupDatabase(disk, disk.Database, mstore.Database, -1, null, -1);
+                disk.Close();
+            });
+        }
+
         public static bool Close()
         {
-            var stack = new StackTrace().ToString();
-            Control.Log("Close intercepted {0}", stack);
             return false;
         }
 
+        static SQLiteConnection mstore = null;
         static IDbConnection memoryStore = null;
+        static string ConnectionURI = null;
     }
 
     class SQLProxy : IDbConnection
