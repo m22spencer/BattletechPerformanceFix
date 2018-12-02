@@ -20,6 +20,7 @@ using HBS.Threading;
 using BattleTech.Save.Core;
 using Newtonsoft.Json;
 using HBS.Data;
+using RSG;
 
 namespace BattletechPerformanceFix
 {
@@ -138,6 +139,9 @@ namespace BattletechPerformanceFix
             foreach (var x in xs) f(x);
         }
 
+        public static IPromise Unit<T>(this IPromise<T> p)
+            => p.Then(x => {});
+
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         public static void Start(string modDirectory, string json)
@@ -146,7 +150,7 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-MDDB-memory");
             
             Trap(() =>
             {
@@ -188,10 +192,9 @@ namespace BattletechPerformanceFix
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
-                    { typeof(MDDB_InMemoryCache), false },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
+                    { typeof(MDDB_InMemoryCache), true },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
                     //{ typeof(RemoveMDDB), true },
                     { typeof(ContractLagFix), true },
-                    { typeof(LoadResourceRemoveIntermediate), true },
                     { typeof(ResolveDepsAsync), true }
                 };
                                

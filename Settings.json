@@ -10,7 +10,6 @@
     "ShopTabLagFix": true,
     "MDDB_InMemoryCache": true,
     "ContractLagFix": true,
-    "LoadResourceRemoveIntermediate": true,
     "ResolveDepsAsync": true
   }
 }

@@ -25,13 +25,13 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            var wantTracking = false;
-
+            var wantTracking = true;
 
             var t = typeof(ResolveDepsAsync);
 
             if (wantTracking)
             {
+                Log("Tracking is ON");
                 Assembly.GetAssembly(typeof(HeraldryDef))
                     .GetTypes()
                     .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
@@ -47,13 +47,16 @@ namespace BattletechPerformanceFix
                 harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SGRoomController_CmdCenter), "EnterRoom"), new HarmonyMethod(AccessTools.Method(t, "Summary")));
             }
 
-            //return;
             Log("CDAL fix on");
             var drop = AccessTools.Method(t, nameof(Drop));
             harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
-            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "DependenciesLoaded"), new HarmonyMethod(drop));
-            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies))));
-            
+            //harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "DependenciesLoaded"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_HeraldryDef))));
+             
+            harmony.Patch(AccessTools.Method(typeof(ChassisDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
+            //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(ChassisDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_ChassisDef))));
+
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
         }
 
@@ -63,17 +66,19 @@ namespace BattletechPerformanceFix
             var frm = new StackFrame(1).GetMethod();
             var key = string.Format("{0}.{1}", frm.DeclaringType.Name, frm.Name);
             if (!track.ContainsKey(key)) track[key] = 0;
+            if (!track.ContainsKey("total")) track["total"] = 0;
             track[key]++;
+            track["total"]++;
         }
 
         public static void Summary()
         {
-            Control.LogDebug("(Track {0})", string.Join(" ", track.Select(kv => string.Format(":{0} {1}", kv.Key, kv.Value)).ToArray()));
+            Control.Log("(Track {0})", string.Join(" ", track.Select(kv => string.Format(":{0} {1}", kv.Key, kv.Value)).ToArray()));
         }
 
         public static bool Drop() => false;
 
-        public static bool RequestDependencies(HeraldryDef __instance, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
+        public static bool RequestDependencies_HeraldryDef(HeraldryDef __instance, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
         {
             LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
 
@@ -84,6 +89,8 @@ namespace BattletechPerformanceFix
                 if (!string.IsNullOrEmpty(__instance.Description.Icon)) all.Add(Load<Sprite>(RT.Sprite, __instance.Description.Icon).Then(s => { }));
                 if (!string.IsNullOrEmpty(__instance.textureLogoID))
                 {
+                    //Heraldry also loads sprite here with same ID. Is this valid even?
+                    //  Do we really want colliding identifiers for items of different types?
                     //all.Add(Load<Sprite>(RT.Sprite, __instance.textureLogoID).Then(s => { }));
                     all.Add(Load<Texture2D>(RT.Texture2D, __instance.textureLogoID).Then(s => { }));
                 }
@@ -99,6 +106,55 @@ namespace BattletechPerformanceFix
                         LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
                         __instance.Refresh();
                         onDependenciesLoaded();
+                    }
+                         , err => LogException(err));
+            });
+            return false;
+        }
+        
+        public static bool RequestDependencies_ChassisDef(ChassisDef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+
+            Trap(() =>
+            {
+                var all = new List<IPromise>();
+
+                if (__instance.FixedEquipment != null)
+                    foreach (var equip in __instance.FixedEquipment)
+                    {
+                        // Might need to cache here.
+                        if (!equip.DependenciesLoaded(loadRequest.RequestWeight.AllowedWeight)) {
+                            var prom = new Promise();
+                            equip.RequestDependencies(dataManager, prom.Resolve, loadRequest);
+                            all.Add(prom);
+                        }
+                    }
+
+                // PRE - RequestInventoryPrefabs();
+                if (__instance.FixedEquipment != null)
+                    foreach (var equip in __instance.FixedEquipment)
+                    {
+                        if (equip.Def != null && !string.IsNullOrEmpty(equip.prefabName))
+                            all.Add(Load(RT.Prefab, equip.prefabName));
+                    }
+                // FIXME: Implement
+                // POST - RequestInventoryPrefabs();
+
+                all.Add(Load(RT.Prefab, __instance.PrefabIdentifier));
+                if (!string.IsNullOrEmpty(__instance.Description.Icon)) all.Add(Load(RT.Sprite, __instance.Description.Icon));
+                all.Add(Load(RT.HardpointDataDef, __instance.HardpointDataDefID));
+                all.Add(Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID));
+                all.Add(Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID));
+                
+                Promise.All(all)
+                    .Done(() =>
+                    {
+                        LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                        __instance.Refresh();
+                        LogDebug("Refreshed {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                        onDependenciesLoaded();
+                        LogDebug("onDepsLoaded {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
                     }
                          , err => LogException(err));
             });
@@ -121,6 +177,12 @@ namespace BattletechPerformanceFix
                 promises[id] = p;
                 return p;
             }
+        }
+
+        public static IPromise Load(RT type, string id)
+        {
+            Trap(() => stuff.RequestResource(type, id, new PrewarmRequest(), false, false));
+            return Ensure(id).Unit();
         }
 
         public static IPromise<T> Load<T>(RT type, string id)
