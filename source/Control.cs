@@ -133,6 +133,10 @@ namespace BattletechPerformanceFix
         public static T[] Array<T>(params T[] p) => p;
         public static List<T> List<T>(params T[] p) => p.ToList();
         public static IEnumerable<T> Sequence<T>(params T[] p) => p;
+        public static void ForEach<T>(this IEnumerable<T> xs, Action<T> f)
+        {
+            foreach (var x in xs) f(x);
+        }
 
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
@@ -142,7 +146,7 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-Super-Secret MDDB edition");
             
             Trap(() =>
             {
@@ -167,7 +171,6 @@ namespace BattletechPerformanceFix
 
                 lib = mod = new Mod(modDirectory);
                 lib.SetupLogging();
-                mod.LoadSettings(settings);
                 settings = JsonConvert.DeserializeObject<ModSettings>(File.ReadAllText(mod.SettingsPath));
 
                 mod.Logger.Log(settings.logLevel);
@@ -181,13 +184,15 @@ namespace BattletechPerformanceFix
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
-                    //{ typeof(DataLoaderGetEntryCheck), false },  // A bit too dangerous to enable at the moment.
+                    { typeof(DataLoaderGetEntryCheck), false },  // A bit too dangerous to enable at the moment.
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
-                    //{ typeof(MDDB_InMemoryCache), true },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
+                    { typeof(MDDB_InMemoryCache), false },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
                     //{ typeof(RemoveMDDB), true },
-                    { typeof(ContractLagFix), true }
+                    { typeof(ContractLagFix), true },
+                    { typeof(LoadResourceRemoveIntermediate), true },
+                    { typeof(ResolveDepsAsync), true }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
