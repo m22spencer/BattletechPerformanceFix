@@ -24,21 +24,58 @@ namespace BattletechPerformanceFix
     class ResolveDepsAsync : Feature
     {
         public void Activate()
-        {   
+        {
+            var wantTracking = false;
+
+
             var t = typeof(ResolveDepsAsync);
+
+            if (wantTracking)
+            {
+                Assembly.GetAssembly(typeof(HeraldryDef))
+                    .GetTypes()
+                    .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
+                    .ForEach(ild =>
+                    {
+                        var pre = new HarmonyMethod(AccessTools.Method(t, "TrackPre"));
+                        HarmonyMethod post = null; // new HarmonyMethod(AccessTools.Method(t, "TrackPost"));
+                    harmony.Patch(AccessTools.Method(ild, "CheckDependenciesAfterLoad"), pre, post);
+                        harmony.Patch(AccessTools.Method(ild, "DependenciesLoaded"), pre, post);
+                        harmony.Patch(AccessTools.Method(ild, "RequestDependencies"), pre, post);
+                    });
+
+                harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SGRoomController_CmdCenter), "EnterRoom"), new HarmonyMethod(AccessTools.Method(t, "Summary")));
+            }
+
+            //return;
+            Log("CDAL fix on");
             var drop = AccessTools.Method(t, nameof(Drop));
             harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "DependenciesLoaded"), new HarmonyMethod(drop));
-            Trap(() => harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies)))));
+            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies))));
             
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
+        }
+
+        static Dictionary<string,int> track = new Dictionary<string,int>();
+        public static void TrackPre()
+        {
+            var frm = new StackFrame(1).GetMethod();
+            var key = string.Format("{0}.{1}", frm.DeclaringType.Name, frm.Name);
+            if (!track.ContainsKey(key)) track[key] = 0;
+            track[key]++;
+        }
+
+        public static void Summary()
+        {
+            Control.LogDebug("(Track {0})", string.Join(" ", track.Select(kv => string.Format(":{0} {1}", kv.Key, kv.Value)).ToArray()));
         }
 
         public static bool Drop() => false;
 
         public static bool RequestDependencies(HeraldryDef __instance, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
         {
-            Log("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+            LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
 
             Trap(() =>
             {
@@ -59,7 +96,7 @@ namespace BattletechPerformanceFix
                 Promise.All(all)
                     .Done(() =>
                     {
-                        Log("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                        LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
                         __instance.Refresh();
                         onDependenciesLoaded();
                     }
@@ -106,7 +143,7 @@ namespace BattletechPerformanceFix
 
         public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
-            Log("Request {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
+            LogDebug("Request {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
             if (!Initialized)
             {
                 stuff = new Stuff(__instance);
@@ -126,11 +163,11 @@ namespace BattletechPerformanceFix
             // Just temporarily testing the waters here before writing the dependency functions
             if (resourceType == RT.Texture2D || resourceType == RT.SimGameConstants || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
             {
-                Log("Request {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
+                LogDebug("Request {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
                 stuff.Load<object>(resourceType, identifier)
                      .Done(res =>
                      {
-                         Log("Loaded {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
+                         LogDebug("Loaded {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
                      },
                      (ex) =>
                      {
@@ -140,7 +177,7 @@ namespace BattletechPerformanceFix
             }
             else
             {
-                Log("Unhandled {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
+                LogDebug("Unhandled {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
             }
             return true;
         }
@@ -303,7 +340,7 @@ namespace BattletechPerformanceFix
             else
             {
                 // FIXME: This caching does not seem to be working, test it.
-                Log("Loading {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
+                LogDebug("Loading {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
                 var v = Go();
                 cache[identifier] = v;
                 return v;
