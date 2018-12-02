@@ -16,6 +16,7 @@ using System.Reflection;
 using BattleTech.Portraits;
 using BattleTech.Framework;
 using RT = BattleTech.BattleTechResourceType;
+using BattleTech.Rendering.MechCustomization;
 using static BattletechPerformanceFix.Control;
 
 namespace BattletechPerformanceFix
@@ -23,14 +24,96 @@ namespace BattletechPerformanceFix
     class ResolveDepsAsync : Feature
     {
         public void Activate()
-        {
+        {   
             var t = typeof(ResolveDepsAsync);
             var drop = AccessTools.Method(t, nameof(Drop));
-            //harmony.Patch(AccessTools.Method(typeof(WeaponDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
-            //harmony.Patch(AccessTools.Method(typeof(WeaponDef), "DependenciesLoaded"), new HarmonyMethod(drop));
-            //harmony.Patch(AccessTools.Method(typeof(WeaponDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies))));
+            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "DependenciesLoaded"), new HarmonyMethod(drop));
+            Trap(() => harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies)))));
             
-            harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal))));
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
+        }
+
+        public static bool Drop() => false;
+
+        public static bool RequestDependencies(HeraldryDef __instance, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            Log("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+
+            Trap(() =>
+            {
+                var all = new List<IPromise>();
+
+                if (!string.IsNullOrEmpty(__instance.Description.Icon)) all.Add(Load<Sprite>(RT.Sprite, __instance.Description.Icon).Then(s => { }));
+                if (!string.IsNullOrEmpty(__instance.textureLogoID))
+                {
+                    //all.Add(Load<Sprite>(RT.Sprite, __instance.textureLogoID).Then(s => { }));
+                    all.Add(Load<Texture2D>(RT.Texture2D, __instance.textureLogoID).Then(s => { }));
+                }
+                Sequence(__instance.primaryMechColorID, __instance.secondaryMechColorID, __instance.tertiaryMechColorID)
+                    .ForEach(color =>
+                    {
+                        if (!string.IsNullOrEmpty(color)) all.Add(Load<ColorSwatch>(RT.ColorSwatch, color).Then(s => { }));
+                    });
+
+                Promise.All(all)
+                    .Done(() =>
+                    {
+                        Log("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                        __instance.Refresh();
+                        onDependenciesLoaded();
+                    }
+                         , err => LogException(err));
+            });
+            return false;
+        }
+
+        public static Dictionary<string, Promise<object>> promises = new Dictionary<string, Promise<object>>();
+        public static bool Initialized = false;
+        public static Stuff stuff;
+
+        public static Promise<object> Ensure(string id)
+        {
+            if (promises.TryGetValue(id, out var prom))
+            {
+                return prom;
+            }
+            else
+            {
+                var p = new Promise<object>();
+                promises[id] = p;
+                return p;
+            }
+        }
+
+        public static IPromise<T> Load<T>(RT type, string id)
+        {
+            Trap(() => stuff.RequestResource(type, id, new PrewarmRequest(), false, false));
+            return Ensure(id)
+                .Then(x => (T)x);
+        }
+
+        public static void DispatchAssetLoad(MessageCenterMessage msg)
+        {
+            var t = new Traverse(msg);
+            var val = t.Property("Resource").GetValue();
+            var id = t.Property("ResourceId").GetValue<string>();
+
+            //FIXME: need to capture any multiple resolved promise here and do some cache correcting
+            Ensure(id)
+                .Resolve(val);
+        }
+
+        public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
+        {
+            Log("Request {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
+            if (!Initialized)
+            {
+                stuff = new Stuff(__instance);
+                Initialized = true;
+                stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
+            }
+            return true;
         }
 
         public static bool CollectDeps = false;
@@ -61,15 +144,6 @@ namespace BattletechPerformanceFix
             }
             return true;
         }
-
-        public static bool Drop() => false;
-
-        public static bool RequestDependencies(WeaponDef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
-        {
-            LogError("WeaponDef Request dependencies was called from\n{0}\n\n", new StackTrace().ToString());
-            //WeaponDef_Deps(__instance, dataManager, onDependenciesLoaded, loadRequest?.ResourceId);
-            return false;
-        }
     }
 
     delegate void AcceptReject<T>(Action<T> accept, Action<Exception> reject);
@@ -88,6 +162,11 @@ namespace BattletechPerformanceFix
             this.dataLoader = new Traverse(dataManager).Field("dataLoader").GetValue<HBS.Data.DataLoader>();
             this.messageCenter = new Traverse(dataManager).Property("MessageCenter").GetValue<MessageCenter>();
             this.textureManager = new Traverse(dataManager).Property("TextureManager").GetValue<TextureManager>();
+        }
+
+        public bool RequestResource(RT type, string id, PrewarmRequest p, bool stack, bool own)
+        {
+            return dataManager.RequestResource(type, id);
         }
 
         public void Add<T>(string field, string key, T item) where T : new()
