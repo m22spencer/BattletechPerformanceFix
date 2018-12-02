@@ -13,7 +13,7 @@ using HBS.Data;
 using RSG;
 using System.Diagnostics;
 using System.Reflection;
-using BattleTech;
+using BattleTech.Portraits;
 using BattleTech.Framework;
 using RT = BattleTech.BattleTechResourceType;
 using static BattletechPerformanceFix.Control;
@@ -29,11 +29,10 @@ namespace BattletechPerformanceFix
             //harmony.Patch(AccessTools.Method(typeof(WeaponDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(WeaponDef), "DependenciesLoaded"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(WeaponDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies))));
-
-            Log("RRI");
+            
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal))));
         }
-        
+
         public static bool CollectDeps = false;
         public static int CollectDepsDepth = 0;
         public static bool Halt = false;
@@ -42,16 +41,13 @@ namespace BattletechPerformanceFix
             var stuff = new Stuff(__instance);
             
             // Just temporarily testing the waters here before writing the dependency functions
-            if (resourceType == RT.SimGameConstants)
+            if (resourceType == RT.Texture2D || resourceType == RT.SimGameConstants || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
             {
-                Log("Request SGC {0}", identifier);
-                stuff.Load<string>(resourceType, identifier)
+                Log("Request {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
+                stuff.Load<object>(resourceType, identifier)
                      .Done(res =>
                      {
-                         Log("Loaded SGC {0}", identifier);
-                         
-                         //TODO: Consider moving this into Load<>
-                         stuff.messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<string>(resourceType, identifier, res));
+                         Log("Loaded {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
                      },
                      (ex) =>
                      {
@@ -59,22 +55,9 @@ namespace BattletechPerformanceFix
                      });
                 return false;
             }
-            else if (resourceType == RT.BaseDescriptionDef)
+            else
             {
-                Log("Request BDD {0}", identifier);
-                stuff.Load<BaseDescriptionDef>(resourceType, identifier)
-                     .Done(res =>
-                     {
-                         Log("Loaded BDD {0} {1}", identifier, res.Details);
-
-                         //TODO: Consider moving this into Load<>
-                         stuff.messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<BaseDescriptionDef>(resourceType, identifier, res));
-                     },
-                     (ex) =>
-                     {
-                         LogException(ex);
-                     });
-                return false;
+                Log("Unhandled {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
             }
             return true;
         }
@@ -89,7 +72,7 @@ namespace BattletechPerformanceFix
         }
     }
 
-    delegate IPromise<T> AcceptReject<T>(Action<T> accept, Action<object> reject);
+    delegate void AcceptReject<T>(Action<T> accept, Action<Exception> reject);
 
     class Stuff
     {
@@ -97,12 +80,14 @@ namespace BattletechPerformanceFix
         public HBS.Data.DataLoader dataLoader;
         public AssetBundleManager bundleManager;
         public MessageCenter messageCenter;
+        public TextureManager textureManager;
         public Stuff(DataManager dataManager)
         {
             this.dataManager = dataManager;
             this.bundleManager = new Traverse(dataManager).Property("AssetBundleManager").GetValue<AssetBundleManager>();
             this.dataLoader = new Traverse(dataManager).Field("dataLoader").GetValue<HBS.Data.DataLoader>();
             this.messageCenter = new Traverse(dataManager).Property("MessageCenter").GetValue<MessageCenter>();
+            this.textureManager = new Traverse(dataManager).Property("TextureManager").GetValue<TextureManager>();
         }
 
         public void Add<T>(string field, string key, T item) where T : new()
@@ -116,8 +101,14 @@ namespace BattletechPerformanceFix
             });
         }
         
+        public void LoadAndPublish<T>(RT resourceType, string identifier)
+        {
+            Load<T>(resourceType, identifier)
+                .Done(res => messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<T>(resourceType, identifier, res)));
+        }
+
         public static Dictionary<string,object> cache = new Dictionary<string,object>();
-        public IPromise<T> Load<T>(BattleTechResourceType resourceType, string identifier)
+        public IPromise<T> Load<T>(BattleTechResourceType resourceType, string identifier, bool publish = true)
         {
             // Store item in datamanager
             // It's likely necessary to clear the cache based on the dm field, since items may be removed from dm
@@ -127,7 +118,17 @@ namespace BattletechPerformanceFix
                 return p.Then(x =>
                 {
                     Trap(() => new Traverse(dataManager).Field(field).GetValue<DictionaryStore<K>>().Add(identifier, x));
+                    if(publish) messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<K>(resourceType, identifier, x));
                     return (T)(object)x;
+                });
+            }
+
+            IPromise<T> passthrough<K>(IPromise<K> p)
+            {
+                return p.Then(val =>
+                {
+                    if (publish) messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<K>(resourceType, identifier, val));
+                    return (T)(object)val;
                 });
             }
 
@@ -179,7 +180,7 @@ namespace BattletechPerformanceFix
                     case RT.ShipModuleUpgrade: return f("shipUpgradeDefs", LoadJson<ShipModuleUpgrade>(entry, resourceType, identifier));
                     case RT.SimGameSubstitutionListDef: return f("simGameSubstitutionDefLists", LoadJson<SimGameSubstitutionListDef>(entry, resourceType, identifier));
                     case RT.BaseDescriptionDef: return f("baseDescriptionDefs", LoadJson<BaseDescriptionDef>(entry, resourceType, identifier));
-                    //case RT.PortraitSettings: return f("portraitSettings", LoadJson<PortraitSettings>(entry, resourceType, identifier));
+                    case RT.PortraitSettings: return f("portraitSettings", LoadJson<PortraitSettings>(entry, resourceType, identifier));
                     case RT.SimGameDifficultySettingList: return f("simGameDifficultySettingLists", LoadJson<SimGameDifficultySettingList>(entry, resourceType, identifier));
                     case RT.FlashpointDef: return f("flashpointDefs", LoadJson<FlashpointDef>(entry, resourceType, identifier));
                     case RT.SimGameMilestoneSet: return f("milestoneSets", LoadJson<SimGameMilestoneSet>(entry, resourceType, identifier));
@@ -191,10 +192,22 @@ namespace BattletechPerformanceFix
                     case RT.Sprite:
                     case RT.SVGAsset:
                     case RT.ColorSwatch:
-                    case RT.Texture2D:
-                    case RT.UIModulePrefabs:
-                    case RT.AssetBundle: 
                     */
+                    case RT.Texture2D:
+                        /* if (this.TextureManager != null && this.TextureManager.Contains(identifier))
+                            {
+                                obj = this.TextureManager.GetLoadedTexture(identifier);
+                            }
+                            */
+                        return passthrough(LoadMapper(entry, resourceType, identifier
+                                                     , null
+                                                     , (Texture2D t) => { textureManager.InsertTexture(identifier, t); return t; }
+                                                     , (yes, no) => textureManager.RequestTexture(identifier, new TextureLoaded(yes), new LoadFailed(err => no(new Exception(err))))));
+
+                /*
+                case RT.UIModulePrefabs:
+                case RT.AssetBundle: 
+                */
 
                     // Grouped
                     case RT.BehaviorVariableScope:
@@ -202,7 +215,7 @@ namespace BattletechPerformanceFix
                     case RT.AudioConstants:
                     case RT.CombatGameConstants:
                     case RT.MechStatisticsConstants:
-                    case RT.SimGameConstants: return LoadMapper(entry, resourceType, identifier, s => s, (TextAsset t) => t.text).Then(x => Promise<T>.Resolved((T)(object)x));
+                    case RT.SimGameConstants: return passthrough(LoadMapper(entry, resourceType, identifier, s => s, (TextAsset t) => t.text).Then(x => Promise<string>.Resolved(x)));
                 }
                 return Promise<T>.Rejected(new Exception(string.Format("Unhandled RT type {0}", Enum.GetName(typeof(RT), resourceType))));
             }
@@ -210,6 +223,8 @@ namespace BattletechPerformanceFix
             if (cache.TryGetValue(identifier, out var promise)) return (Promise<T>)promise;
             else
             {
+                // FIXME: This caching does not seem to be working, test it.
+                Log("Loading {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
                 var v = Go();
                 cache[identifier] = v;
                 return v;
@@ -231,16 +246,17 @@ namespace BattletechPerformanceFix
         }
         
         // TODO: Looks like resource and bundle are the same type always, if so reduce them into one selector
-        public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<string, T> file, Func<R, T> resource) 
+        public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<string, T> file, Func<R, T> resource, AcceptReject<T> recover = null) 
             where R : UnityEngine.Object 
         {
             var res = new Promise<T>();
             try
             {
-                if (entry.IsFileAsset) dataLoader.LoadResource(entry.FilePath, c => res.Resolve(file(c)));
-                else if (entry.IsResourcesAsset) res.Resolve(resource(Resources.Load<R>(entry.ResourcesLoadPath)));
-                else if (entry.IsAssetBundled) bundleManager.RequestAsset<R>(resourceType, identifier, b => res.Resolve(resource(b)));
-                else throw new System.Exception(string.Format("Invalid manifest entry for {0}, it is not a file, resource, or asset", identifier));
+                if (entry.IsFileAsset && file != null) dataLoader.LoadResource(entry.FilePath, c => res.Resolve(file(c)));
+                else if (entry.IsResourcesAsset && resource != null) res.Resolve(resource(Resources.Load<R>(entry.ResourcesLoadPath)));
+                else if (entry.IsAssetBundled && resource != null) bundleManager.RequestAsset<R>(resourceType, identifier, b => res.Resolve(resource(b)));
+                else if (recover != null) recover(res.Resolve, res.Reject);
+                else throw new System.Exception(string.Format("Unhandled file, resource, or asset", identifier));
             } catch (Exception e)
             {
                 res.Reject(e);
