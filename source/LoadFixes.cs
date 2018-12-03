@@ -79,7 +79,7 @@ namespace BattletechPerformanceFix {
                 fastJSON.JSON.Parse(json);
                 return json;
             }
-            catch (Exception e)
+            catch
             {
                 return HBSStripCommentsMirror(json);
             }

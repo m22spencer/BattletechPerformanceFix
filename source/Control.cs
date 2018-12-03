@@ -198,7 +198,7 @@ namespace BattletechPerformanceFix
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
                     { typeof(MDDB_InMemoryCache), true },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
-                    //{ typeof(RemoveMDDB), true },
+                    { typeof(RemoveMDDB), true },
                     { typeof(ContractLagFix), true },
                     { typeof(ResolveDepsAsync), true }
                 };

@@ -33,10 +33,10 @@ namespace BattletechPerformanceFix
     {
         public static IPromise Resolve(this DataManager.ILoadDependencies cls, DataManager dm)
         {
-            Log("Attempt to resolve {0}", cls.GetType());
+            LogDebug("Attempt to resolve {0}", cls.GetType());
             var prom = new Promise();
             if (dm == null)
-                Log("DM is null");
+                LogError("DM is null");
             cls.DataManager = dm;
             cls.RequestDependencies(cls.DataManager, prom.Resolve, new DummyLoadRequest(dm));
             return prom;
@@ -54,33 +54,60 @@ namespace BattletechPerformanceFix
             var wantTracking = true;
 
             var t = typeof(ResolveDepsAsync);
+            var drop = AccessTools.Method(t, nameof(Drop));
             harmony.Patch(AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries"), null, new HarmonyMethod(AccessTools.Method(t, nameof(IntegrityCheck))));
 
             if (WantVerify || wantTracking)
             {
                 Log("Tracking is ON");
+                var pre = new HarmonyMethod(AccessTools.Method(t, "TrackPre"));
+                HarmonyMethod post = null; // new HarmonyMethod(AccessTools.Method(t, "TrackPost"));
                 Assembly.GetAssembly(typeof(HeraldryDef))
                     .GetTypes()
                     .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
                     .ForEach(ild =>
                     {
-                        var pre = new HarmonyMethod(AccessTools.Method(t, "TrackPre"));
-                        HarmonyMethod post = null; // new HarmonyMethod(AccessTools.Method(t, "TrackPost"));
+
                         harmony.Patch(AccessTools.Method(ild, "CheckDependenciesAfterLoad"), pre, post);
                         harmony.Patch(AccessTools.Method(ild, "DependenciesLoaded"), pre, post);
                         harmony.Patch(AccessTools.Method(ild, "RequestDependencies"), pre, post);
                     });
 
+                Assembly.GetAssembly(typeof(DataManager))
+                    .GetTypes()
+                    .Where(ty => ty.FullName.EndsWith("SpriteLoadRequest"))
+                    .ForEach(ty => harmony.Patch(AccessTools.Method(ty, "Load"), pre, post));
+
+                AccessTools.GetDeclaredMethods(typeof(Resources))
+                    .Where(meth => meth.Name == "Load" && !meth.IsGenericMethod && !meth.IsGenericMethodDefinition && meth.GetMethodBody() != null)
+                    .ForEach(meth => harmony.Patch(meth, new HarmonyMethod(AccessTools.Method(t, nameof(FileHookPath)))));
+
+                AccessTools.GetDeclaredMethods(typeof(AssetBundle))
+                    .Where(meth => meth.Name == "LoadAsset" && !meth.IsGenericMethod && !meth.IsGenericMethodDefinition && meth.GetMethodBody() != null)
+                    .ForEach(meth => harmony.Patch(meth, new HarmonyMethod(AccessTools.Method(t, nameof(FileHookName)))));
+                harmony.Patch(AccessTools.Method(typeof(DataLoader), "CallHandler"), new HarmonyMethod(AccessTools.Method(t, nameof(FileHookPath))));
+                // Also check GenerateWebRequest GenerateWebRequest
+
+
                 harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SimGameOptionsMenu), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(t, "Summary")));
                 harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(TrackRequestResource))));
+
+
+                //harmony.Patch(AccessTools.Method(typeof(DataManager), "Update"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Update))));
             }
-            
+
+            /*
+            harmony.Patch(AccessTools.Method(typeof(HBS.Threading.SimpleThreadPool), "Worker"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.AVPVideoPlayer), "ForcePlayVideo"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.AVPVideoPlayer), "PlayVideo"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SGVideoPlayer), "PlayVideo"), new HarmonyMethod(drop));            
+            */
+            harmony.Patch(AccessTools.Method(typeof(BattleTech.IntroCinematicLauncher), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(t, "IntroAdded")));
+
+
             Log("CDAL fix on");
-            var drop = AccessTools.Method(t, nameof(Drop));
 
             var resolver = AccessTools.Method(typeof(Resolver<ChassisDef>), "RequestDependencies"); //just using ChassisDef here to reference the static function. It means nothing;
-
-            var c = true;
 
             Assembly.GetAssembly(typeof(HeraldryDef))
                 .GetTypes()
@@ -98,9 +125,35 @@ namespace BattletechPerformanceFix
             new HeraldryDefResolver();
             new AbilityDefResolver();
             new BaseComponentRefResolver();
+            new MechComponentRefResolver();
             new PilotDefResolver();
             new WeaponDefResolver();
             new MechDefResolver();
+            new VehicleDefResolver();
+        }
+    
+        public static void DataManager_Update(DataManager __instance, Dictionary<string, object> ___poolNextUpdate
+            , Dictionary<BattleTechResourceType, Dictionary<string, object>> ___foregroundRequests
+            , Dictionary<BattleTechResourceType, Dictionary<string, object>> ___backgroundRequests) {
+            int f(Dictionary<BattleTechResourceType, Dictionary<string, object>> req)
+                => req.SelectMany(r => r.Value).Count();
+            Trap(() => Log("Pool, foreground, background: {0}, {1}, {2}", ___poolNextUpdate.Count, f(___foregroundRequests), f(___backgroundRequests)));
+        }
+
+        public static bool IntroAdded(IntroCinematicLauncher __instance)
+        {
+            return false;
+        }
+
+        static List<string> allfiles = new List<string>();
+        public static void FileHookPath(string path)
+        {
+            allfiles.Add(path);
+        }
+
+        public static void FileHookName(string name)
+        {
+            allfiles.Add(name);
         }
 
 
@@ -190,7 +243,7 @@ namespace BattletechPerformanceFix
                 // Something is running a dependency check, we want to ignore it.
                 if (RequestDependencies_DryRun)
                 {
-                    Log("Depcheck");
+                    LogDebug("Depcheck");
                     return true;
                 }
 
@@ -198,20 +251,47 @@ namespace BattletechPerformanceFix
                 if (resolveMap.TryGetValue(t.FullName, out var rescls))
                 {
                     // we handle it
-                    Log("Resolver<T>.RequestDependencies where T = {0} && {1}", t.FullName, rescls.GetType().FullName);
+                    LogDebug("Resolver<T>.RequestDependencies where T = {0} && {1}", t.FullName, rescls.GetType().FullName);
                     var rs = rescls.GetType()
                         .GetMethod("ResolveSafe");
                     if (rs == null)
                         LogError("Unable to find ResolveSafe function");
 
                     var prom = (IPromise)rs.Invoke(rescls, new object[] { __instance, dataManager, loadRequest.ResourceType, loadRequest.ResourceId });
-                    prom.Done(onDependenciesLoaded);
+                    if (!onDependenciesLoaded.Method.DeclaringType.FullName.StartsWith("BattleTechPerformanceFix"))
+                        prom.Done(onDependenciesLoaded);  // This is going to duplicate *a lot* of work.
                     return false;
                 } else
                 {
                     // DM handles it
-                    Log("Resolver<T>.RequestDependencies where T = {0} did not resolve and will pass through", t.FullName);
+                    LogDebug("Resolver<T>.RequestDependencies where T = {0} did not resolve and will pass through", t.FullName);
                     return true;
+                }
+            }
+        }
+
+        class ProxyResolver<T,K> : Resolver<T>
+            where T : DataManager.ILoadDependencies
+            where K : DataManager.ILoadDependencies
+        {
+            internal override IPromise Resolve(T __instance, RT type, string id)
+            {
+                var t = __instance.GetType();
+                var k = typeof(K);
+                if (resolveMap.TryGetValue(k.FullName, out var rescls))
+                {
+                    // we handle it
+                    LogDebug("ResolverProxy<T->K>.Resolve where T = {0} K = {1} && {2}", t.FullName, k.FullName, rescls.GetType().FullName);
+                    var rs = rescls.GetType()
+                        .GetMethod("Resolve", BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (rs == null)
+                        LogError("Unable to find Proxied resolve function function");
+                    LogDebug("Found proxied resolve");
+
+                    return Trap(() => (IPromise)rs.Invoke(rescls, new object[] { __instance, type, id }));
+                } else
+                {
+                    return Promise.Rejected(new Exception(string.Format("ResolverProxy<T->K>.Resolve FAILED where T = {0} K = {1} && {2}", t.FullName, k.FullName, rescls.GetType().FullName)));
                 }
             }
         }
@@ -229,9 +309,9 @@ namespace BattletechPerformanceFix
         {
             internal override IPromise Resolve(ChassisDef __instance, RT type, string id)
             {
-                Log("Chassis-__instance: {0}", __instance == null ? "null" : "ok");
-                Log("Chassis-type: {0}", Enum.GetName(typeof(RT), type));
-                Log("Chassis-id: {0}", id);
+                LogDebug("Chassis-__instance: {0}", __instance == null ? "null" : "ok");
+                LogDebug("Chassis-type: {0}", Enum.GetName(typeof(RT), type));
+                LogDebug("Chassis-id: {0}", id);
 
                 return Promise.All( __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve(__instance.DataManager)))
                                   , __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
@@ -306,6 +386,21 @@ namespace BattletechPerformanceFix
             }
         }
 
+        class VehicleDefResolver : Resolver<VehicleDef>
+        {
+            internal override IPromise Resolve(VehicleDef __instance, RT type, string id)
+            {
+                __instance.imaginaryLaserWeaponRef.DataManager = __instance.DataManager;
+                return Promise.All(__instance.ChassisID.OfString(RT.ChassisDef)
+                                  , __instance.Chassis == null ? Promise.Resolved() : __instance.Chassis.Resolve(__instance.DataManager)
+                                  , __instance.HeraldryID.OfString(RT.HeraldryDef)
+                                  , Promise.All(__instance.Inventory.Select(inv => inv.Resolve(__instance.DataManager)))
+                                  , __instance.imaginaryLaserWeaponRef.Resolve(__instance.DataManager));
+            }
+        }
+
+        class MechComponentRefResolver : ProxyResolver<MechComponentRef, BaseComponentRef> { }
+
         static Dictionary<string,int> track = new Dictionary<string,int>();
 
         public static void TrackRequestResource(DataManager __instance, BattleTechResourceType resourceType, PrewarmRequest prewarm)
@@ -354,6 +449,13 @@ namespace BattletechPerformanceFix
         public static void Summary()
         {
             Control.Log("(Track {0})", string.Join(" ", track.Select(kv => string.Format(":{0} {1}", kv.Key, kv.Value)).ToArray()));
+
+            var counts = allfiles.GroupBy(s => s)
+                .Where(g => g.Count() > 1)
+                .Select(g => string.Format("{0}:{1}", g.First(), g.Count()));
+
+
+            Control.Log("(File-duplicates {0})", string.Join(" ", counts.ToArray()));
             track.Clear();
         }
 
@@ -430,6 +532,10 @@ namespace BattletechPerformanceFix
 
         public static IPromise Load(RT type, string id)
         {
+            if (type == RT.MechDef)
+            {
+                return stuff.Load<MechDef>(type, id, false).Unit();
+            }
             Trap(() => stuff.RequestResource(type, id, new PrewarmRequest(), false, false));
             return Ensure(id).Unit();
         }
@@ -452,7 +558,7 @@ namespace BattletechPerformanceFix
             {
                 Ensure(id)
                     .Resolve(val);
-            } catch (Exception e)
+            } catch
             {
                 LogWarning("Asset {0} already dispatched", id);
             }
@@ -473,12 +579,21 @@ namespace BattletechPerformanceFix
                 Initialized = true;
                 stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
             }
+
+            if (resourceType == RT.MechDef || resourceType == RT.Texture2D || resourceType == RT.SimGameConstants || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
+            {
+                Log("custom request: {0}", identifier);
+                stuff.Load<object>(resourceType, identifier);
+                return false;
+            }
+
             return true;
         }
 
         public static bool CollectDeps = false;
         public static int CollectDepsDepth = 0;
         public static bool Halt = false;
+        public static Dictionary<string, Promise<object>> reqCache = new Dictionary<string, Promise<object>>();
         public static bool RequestResources_Internal(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
             var stuff = new Stuff(__instance);
@@ -573,6 +688,7 @@ namespace BattletechPerformanceFix
 
             IPromise<T> Go()
             {
+                LogDebug("Custom load: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
                 var entry = dataManager.ResourceLocator.EntryByID(identifier, resourceType, false);
                 switch (resourceType)
                 {
