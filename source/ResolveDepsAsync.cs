@@ -92,6 +92,7 @@ namespace BattletechPerformanceFix
             new AbilityDefResolver();
             new BaseComponentRefResolver();
             new PilotDefResolver();
+            new WeaponDefResolver();
         }
 
 
@@ -128,6 +129,8 @@ namespace BattletechPerformanceFix
                     LogError("Resolve safe wrong ILD type");
                 var __instance = (T)ild;
                 __instance.DataManager = dataManager;
+                var dummyload = new DummyLoadRequest(dataManager);
+                new Traverse(__instance).Field("loadRequest").SetValue(dummyload);
                 var idef = string.Format("{0}:{1}", id, Enum.GetName(typeof(RT), type));
                 if (cache.TryGetValue(__instance, out var prom))
                 {
@@ -142,7 +145,9 @@ namespace BattletechPerformanceFix
                     LogDebug("Cleanup {0}", idef);
                     np.Done(() =>
                     {
-                        if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved <?fixme T?> {0}", idef);
+                        var dl = Trap(() => __instance.DependenciesLoaded(1000000));
+                        
+                        if (dl) LogDebug("Resolved <?fixme T?> {0}", idef);
                         else
                         {
                             RequestDependencies_DryRun = true;
@@ -151,7 +156,7 @@ namespace BattletechPerformanceFix
                             {
                                 if (__instance.DataManager == null)
                                     LogError("Can't find DM");
-                                __instance.RequestDependencies(__instance.DataManager, () => { }, new DummyLoadRequest(dataManager)); // Have to create a dummy request only for the stupid request weights.
+                                __instance.RequestDependencies(__instance.DataManager, () => { }, dummyload); // Have to create a dummy request only for the stupid request weights.
                                 return string.Join(" ", dryRun.ToArray());
                             });
                             dryRun = null;
@@ -255,6 +260,18 @@ namespace BattletechPerformanceFix
                 return Promise.All(__instance.abilityDefNames == null ? Promise.Resolved() : Promise.All(__instance.abilityDefNames.Select(name => Load<AbilityDef>(RT.AbilityDef, name).Then(def => def.Resolve())))
                                   , __instance.PortraitSettings == null ? Promise.Resolved() : Load(RT.PortraitSettings, __instance.PortraitSettings.Description.Id)
                                   , string.IsNullOrEmpty(__instance.Description.Id) ? Promise.Resolved() : Load(RT.Sprite, __instance.Description.Icon));
+            }
+        }
+
+        class WeaponDefResolver : Resolver<WeaponDef>
+        {
+            internal override IPromise Resolve(WeaponDef __instance, RT type, string id)
+            {
+                return Promise.All(Load(RT.Prefab, __instance.WeaponEffectID)
+                                  , string.IsNullOrEmpty(__instance.AmmoCategoryToAmmoId) ? Promise.Resolved() : Load(RT.AmmunitionDef, __instance.AmmoCategoryToAmmoId)
+                                  , string.IsNullOrEmpty(__instance.AmmoCategoryToAmmoBoxId) ? Promise.Resolved() : Load(RT.AmmunitionBoxDef, __instance.AmmoCategoryToAmmoBoxId)
+                                  , string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.SVGAsset, __instance.Description.Icon)
+                                  , Promise.All(__instance.statusEffects.Where(eff => !string.IsNullOrEmpty(eff.Description.Icon)).Select(eff => Load(RT.SVGAsset, eff.Description.Icon))));
             }
         }
 
