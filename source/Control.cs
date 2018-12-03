@@ -155,7 +155,7 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-MDDB-memory");
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-Resolver");
             
             Trap(() =>
             {

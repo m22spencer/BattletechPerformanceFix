@@ -25,7 +25,7 @@ namespace BattletechPerformanceFix
     /* Just to set the load request for the dependency verification */
     class DummyLoadRequest : DataManager.ResourceLoadRequest<object>
     {
-        public DummyLoadRequest(DataManager dataManager) : base(dataManager, RT.AbilityDef, "", 10000, null) { }
+        public DummyLoadRequest(DataManager dataManager) : base(dataManager, RT.AbilityDef, "dummy_load_request_for_weight", 10000, null) { }
         public override bool AlreadyLoaded { get => true; }
     }
 
@@ -90,8 +90,12 @@ namespace BattletechPerformanceFix
             new ChassisDefResolver();
             new HeraldryDefResolver();
             new AbilityDefResolver();
+            new BaseComponentRefResolver();
+            new PilotDefResolver();
         }
 
+
+        static Dictionary<string, object> resolveMap = new Dictionary<string, object>();
 
         class Resolver<T>
             where T : DataManager.ILoadDependencies
@@ -99,13 +103,17 @@ namespace BattletechPerformanceFix
             public Dictionary<T,IPromise> cache = new Dictionary<T,IPromise>();
             public Resolver()
             {
-                if (resolveMap.ContainsKey(typeof(T))) LogWarning("Resolve map duplicate for {0}", typeof(T).FullName);
-                else resolveMap[typeof(T)] = this;
+                if (resolveMap.ContainsKey(typeof(T).FullName)) LogWarning("Resolve map duplicate for {0}", typeof(T).FullName);
+                else
+                {
+                    Log("Add resolver {0}", typeof(T).FullName);
+                    resolveMap[typeof(T).FullName] = this;
+                }
             }            
 
             internal virtual IPromise Resolve(T __instance, RT type, string id)
             {
-                throw new System.Exception(string.Format("Missing Resolve<T>.Resolve for {0}", typeof(T).FullName));
+                throw new System.Exception(string.Format("Missing Resolver<T>.Resolve for {0}", typeof(T).FullName));
             }
 
             public IPromise ResolveSafe(DataManager.ILoadDependencies ild, DataManager dataManager, RT type, string id)
@@ -157,7 +165,7 @@ namespace BattletechPerformanceFix
                 }
             }
 
-            static Dictionary<Type, Resolver<T>> resolveMap = new Dictionary<Type, Resolver<T>>();
+            
             static bool RequestDependencies_DryRun = false;
             /* This is the patch function which harmony calls for all ILoadDependencies types */
             public static bool RequestDependencies(DataManager.ILoadDependencies __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
@@ -167,12 +175,17 @@ namespace BattletechPerformanceFix
                     return true;
 
                 var t = __instance.GetType();
-                if (resolveMap.TryGetValue(t, out var rescls))
+                if (resolveMap.TryGetValue(t.FullName, out var rescls))
                 {
                     // we handle it
-                    Log("Resolver<T>.RequestDependencies where T = {0}", t.FullName);
-                    rescls.ResolveSafe(__instance, dataManager, loadRequest.ResourceType, loadRequest.ResourceId)
-                          .Done(onDependenciesLoaded);
+                    Log("Resolver<T>.RequestDependencies where T = {0} && {1}", t.FullName, rescls.GetType().FullName);
+                    var rs = rescls.GetType()
+                        .GetMethod("ResolveSafe");
+                    if (rs == null)
+                        LogError("Unable to find ResolveSafe function");
+
+                    var prom = (IPromise)rs.Invoke(rescls, new object[] { __instance, dataManager, loadRequest.ResourceType, loadRequest.ResourceId });
+                    prom.Done(onDependenciesLoaded);
                     return false;
                 } else
                 {
@@ -203,7 +216,7 @@ namespace BattletechPerformanceFix
                 return Promise.All( __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve()))
                                   , __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
                                   , Load(RT.Prefab, __instance.PrefabIdentifier)
-                                  , !string.IsNullOrEmpty(__instance.Description.Icon) ? Load(RT.Sprite, __instance.Description.Icon) : Promise.Resolved()
+                                  , string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.Sprite, __instance.Description.Icon)
                                   , Load(RT.HardpointDataDef, __instance.HardpointDataDefID)
                                   , Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID)
                                   , Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID))
@@ -218,6 +231,30 @@ namespace BattletechPerformanceFix
                 return Promise.All( string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.SVGAsset, __instance.Description.Icon)
                                   , Promise.All(__instance.EffectData.Where(eff => !string.IsNullOrEmpty(eff.Description.Icon)).Select(eff => Load(RT.SVGAsset, eff.Description.Icon)))
                                   , string.IsNullOrEmpty(__instance.WeaponResource) ? Promise.Resolved() : Load(RT.WeaponDef, __instance.WeaponResource));
+            }
+        }
+
+        class BaseComponentRefResolver : Resolver<BaseComponentRef>
+        {
+            internal override IPromise Resolve(BaseComponentRef __instance, RT type, string id)
+            {
+                return Load<MechComponentRef>(__instance.GetResourceType(), __instance.ComponentDefID)
+                    .Then(def =>
+                    {
+                        new Traverse(__instance).Property("Def").SetValue(def);
+                        __instance.Def.Resolve();
+                    });
+            }
+        }
+
+        class PilotDefResolver : Resolver<PilotDef>
+        {
+            internal override IPromise Resolve(PilotDef __instance, RT type, string id)
+            {
+                //                                                                                                                             Add LoadAndResolve?
+                return Promise.All(__instance.abilityDefNames == null ? Promise.Resolved() : Promise.All(__instance.abilityDefNames.Select(name => Load<AbilityDef>(RT.AbilityDef, name).Then(def => def.Resolve())))
+                                  , __instance.PortraitSettings == null ? Promise.Resolved() : Load(RT.PortraitSettings, __instance.PortraitSettings.Description.Id)
+                                  , string.IsNullOrEmpty(__instance.Description.Id) ? Promise.Resolved() : Load(RT.Sprite, __instance.Description.Icon));
             }
         }
 
