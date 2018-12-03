@@ -21,6 +21,15 @@ using static BattletechPerformanceFix.Control;
 
 namespace BattletechPerformanceFix
 {
+    static class ResolveExt
+    {
+        public static IPromise Resolve(this DataManager.ILoadDependencies cls)
+        {
+            LogError("NYI");
+            throw new System.Exception("STOP");
+        }
+    }
+
     class ResolveDepsAsync : Feature
     {
         public void Activate()
@@ -71,6 +80,8 @@ namespace BattletechPerformanceFix
             IPromise Resolve(T __instance, RT type, string id);
         }
 
+
+
         class HeraldryDefResolver : Resolver<HeraldryDef>
         {
             public IPromise Resolve(HeraldryDef __instance, RT type, string id)
@@ -80,13 +91,17 @@ namespace BattletechPerformanceFix
                                                      .Select(color => Load(RT.ColorSwatch, color))));
         }
 
-        /*
         class ChassisDefResolver : Resolver<ChassisDef>
         {
             public IPromise Resolve(ChassisDef __instance, RT type, string id)
-                => Promise.All(
+                => Promise.All( __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve()))
+                              , __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment?.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
+                              , Load(RT.Prefab, __instance.PrefabIdentifier)
+                              , !string.IsNullOrEmpty(__instance.Description.Icon) ? Load(RT.Sprite, __instance.Description.Icon) : Promise.Resolved()
+                              , Load(RT.HardpointDataDef, __instance.HardpointDataDefID)
+                              , Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID)
+                              , Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID));
         }
-        */
 
         static Dictionary<string,int> track = new Dictionary<string,int>();
 
@@ -222,43 +237,7 @@ namespace BattletechPerformanceFix
             {
                 LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
 
-                var np = Trap(() =>
-                {
-                    var all = new List<IPromise>();
-                    
-                    if (__instance.FixedEquipment != null)
-                        foreach (var equip in __instance.FixedEquipment)
-                        {
-                            // Might need to cache here.
-                            if (!equip.DependenciesLoaded(loadRequest.RequestWeight.AllowedWeight))
-                            {
-                                all.Add(Resolve_BaseComponentRef(equip, loadRequest));
-                            }
-                        }
-
-                    // PRE - RequestInventoryPrefabs();
-                    if (__instance.FixedEquipment != null)
-                        foreach (var equip in __instance.FixedEquipment)
-                        {
-                            if (equip.Def != null && !string.IsNullOrEmpty(equip.prefabName))
-                                all.Add(Load(RT.Prefab, equip.prefabName));
-                        }
-                    // POST - RequestInventoryPrefabs();
-
-                    all.Add(Load(RT.Prefab, __instance.PrefabIdentifier));
-                    if (!string.IsNullOrEmpty(__instance.Description.Icon)) all.Add(Load(RT.Sprite, __instance.Description.Icon));
-                    all.Add(Load(RT.HardpointDataDef, __instance.HardpointDataDefID));
-                    all.Add(Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID));
-                    all.Add(Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID));
-
-                    // Do we have all the checks for MechChassisDef?
-
-                    return Promise.All(all)
-                        .Then(() =>
-                        {
-                            __instance.Refresh();
-                        });
-                });
+                var np = Trap(() => new ChassisDefResolver().Resolve(__instance, loadRequest.ResourceType, loadRequest.ResourceId));
                 np.Done(() =>
                 {
                     // Possibility for deps validation
