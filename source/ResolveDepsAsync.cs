@@ -54,7 +54,6 @@ namespace BattletechPerformanceFix
             var wantTracking = true;
 
             var t = typeof(ResolveDepsAsync);
-            var drop = AccessTools.Method(t, nameof(Drop));
             harmony.Patch(AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries"), null, new HarmonyMethod(AccessTools.Method(t, nameof(IntegrityCheck))));
 
             if (WantVerify || wantTracking)
@@ -114,8 +113,8 @@ namespace BattletechPerformanceFix
                 .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
                 .ForEach(ildtype =>
                 {
-                    harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
-                    //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), new HarmonyMethod(drop));
+                    harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), Drop);
+                    //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), Drop);
                     harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
                 });
 
@@ -459,59 +458,7 @@ namespace BattletechPerformanceFix
             track.Clear();
         }
 
-        public static bool Drop() => false;
-    
-
-        public static bool RequestDependencies_BaseComponentRef(BaseComponentRef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
-        {
-            LogDebug("Raw Deprequest for {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-            __instance.DataManager = dataManager;
-            Resolve_BaseComponentRef(__instance, loadRequest).Done(onDependenciesLoaded);
-
-            return false;
-        }
-        public static Dictionary<BaseComponentRef, IPromise> BaseComponentRefCache = new Dictionary<BaseComponentRef, IPromise>();
-        public static IPromise Resolve_BaseComponentRef(BaseComponentRef __instance, DataManager.DataManagerLoadRequest loadRequest)
-        {
-            if (BaseComponentRefCache.TryGetValue(__instance, out var prom))
-            {
-                LogDebug("Resolve(cached) {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-                return prom;
-            }
-            else
-            {
-                LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-
-                var np = Trap(() =>
-                {
-                    var all = new List<IPromise>();
-
-                    all.Add(Load<MechComponentDef>(__instance.GetResourceType(), __instance.ComponentDefID)
-                        .Then(def =>
-                        {
-                            new Traverse(__instance).Property("Def").SetValue(def);
-                            //__instance.RefreshComponentDef();
-                            var ppm = new Promise();
-                            // FIXME: Must do a dispatch to the proper resolve function, we need a lookup table
-                            LogDebug("Request dependencies of WeaponDef {0}", def?.Description?.Id);
-                            if (__instance.Def != null) __instance.Def.RequestDependencies(__instance.DataManager, ppm.Resolve, loadRequest);
-                            else ppm.Resolve();
-                            return (IPromise)ppm;
-                        }));
-
-                    return Promise.All(all)
-                        .Then(() =>
-                        {
-                            LogDebug("Resolved BaseComponentRef {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-                            LogDebug("Refreshed {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-                        }
-                             , err => LogException(err));
-                });
-                BaseComponentRefCache[__instance] = np;
-                return np;
-            }
-        }
-
+       
         public static Dictionary<string, Promise<object>> promises = new Dictionary<string, Promise<object>>();
         public static bool Initialized = false;
         public static Stuff stuff;

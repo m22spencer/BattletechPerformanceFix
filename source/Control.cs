@@ -149,6 +149,9 @@ namespace BattletechPerformanceFix
 
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
+        public static HarmonyMethod Drop = new HarmonyMethod(AccessTools.Method(typeof(Control), nameof(Drop_Patch)));
+        public static bool Drop_Patch() => false;
+
         public static void Start(string modDirectory, string json)
         {
             var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
