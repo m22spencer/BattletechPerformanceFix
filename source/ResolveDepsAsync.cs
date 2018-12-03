@@ -61,40 +61,153 @@ namespace BattletechPerformanceFix
             
             Log("CDAL fix on");
             var drop = AccessTools.Method(t, nameof(Drop));
+
+            var resolver = AccessTools.Method(typeof(Resolver<ChassisDef>), "RequestDependencies"); //just using ChassisDef here to reference the static function. It means nothing;
+
+            var c = true;
+
+            Assembly.GetAssembly(typeof(HeraldryDef))
+                .GetTypes()
+                .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
+                .ForEach(ildtype =>
+                {
+                    harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
+                    //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), new HarmonyMethod(drop));
+                    harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
+                });
+
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
+
+            new ChassisDefResolver();
+            new HeraldryDefResolver();
+            new AbilityDefResolver();
+
+            return;
             harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "DependenciesLoaded"), new HarmonyMethod(drop));
-            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_HeraldryDef))));
+            harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(c ? resolver : AccessTools.Method(t, nameof(RequestDependencies_HeraldryDef))));
              
             //*
             harmony.Patch(AccessTools.Method(typeof(ChassisDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
-            harmony.Patch(AccessTools.Method(typeof(ChassisDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_ChassisDef))));
+            harmony.Patch(AccessTools.Method(typeof(ChassisDef), "RequestDependencies"), new HarmonyMethod(c ? resolver : AccessTools.Method(t, nameof(RequestDependencies_ChassisDef))));
             //*/
 
             //
             harmony.Patch(AccessTools.Method(typeof(BaseComponentRef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
-            harmony.Patch(AccessTools.Method(typeof(BaseComponentRef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_BaseComponentRef))));
+            harmony.Patch(AccessTools.Method(typeof(BaseComponentRef), "RequestDependencies"), new HarmonyMethod(c ? resolver : AccessTools.Method(t, nameof(RequestDependencies_BaseComponentRef))));
             //*/
 
 
             harmony.Patch(AccessTools.Method(typeof(AbilityDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
-            harmony.Patch(AccessTools.Method(typeof(AbilityDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_AbilityDef))));
+            harmony.Patch(AccessTools.Method(typeof(AbilityDef), "RequestDependencies"), new HarmonyMethod(c ? resolver : AccessTools.Method(t, nameof(RequestDependencies_AbilityDef))));
 
-            harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
+
+
         }
 
-        interface Resolver<T>
+        /* Just to set the load request for the dependency verification */
+        class DummyLoadRequest : DataManager.ResourceLoadRequest<object>
         {
-            IPromise Resolve(T __instance, RT type, string id);
+            public DummyLoadRequest(DataManager dataManager) : base(dataManager, RT.AbilityDef, "", 10000, null) { }
+            public override bool AlreadyLoaded { get => true; }
         }
 
+        class Resolver<T>
+            where T : DataManager.ILoadDependencies
+        {
+            public Dictionary<T,IPromise> cache = new Dictionary<T,IPromise>();
+            public Resolver()
+            {
+                if (resolveMap.ContainsKey(typeof(T))) LogWarning("Resolve map duplicate for {0}", typeof(T).FullName);
+                else resolveMap[typeof(T)] = this;
+            }            
 
+            internal virtual IPromise Resolve(T __instance, RT type, string id)
+            {
+                throw new System.Exception(string.Format("Missing Resolve<T>.Resolve for {0}", typeof(T).FullName));
+            }
+
+            public IPromise ResolveSafe(DataManager.ILoadDependencies ild, DataManager dataManager, RT type, string id)
+            {
+                if (ild == null)
+                    LogError("ILD is null");
+                if (dataManager == null)
+                    LogError("DataManager is null");
+                if (id == null)
+                    LogError("id is null");
+                if (ild.GetType() != typeof(T))
+                    LogError("Resolve safe wrong ILD type");
+                var __instance = (T)ild;
+                __instance.DataManager = dataManager;
+                var idef = string.Format("{0}:{1}", id, Enum.GetName(typeof(RT), type));
+                if (cache.TryGetValue(__instance, out var prom))
+                {
+                    LogDebug("ResolveSafe cached {0}", idef);
+                    return prom;
+                }
+                else
+                {
+                    LogDebug("ResolveSafe {0}", idef);
+
+                    var np = Trap(() => Resolve(__instance, type, id));
+                    LogDebug("Cleanup {0}", idef);
+                    np.Done(() =>
+                    {
+                        if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved <?fixme T?> {0}", idef);
+                        else
+                        {
+                            RequestDependencies_DryRun = true;
+                            dryRun = new List<string>();
+                            var lcopy = Trap(() =>
+                            {
+                                if (__instance.DataManager == null)
+                                    LogError("Can't find DM");
+                                __instance.RequestDependencies(__instance.DataManager, () => { }, new DummyLoadRequest(dataManager)); // Have to create a dummy request only for the stupid request weights.
+                                return string.Join(" ", dryRun.ToArray());
+                            });
+                            dryRun = null;
+                            RequestDependencies_DryRun = false;
+
+                            LogError("desynchronized {0} [{1}]", idef , lcopy);
+                        }
+                    });
+                    cache[__instance] = np;
+                    return np;
+                }
+            }
+
+            static Dictionary<Type, Resolver<T>> resolveMap = new Dictionary<Type, Resolver<T>>();
+            static bool RequestDependencies_DryRun = false;
+            /* This is the patch function which harmony calls for all ILoadDependencies types */
+            public static bool RequestDependencies(DataManager.ILoadDependencies __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
+            {
+                // Something is running a dependency check, we want to ignore it.
+                if (RequestDependencies_DryRun)
+                    return true;
+
+                var t = __instance.GetType();
+                if (resolveMap.TryGetValue(t, out var rescls))
+                {
+                    // we handle it
+                    Log("Resolver<T>.RequestDependencies where T = {0}", t.FullName);
+                    rescls.ResolveSafe(__instance, dataManager, loadRequest.ResourceType, loadRequest.ResourceId)
+                          .Done(onDependenciesLoaded);
+                    return false;
+                } else
+                {
+                    // DM handles it
+                    Log("Resolver<T>.RequestDependencies where T = {0} did not resolve and will pass through", t.FullName);
+                    return true;
+                }
+            }
+        }
 
         class HeraldryDefResolver : Resolver<HeraldryDef>
         {
-            public IPromise Resolve(HeraldryDef __instance, RT type, string id)
+            internal override IPromise Resolve(HeraldryDef __instance, RT type, string id)
                 => Promise.All(Load(RT.Texture2D, __instance.textureLogoID)
                                    , Promise.All(Sequence(__instance.primaryMechColorID, __instance.secondaryMechColorID, __instance.tertiaryMechColorID)
                                                      .Where(color => !string.IsNullOrEmpty(color))
@@ -103,22 +216,26 @@ namespace BattletechPerformanceFix
 
         class ChassisDefResolver : Resolver<ChassisDef>
         {
-            public IPromise Resolve(ChassisDef __instance, RT type, string id)
+            internal override IPromise Resolve(ChassisDef __instance, RT type, string id)
             {
-                return Promise.All(__instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve()))
-                              , __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
-                              , Load(RT.Prefab, __instance.PrefabIdentifier)
-                              , !string.IsNullOrEmpty(__instance.Description.Icon) ? Load(RT.Sprite, __instance.Description.Icon) : Promise.Resolved()
-                              , Load(RT.HardpointDataDef, __instance.HardpointDataDefID)
-                              , Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID)
-                              , Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID))
+                Log("Chassis-__instance: {0}", __instance == null ? "null" : "ok");
+                Log("Chassis-type: {0}", Enum.GetName(typeof(RT), type));
+                Log("Chassis-id: {0}", id);
+
+                return Promise.All( Promise.Resolved() //__instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve()))
+                                  , Promise.Resolved() //__instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
+                                  , Load(RT.Prefab, __instance.PrefabIdentifier)
+                                  , !string.IsNullOrEmpty(__instance.Description.Icon) ? Load(RT.Sprite, __instance.Description.Icon) : Promise.Resolved()
+                                  , Load(RT.HardpointDataDef, __instance.HardpointDataDefID)
+                                  , Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID)
+                                  , Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID))
                               .Then(() => __instance.Refresh());
             }
         }
 
         class AbilityDefResolver : Resolver<AbilityDef>
         {
-            public IPromise Resolve(AbilityDef __instance, RT type, string id)
+            internal override IPromise Resolve(AbilityDef __instance, RT type, string id)
             {
                 return Promise.All( string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.SVGAsset, __instance.Description.Icon)
                                   , Promise.All(__instance.EffectData.Where(eff => !string.IsNullOrEmpty(eff.Description.Icon)).Select(eff => Load(RT.SVGAsset, eff.Description.Icon)))
