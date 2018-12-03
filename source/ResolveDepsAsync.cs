@@ -13,6 +13,7 @@ using HBS.Data;
 using RSG;
 using System.Diagnostics;
 using System.Reflection;
+using BattleTech;
 using BattleTech.Portraits;
 using BattleTech.Framework;
 using RT = BattleTech.BattleTechResourceType;
@@ -64,13 +65,22 @@ namespace BattletechPerformanceFix
             //harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "DependenciesLoaded"), new HarmonyMethod(drop));
             harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_HeraldryDef))));
              
+            //*
             harmony.Patch(AccessTools.Method(typeof(ChassisDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
             harmony.Patch(AccessTools.Method(typeof(ChassisDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_ChassisDef))));
+            //*/
 
+            //
             harmony.Patch(AccessTools.Method(typeof(BaseComponentRef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
             //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
             harmony.Patch(AccessTools.Method(typeof(BaseComponentRef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_BaseComponentRef))));
+            //*/
+
+
+            harmony.Patch(AccessTools.Method(typeof(AbilityDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
+            //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(AbilityDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_AbilityDef))));
 
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
         }
@@ -94,13 +104,26 @@ namespace BattletechPerformanceFix
         class ChassisDefResolver : Resolver<ChassisDef>
         {
             public IPromise Resolve(ChassisDef __instance, RT type, string id)
-                => Promise.All( __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve()))
-                              , __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment?.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
+            {
+                return Promise.All(__instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve()))
+                              , __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
                               , Load(RT.Prefab, __instance.PrefabIdentifier)
                               , !string.IsNullOrEmpty(__instance.Description.Icon) ? Load(RT.Sprite, __instance.Description.Icon) : Promise.Resolved()
                               , Load(RT.HardpointDataDef, __instance.HardpointDataDefID)
                               , Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID)
-                              , Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID));
+                              , Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID))
+                              .Then(() => __instance.Refresh());
+            }
+        }
+
+        class AbilityDefResolver : Resolver<AbilityDef>
+        {
+            public IPromise Resolve(AbilityDef __instance, RT type, string id)
+            {
+                return Promise.All( string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.SVGAsset, __instance.Description.Icon)
+                                  , Promise.All(__instance.EffectData.Where(eff => !string.IsNullOrEmpty(eff.Description.Icon)).Select(eff => Load(RT.SVGAsset, eff.Description.Icon)))
+                                  , string.IsNullOrEmpty(__instance.WeaponResource) ? Promise.Resolved() : Load(RT.WeaponDef, __instance.WeaponResource));
+            }
         }
 
         static Dictionary<string,int> track = new Dictionary<string,int>();
@@ -206,7 +229,7 @@ namespace BattletechPerformanceFix
                 var np = new HeraldryDefResolver().Resolve(__instance, loadRequest.ResourceType, loadRequest.ResourceId);
                 np.Done(() =>
                 {
-                    if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                    if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved HeraldryDef {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
                     else LogError(string.Format("HeraldryDef desynchronized {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType)));
                 });
                 HeraldryDefCache[__instance] = np;
@@ -241,17 +264,20 @@ namespace BattletechPerformanceFix
                 np.Done(() =>
                 {
                     // Possibility for deps validation
-                    if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                    if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved ChassisDef {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
                     else
                     {
-                        LogDebug("Try fetch deps");
                         RD_CD_Guard = false;
                         dryRun = new List<string>();
-                        __instance.RequestDependencies(__instance.DataManager, null, loadRequest);
-                        var lcopy = string.Join(" ", dryRun.ToArray());
+                        var lcopy = Trap(() =>
+                        {
+                            if (__instance.DataManager == null)
+                                LogError("ChassisDef: Can't find DM");
+                            __instance.RequestDependencies(__instance.DataManager, () => { }, loadRequest);
+                            return string.Join(" ", dryRun.ToArray());
+                        });
                         dryRun = null;
                         RD_CD_Guard = true;
-                        LogDebug("done");
 
                         LogError("ChassisDef desynchronized {0}:{1} [{2}]", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType), lcopy);
                     }
@@ -260,7 +286,57 @@ namespace BattletechPerformanceFix
                 return np;
             }
         }
-        
+
+        public static bool RD_AD_Guard = true;
+        public static bool RequestDependencies_AbilityDef(AbilityDef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            if (!RD_AD_Guard)
+                return true;
+            LogDebug("Raw Deprequest for {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+            __instance.DataManager = dataManager;
+            Resolve_AbilityDef(__instance, loadRequest).Done(onDependenciesLoaded);
+
+            return false;
+        }
+        public static Dictionary<AbilityDef, IPromise> AbilityDefCache = new Dictionary<AbilityDef, IPromise>();
+        public static IPromise Resolve_AbilityDef(AbilityDef __instance, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            if (AbilityDefCache.TryGetValue(__instance, out var prom))
+            {
+                LogDebug("Resolve(cached) {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                return prom;
+            }
+            else
+            {
+                LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+
+                var np = Trap(() => new AbilityDefResolver().Resolve(__instance, loadRequest.ResourceType, loadRequest.ResourceId));
+                np.Done(() =>
+                {
+                    // Possibility for deps validation
+                    if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved ChassisDef {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                    else
+                    {
+                        RD_CD_Guard = false;
+                        dryRun = new List<string>();
+                        var lcopy = Trap(() =>
+                        {
+                            if (__instance.DataManager == null)
+                                LogError("AbilityDef: Can't find DM");
+                            __instance.RequestDependencies(__instance.DataManager, () => { }, loadRequest);
+                            return string.Join(" ", dryRun.ToArray());
+                        });
+                        dryRun = null;
+                        RD_CD_Guard = true;
+
+                        LogError("AbilityDef desynchronized {0}:{1} [{2}]", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType), lcopy);
+                    }
+                });
+                AbilityDefCache[__instance] = np;
+                return np;
+            }
+        }
+
         public static bool RequestDependencies_BaseComponentRef(BaseComponentRef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
         {
             LogDebug("Raw Deprequest for {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
@@ -301,7 +377,7 @@ namespace BattletechPerformanceFix
                     return Promise.All(all)
                         .Then(() =>
                         {
-                            LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                            LogDebug("Resolved BaseComponentRef {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
                             LogDebug("Refreshed {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
                         }
                              , err => LogException(err));
