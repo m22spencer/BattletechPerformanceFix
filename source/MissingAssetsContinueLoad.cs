@@ -40,7 +40,7 @@ namespace BattletechPerformanceFix
                         // Hopefully there is one, or you're screwed.
                         var dummy = dummies.First();
                         var dummyId = dummy.Id;
-                        Control.LogDebug("Missing asset {0}, replacing with dummy {1}", identifier, dummyId);
+                        Control.LogDebug("Missing asset {0}:{1}, replacing with dummy {1}", identifier, Enum.GetName(typeof(BattleTechResourceType), resourceType), dummyId);
 
                         var d = Traverse.Create(dummy);
 

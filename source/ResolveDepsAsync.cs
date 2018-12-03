@@ -31,17 +31,24 @@ namespace BattletechPerformanceFix
 
     static class ResolveExt
     {
-        public static IPromise Resolve(this DataManager.ILoadDependencies cls)
+        public static IPromise Resolve(this DataManager.ILoadDependencies cls, DataManager dm)
         {
             Log("Attempt to resolve {0}", cls.GetType());
             var prom = new Promise();
-            cls.RequestDependencies(cls.DataManager, prom.Resolve, new DummyLoadRequest(cls.DataManager));
+            if (dm == null)
+                Log("DM is null");
+            cls.DataManager = dm;
+            cls.RequestDependencies(cls.DataManager, prom.Resolve, new DummyLoadRequest(dm));
             return prom;
         }
+
+        public static IPromise OfString(this string str, RT type)
+            => string.IsNullOrEmpty(str) ? Promise.Resolved() : ResolveDepsAsync.Load(type, str);
     }
 
     class ResolveDepsAsync : Feature
     {
+        public static bool WantVerify = false;
         public void Activate()
         {
             var wantTracking = true;
@@ -49,7 +56,7 @@ namespace BattletechPerformanceFix
             var t = typeof(ResolveDepsAsync);
             harmony.Patch(AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries"), null, new HarmonyMethod(AccessTools.Method(t, nameof(IntegrityCheck))));
 
-            if (wantTracking)
+            if (WantVerify || wantTracking)
             {
                 Log("Tracking is ON");
                 Assembly.GetAssembly(typeof(HeraldryDef))
@@ -93,6 +100,7 @@ namespace BattletechPerformanceFix
             new BaseComponentRefResolver();
             new PilotDefResolver();
             new WeaponDefResolver();
+            new MechDefResolver();
         }
 
 
@@ -143,28 +151,32 @@ namespace BattletechPerformanceFix
 
                     var np = Trap(() => Resolve(__instance, type, id));
                     LogDebug("Cleanup {0}", idef);
-                    np.Done(() =>
+                    if (ResolveDepsAsync.WantVerify)
                     {
-                        var dl = Trap(() => __instance.DependenciesLoaded(1000000));
-                        
-                        if (dl) LogDebug("Resolved <?fixme T?> {0}", idef);
-                        else
+                        np.Done(() =>
                         {
-                            RequestDependencies_DryRun = true;
-                            dryRun = new List<string>();
-                            var lcopy = Trap(() =>
-                            {
-                                if (__instance.DataManager == null)
-                                    LogError("Can't find DM");
-                                __instance.RequestDependencies(__instance.DataManager, () => { }, dummyload); // Have to create a dummy request only for the stupid request weights.
-                                return string.Join(" ", dryRun.ToArray());
-                            });
-                            dryRun = null;
-                            RequestDependencies_DryRun = false;
 
-                            LogError("desynchronized {0} [{1}]", idef , lcopy);
-                        }
-                    });
+                            var dl = Trap(() => __instance.DependenciesLoaded(1000000));
+
+                            if (dl) LogDebug("Resolved <?fixme T?> {0}", idef);
+                            else
+                            {
+                                RequestDependencies_DryRun = true;
+                                dryRun = new List<string>();
+                                var lcopy = Trap(() =>
+                                {
+                                    if (__instance.DataManager == null)
+                                        LogError("Can't find DM");
+                                    __instance.RequestDependencies(__instance.DataManager, () => { }, dummyload); // Have to create a dummy request only for the stupid request weights.
+                                    return string.Join(" ", dryRun.ToArray());
+                                });
+                                dryRun = null;
+                                RequestDependencies_DryRun = false;
+
+                                LogError("desynchronized {0} [{1}]", idef, lcopy);
+                            }
+                        });
+                    }
                     cache[__instance] = np;
                     return np;
                 }
@@ -177,7 +189,10 @@ namespace BattletechPerformanceFix
             {
                 // Something is running a dependency check, we want to ignore it.
                 if (RequestDependencies_DryRun)
+                {
+                    Log("Depcheck");
                     return true;
+                }
 
                 var t = __instance.GetType();
                 if (resolveMap.TryGetValue(t.FullName, out var rescls))
@@ -218,7 +233,7 @@ namespace BattletechPerformanceFix
                 Log("Chassis-type: {0}", Enum.GetName(typeof(RT), type));
                 Log("Chassis-id: {0}", id);
 
-                return Promise.All( __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve()))
+                return Promise.All( __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Select(equip => equip.Resolve(__instance.DataManager)))
                                   , __instance.FixedEquipment == null ? Promise.Resolved() : Promise.All(__instance.FixedEquipment.Where(equip => equip.Def != null && !string.IsNullOrEmpty(equip.prefabName)).Select(equip => Load(RT.Prefab, equip.prefabName)))
                                   , Load(RT.Prefab, __instance.PrefabIdentifier)
                                   , string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.Sprite, __instance.Description.Icon)
@@ -247,7 +262,7 @@ namespace BattletechPerformanceFix
                     .Then(def =>
                     {
                         new Traverse(__instance).Property("Def").SetValue(def);
-                        __instance.Def.Resolve();
+                        __instance.Def.Resolve(__instance.DataManager);
                     });
             }
         }
@@ -257,7 +272,7 @@ namespace BattletechPerformanceFix
             internal override IPromise Resolve(PilotDef __instance, RT type, string id)
             {
                 //                                                                                                                             Add LoadAndResolve?
-                return Promise.All(__instance.abilityDefNames == null ? Promise.Resolved() : Promise.All(__instance.abilityDefNames.Select(name => Load<AbilityDef>(RT.AbilityDef, name).Then(def => def.Resolve())))
+                return Promise.All(__instance.abilityDefNames == null ? Promise.Resolved() : Promise.All(__instance.abilityDefNames.Select(name => Load<AbilityDef>(RT.AbilityDef, name).Then(def => def.Resolve(__instance.DataManager))))
                                   , __instance.PortraitSettings == null ? Promise.Resolved() : Load(RT.PortraitSettings, __instance.PortraitSettings.Description.Id)
                                   , string.IsNullOrEmpty(__instance.Description.Id) ? Promise.Resolved() : Load(RT.Sprite, __instance.Description.Icon));
             }
@@ -272,6 +287,22 @@ namespace BattletechPerformanceFix
                                   , string.IsNullOrEmpty(__instance.AmmoCategoryToAmmoBoxId) ? Promise.Resolved() : Load(RT.AmmunitionBoxDef, __instance.AmmoCategoryToAmmoBoxId)
                                   , string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.SVGAsset, __instance.Description.Icon)
                                   , Promise.All(__instance.statusEffects.Where(eff => !string.IsNullOrEmpty(eff.Description.Icon)).Select(eff => Load(RT.SVGAsset, eff.Description.Icon))));
+            }
+        }
+
+        class MechDefResolver : Resolver<MechDef>
+        {
+            internal override IPromise Resolve(MechDef __instance, RT type, string id)
+            {
+                __instance.meleeWeaponRef.DataManager = __instance.dfaWeaponRef.DataManager = __instance.imaginaryLaserWeaponRef.DataManager = __instance.DataManager;
+                return Promise.All(__instance.ChassisID.OfString(RT.ChassisDef)
+                                  , __instance.Chassis == null ? Promise.Resolved() : __instance.Chassis.Resolve(__instance.DataManager)
+                                  , __instance.HeraldryID.OfString(RT.HeraldryDef)
+                                  , Promise.All(__instance.Inventory.Select(inv => inv.Resolve(__instance.DataManager)))
+                                  , __instance.meleeWeaponRef.Resolve(__instance.DataManager)
+                                  , __instance.dfaWeaponRef.Resolve(__instance.DataManager)
+                                  , __instance.imaginaryLaserWeaponRef.Resolve(__instance.DataManager)
+                                  , Promise.All(__instance.Inventory.Select(inv => inv.prefabName.OfString(RT.Prefab))));
             }
         }
 
@@ -423,7 +454,7 @@ namespace BattletechPerformanceFix
                     .Resolve(val);
             } catch (Exception e)
             {
-                LogError("Asset {0} already dispatched", id);
+                LogWarning("Asset {0} already dispatched", id);
             }
         }
 
