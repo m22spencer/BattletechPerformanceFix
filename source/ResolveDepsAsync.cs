@@ -129,6 +129,13 @@ namespace BattletechPerformanceFix
             new WeaponDefResolver();
             new MechDefResolver();
             new VehicleDefResolver();
+            new MechComponentDefResolver();
+            new AmmunitionBoxDefResolver();
+            new HeatSinkDefResolver();
+            new JumpJetDefResolver();
+            new FactionDefResolver();
+            new BackgroundDefResolver();
+            new UpgradeDefResolver();
         }
     
         public static void DataManager_Update(DataManager __instance, Dictionary<string, object> ___poolNextUpdate
@@ -225,7 +232,8 @@ namespace BattletechPerformanceFix
                                 dryRun = null;
                                 RequestDependencies_DryRun = false;
 
-                                LogError("desynchronized {0} [{1}]", idef, lcopy);
+                                
+                                LogError("{0}desynchronized {1} [{2}]", lcopy.Any() ? "is" : "semi-", idef, lcopy);
                             }
                         });
                     }
@@ -275,6 +283,7 @@ namespace BattletechPerformanceFix
         {
             internal override IPromise Resolve(T __instance, RT type, string id)
             {
+                Log("ProxyResolveStart {0}", __instance == null ? "null" : "ok");
                 var t = __instance.GetType();
                 var k = typeof(K);
                 if (resolveMap.TryGetValue(k.FullName, out var rescls))
@@ -365,6 +374,7 @@ namespace BattletechPerformanceFix
                                   , string.IsNullOrEmpty(__instance.AmmoCategoryToAmmoId) ? Promise.Resolved() : Load(RT.AmmunitionDef, __instance.AmmoCategoryToAmmoId)
                                   , string.IsNullOrEmpty(__instance.AmmoCategoryToAmmoBoxId) ? Promise.Resolved() : Load(RT.AmmunitionBoxDef, __instance.AmmoCategoryToAmmoBoxId)
                                   , string.IsNullOrEmpty(__instance.Description.Icon) ? Promise.Resolved() : Load(RT.SVGAsset, __instance.Description.Icon)
+                                  // Status effects could be abstracted out. Used multiple times.
                                   , Promise.All(__instance.statusEffects.Where(eff => !string.IsNullOrEmpty(eff.Description.Icon)).Select(eff => Load(RT.SVGAsset, eff.Description.Icon))));
             }
         }
@@ -398,7 +408,38 @@ namespace BattletechPerformanceFix
             }
         }
 
+        class MechComponentDefResolver : Resolver<MechComponentDef>
+        {
+            internal override IPromise Resolve(MechComponentDef __instance, RT type, string id)
+            {
+                return Promise.All( __instance.Description.Icon.OfString(RT.SVGAsset)
+                                  , Promise.All(__instance.statusEffects.Where(eff => !string.IsNullOrEmpty(eff.Description.Icon)).Select(eff => Load(RT.SVGAsset, eff.Description.Icon))));
+            }
+        }
+
+        class FactionDefResolver : Resolver<FactionDef>
+        {
+            internal override IPromise Resolve(FactionDef __instance, RT type, string id)
+            {
+                return Promise.All(__instance.GetSpriteName().OfString(RT.Sprite)
+                                  , __instance.DefaultRepresentativeCastDefId.OfString(RT.CastDef)
+                                  , HeraldryDef.IsSpecialHeraldryDefId(__instance.heraldryDefId) ? Promise.Resolved() : __instance.heraldryDefId.OfString(RT.HeraldryDef));
+            }
+        }
+
+        class BackgroundDefResolver : Resolver<BackgroundDef>
+        {
+            internal override IPromise Resolve(BackgroundDef __instance, RT type, string id)
+            {
+                return string.IsNullOrEmpty(__instance.Description.Id) ? Promise.Resolved() : Load(RT.Sprite, new Traverse(__instance).Property("TxtrId").GetValue<string>());
+            }
+        }
+
         class MechComponentRefResolver : ProxyResolver<MechComponentRef, BaseComponentRef> { }
+        class AmmunitionBoxDefResolver : ProxyResolver<AmmunitionBoxDef, MechComponentDef> { }
+        class HeatSinkDefResolver : ProxyResolver<HeatSinkDef, MechComponentDef> { }
+        class JumpJetDefResolver : ProxyResolver<JumpJetDef, MechComponentDef> { }
+        class UpgradeDefResolver : ProxyResolver<UpgradeDef, MechComponentDef> { }
 
         static Dictionary<string,int> track = new Dictionary<string,int>();
 
@@ -424,7 +465,6 @@ namespace BattletechPerformanceFix
 
                 Control.Log(string.Format("Wrong ids   ({0})", string.Join(" ", wrongIdents.Select(x => f(x.Value)).ToArray())));
                 Control.Log(string.Format("Wrong types ({0})", string.Join(" ", wrongTypes.Select(x => f(x.Value)).ToArray())));
-
                 manifest.SelectMany(types => types.Value.Select(entries => entries.Value))
                     .GroupBy(entry => entry.Id)
                     .Where(group => group.Count() > 1)
