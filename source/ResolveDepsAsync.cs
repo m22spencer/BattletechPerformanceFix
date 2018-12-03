@@ -28,6 +28,7 @@ namespace BattletechPerformanceFix
             var wantTracking = true;
 
             var t = typeof(ResolveDepsAsync);
+            harmony.Patch(AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries"), null, new HarmonyMethod(AccessTools.Method(t, nameof(IntegrityCheck))));
 
             if (wantTracking)
             {
@@ -39,14 +40,15 @@ namespace BattletechPerformanceFix
                     {
                         var pre = new HarmonyMethod(AccessTools.Method(t, "TrackPre"));
                         HarmonyMethod post = null; // new HarmonyMethod(AccessTools.Method(t, "TrackPost"));
-                    harmony.Patch(AccessTools.Method(ild, "CheckDependenciesAfterLoad"), pre, post);
+                        harmony.Patch(AccessTools.Method(ild, "CheckDependenciesAfterLoad"), pre, post);
                         harmony.Patch(AccessTools.Method(ild, "DependenciesLoaded"), pre, post);
                         harmony.Patch(AccessTools.Method(ild, "RequestDependencies"), pre, post);
                     });
 
-                harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SGRoomController_CmdCenter), "EnterRoom"), new HarmonyMethod(AccessTools.Method(t, "Summary")));
+                harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SimGameOptionsMenu), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(t, "Summary")));
+                harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(TrackRequestResource))));
             }
-
+            
             Log("CDAL fix on");
             var drop = AccessTools.Method(t, nameof(Drop));
             harmony.Patch(AccessTools.Method(typeof(HeraldryDef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
@@ -57,10 +59,72 @@ namespace BattletechPerformanceFix
             //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
             harmony.Patch(AccessTools.Method(typeof(ChassisDef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_ChassisDef))));
 
+            harmony.Patch(AccessTools.Method(typeof(BaseComponentRef), "CheckDependenciesAfterLoad"), new HarmonyMethod(drop));
+            //harmony.Patch(AccessTools.Method(typeof(ChassisDef), "DependenciesLoaded"), new HarmonyMethod(drop));
+            harmony.Patch(AccessTools.Method(typeof(BaseComponentRef), "RequestDependencies"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestDependencies_BaseComponentRef))));
+
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
         }
 
+        interface Resolver<T>
+        {
+            IPromise Resolve(T __instance, RT type, string id);
+        }
+
+        class HeraldryDefResolver : Resolver<HeraldryDef>
+        {
+            public IPromise Resolve(HeraldryDef __instance, RT type, string id)
+                => Promise.All(Load(RT.Texture2D, __instance.textureLogoID)
+                                   , Promise.All(Sequence(__instance.primaryMechColorID, __instance.secondaryMechColorID, __instance.tertiaryMechColorID)
+                                                     .Where(color => !string.IsNullOrEmpty(color))
+                                                     .Select(color => Load(RT.ColorSwatch, color))));
+        }
+
+        /*
+        class ChassisDefResolver : Resolver<ChassisDef>
+        {
+            public IPromise Resolve(ChassisDef __instance, RT type, string id)
+                => Promise.All(
+        }
+        */
+
         static Dictionary<string,int> track = new Dictionary<string,int>();
+
+        static bool Guard;
+
+        public static void TrackRequestResource(DataManager __instance, BattleTechResourceType resourceType, PrewarmRequest prewarm)
+        {
+            var key = string.Format("{0}:{1}", Enum.GetName(typeof(RT), resourceType), prewarm != null);
+            if (!track.ContainsKey(key)) track[key] = 0;
+            track[key]++;
+        }
+
+        public static void IntegrityCheck(BattleTechResourceLocator __instance) {
+            Trap(() => { 
+                var manifest = new Traverse(__instance).Field("baseManifest").GetValue<Dictionary<BattleTechResourceType, Dictionary<string, VersionManifestEntry>>>();
+
+                Control.Log("----------------- Manifest integrity check ---------------------------");
+                var wrongIdents = manifest.SelectMany(type => type.Value.Where(entry => entry.Value.Id != entry.Key));
+                var wrongTypes = manifest.SelectMany(type => type.Value.Where(entry => (RT)Enum.Parse(typeof(RT), entry.Value.Type) != type.Key));
+
+
+                string f(VersionManifestEntry vme)
+                    => string.Format("{0}:{1}", vme.Id, (RT)Enum.Parse(typeof(RT), vme.Type));
+
+
+                Control.Log(string.Format("Wrong ids   ({0})", string.Join(" ", wrongIdents.Select(x => f(x.Value)).ToArray())));
+                Control.Log(string.Format("Wrong types ({0})", string.Join(" ", wrongTypes.Select(x => f(x.Value)).ToArray())));
+
+                manifest.SelectMany(types => types.Value.Select(entries => entries.Value))
+                    .GroupBy(entry => entry.Id)
+                    .Where(group => group.Count() > 1)
+                    .ForEach(collision =>
+                    {
+                        string.Format("ID collision: ({0})", string.Join(" ", collision.Select(f).ToArray()));
+                    });
+            });
+        }
+
         public static void TrackPre()
         {
             var frm = new StackFrame(1).GetMethod();
@@ -74,91 +138,198 @@ namespace BattletechPerformanceFix
         public static void Summary()
         {
             Control.Log("(Track {0})", string.Join(" ", track.Select(kv => string.Format(":{0} {1}", kv.Key, kv.Value)).ToArray()));
+            track.Clear();
         }
 
         public static bool Drop() => false;
-
-        public static bool RequestDependencies_HeraldryDef(HeraldryDef __instance, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
+    
+        public static bool RequestDependencies_HeraldryDef(HeraldryDef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
         {
-            LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+            LogDebug("Raw Deprequest for {0}:{1} origin {2}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType), new StackFrame(1).ToString());
+            __instance.DataManager = dataManager;
+            Resolve_HeraldryDef(__instance, loadRequest).Done(onDependenciesLoaded);
 
-            Trap(() =>
-            {
-                var all = new List<IPromise>();
-
-                if (!string.IsNullOrEmpty(__instance.Description.Icon)) all.Add(Load<Sprite>(RT.Sprite, __instance.Description.Icon).Then(s => { }));
-                if (!string.IsNullOrEmpty(__instance.textureLogoID))
-                {
-                    //Heraldry also loads sprite here with same ID. Is this valid even?
-                    //  Do we really want colliding identifiers for items of different types?
-                    //all.Add(Load<Sprite>(RT.Sprite, __instance.textureLogoID).Then(s => { }));
-                    all.Add(Load<Texture2D>(RT.Texture2D, __instance.textureLogoID).Then(s => { }));
-                }
-                Sequence(__instance.primaryMechColorID, __instance.secondaryMechColorID, __instance.tertiaryMechColorID)
-                    .ForEach(color =>
-                    {
-                        if (!string.IsNullOrEmpty(color)) all.Add(Load<ColorSwatch>(RT.ColorSwatch, color).Then(s => { }));
-                    });
-
-                Promise.All(all)
-                    .Done(() =>
-                    {
-                        LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-                        __instance.Refresh();
-                        onDependenciesLoaded();
-                    }
-                         , err => LogException(err));
-            });
             return false;
         }
         
+        public static void FooTest(List<IPromise> all, string ident, RT type)
+        {
+            if (!string.IsNullOrEmpty(ident)) all.Add(Load(type, ident));
+        }
+
+        class Deps
+        {
+            List<IPromise> all;
+            public Deps()
+            {
+                all = new List<IPromise>();
+            }
+
+            public void FromField(RT type, string ident)
+            {
+                if (!string.IsNullOrEmpty(ident)) all.Add(Load(type, ident));
+            }
+
+            public void FromField<T>(RT type, string ident, Action<T> f)
+            {
+                if (!string.IsNullOrEmpty(ident)) all.Add(Load<T>(type, ident).Then(f));
+            }
+        }
+
+        public static Dictionary<HeraldryDef, IPromise> HeraldryDefCache = new Dictionary<HeraldryDef, IPromise>();
+        public static IPromise Resolve_HeraldryDef(HeraldryDef __instance, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            if (HeraldryDefCache.TryGetValue(__instance, out var prom))
+            {
+                LogDebug("Resolve(cached) {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                return prom;
+            }
+            else
+            {
+                LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                
+                var np = new HeraldryDefResolver().Resolve(__instance, loadRequest.ResourceType, loadRequest.ResourceId);
+                np.Done(() =>
+                {
+                    if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                    else LogError(string.Format("HeraldryDef desynchronized {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType)));
+                });
+                HeraldryDefCache[__instance] = np;
+                return np;
+            }
+        }
+
+        public static bool RD_CD_Guard = true;
         public static bool RequestDependencies_ChassisDef(ChassisDef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
         {
-            LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+            if (!RD_CD_Guard)
+                return true;
+            LogDebug("Raw Deprequest for {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+            __instance.DataManager = dataManager;
+            Resolve_ChassisDef(__instance, loadRequest).Done(onDependenciesLoaded);
 
-            Trap(() =>
-            {
-                var all = new List<IPromise>();
-
-                if (__instance.FixedEquipment != null)
-                    foreach (var equip in __instance.FixedEquipment)
-                    {
-                        // Might need to cache here.
-                        if (!equip.DependenciesLoaded(loadRequest.RequestWeight.AllowedWeight)) {
-                            var prom = new Promise();
-                            equip.RequestDependencies(dataManager, prom.Resolve, loadRequest);
-                            all.Add(prom);
-                        }
-                    }
-
-                // PRE - RequestInventoryPrefabs();
-                if (__instance.FixedEquipment != null)
-                    foreach (var equip in __instance.FixedEquipment)
-                    {
-                        if (equip.Def != null && !string.IsNullOrEmpty(equip.prefabName))
-                            all.Add(Load(RT.Prefab, equip.prefabName));
-                    }
-                // FIXME: Implement
-                // POST - RequestInventoryPrefabs();
-
-                all.Add(Load(RT.Prefab, __instance.PrefabIdentifier));
-                if (!string.IsNullOrEmpty(__instance.Description.Icon)) all.Add(Load(RT.Sprite, __instance.Description.Icon));
-                all.Add(Load(RT.HardpointDataDef, __instance.HardpointDataDefID));
-                all.Add(Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID));
-                all.Add(Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID));
-                
-                Promise.All(all)
-                    .Done(() =>
-                    {
-                        LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-                        __instance.Refresh();
-                        LogDebug("Refreshed {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-                        onDependenciesLoaded();
-                        LogDebug("onDepsLoaded {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
-                    }
-                         , err => LogException(err));
-            });
             return false;
+        }
+        public static Dictionary<ChassisDef, IPromise> ChassisDefCache = new Dictionary<ChassisDef, IPromise>();
+        public static IPromise Resolve_ChassisDef(ChassisDef __instance, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            if (ChassisDefCache.TryGetValue(__instance, out var prom))
+            {
+                LogDebug("Resolve(cached) {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                return prom;
+            }
+            else
+            {
+                LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+
+                var np = Trap(() =>
+                {
+                    var all = new List<IPromise>();
+                    
+                    if (__instance.FixedEquipment != null)
+                        foreach (var equip in __instance.FixedEquipment)
+                        {
+                            // Might need to cache here.
+                            if (!equip.DependenciesLoaded(loadRequest.RequestWeight.AllowedWeight))
+                            {
+                                all.Add(Resolve_BaseComponentRef(equip, loadRequest));
+                            }
+                        }
+
+                    // PRE - RequestInventoryPrefabs();
+                    if (__instance.FixedEquipment != null)
+                        foreach (var equip in __instance.FixedEquipment)
+                        {
+                            if (equip.Def != null && !string.IsNullOrEmpty(equip.prefabName))
+                                all.Add(Load(RT.Prefab, equip.prefabName));
+                        }
+                    // POST - RequestInventoryPrefabs();
+
+                    all.Add(Load(RT.Prefab, __instance.PrefabIdentifier));
+                    if (!string.IsNullOrEmpty(__instance.Description.Icon)) all.Add(Load(RT.Sprite, __instance.Description.Icon));
+                    all.Add(Load(RT.HardpointDataDef, __instance.HardpointDataDefID));
+                    all.Add(Load(RT.MovementCapabilitiesDef, __instance.MovementCapDefID));
+                    all.Add(Load(RT.PathingCapabilitiesDef, __instance.PathingCapDefID));
+
+                    // Do we have all the checks for MechChassisDef?
+
+                    return Promise.All(all)
+                        .Then(() =>
+                        {
+                            __instance.Refresh();
+                        });
+                });
+                np.Done(() =>
+                {
+                    // Possibility for deps validation
+                    if (__instance.DependenciesLoaded(1000000)) LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                    else
+                    {
+                        LogDebug("Try fetch deps");
+                        RD_CD_Guard = false;
+                        dryRun = new List<string>();
+                        __instance.RequestDependencies(__instance.DataManager, null, loadRequest);
+                        var lcopy = string.Join(" ", dryRun.ToArray());
+                        dryRun = null;
+                        RD_CD_Guard = true;
+                        LogDebug("done");
+
+                        LogError("ChassisDef desynchronized {0}:{1} [{2}]", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType), lcopy);
+                    }
+                });
+                ChassisDefCache[__instance] = np;
+                return np;
+            }
+        }
+        
+        public static bool RequestDependencies_BaseComponentRef(BaseComponentRef __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            LogDebug("Raw Deprequest for {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+            __instance.DataManager = dataManager;
+            Resolve_BaseComponentRef(__instance, loadRequest).Done(onDependenciesLoaded);
+
+            return false;
+        }
+        public static Dictionary<BaseComponentRef, IPromise> BaseComponentRefCache = new Dictionary<BaseComponentRef, IPromise>();
+        public static IPromise Resolve_BaseComponentRef(BaseComponentRef __instance, DataManager.DataManagerLoadRequest loadRequest)
+        {
+            if (BaseComponentRefCache.TryGetValue(__instance, out var prom))
+            {
+                LogDebug("Resolve(cached) {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                return prom;
+            }
+            else
+            {
+                LogDebug("Resolve {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+
+                var np = Trap(() =>
+                {
+                    var all = new List<IPromise>();
+
+                    all.Add(Load<MechComponentDef>(__instance.GetResourceType(), __instance.ComponentDefID)
+                        .Then(def =>
+                        {
+                            new Traverse(__instance).Property("Def").SetValue(def);
+                            //__instance.RefreshComponentDef();
+                            var ppm = new Promise();
+                            // FIXME: Must do a dispatch to the proper resolve function, we need a lookup table
+                            LogDebug("Request dependencies of WeaponDef {0}", def?.Description?.Id);
+                            if (__instance.Def != null) __instance.Def.RequestDependencies(__instance.DataManager, ppm.Resolve, loadRequest);
+                            else ppm.Resolve();
+                            return (IPromise)ppm;
+                        }));
+
+                    return Promise.All(all)
+                        .Then(() =>
+                        {
+                            LogDebug("Resolved {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                            LogDebug("Refreshed {0}:{1}", loadRequest.ResourceId, Enum.GetName(typeof(RT), loadRequest.ResourceType));
+                        }
+                             , err => LogException(err));
+                });
+                BaseComponentRefCache[__instance] = np;
+                return np;
+            }
         }
 
         public static Dictionary<string, Promise<object>> promises = new Dictionary<string, Promise<object>>();
@@ -189,7 +360,7 @@ namespace BattletechPerformanceFix
         {
             Trap(() => stuff.RequestResource(type, id, new PrewarmRequest(), false, false));
             return Ensure(id)
-                .Then(x => (T)x);
+                .Then(x => x is T ? (T)x : throw new Exception(string.Format("Load<T> Wanted {0}, but {1}:{2} is a {3}", typeof(T).FullName, id, Enum.GetName(typeof(RT), type), x.GetType().FullName)));
         }
 
         public static void DispatchAssetLoad(MessageCenterMessage msg)
@@ -199,12 +370,24 @@ namespace BattletechPerformanceFix
             var id = t.Property("ResourceId").GetValue<string>();
 
             //FIXME: need to capture any multiple resolved promise here and do some cache correcting
-            Ensure(id)
-                .Resolve(val);
+            try
+            {
+                Ensure(id)
+                    .Resolve(val);
+            } catch (Exception e)
+            {
+                LogError("Asset {0} already dispatched", id);
+            }
         }
 
+        public static List<string> dryRun = null;
         public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
+            if (dryRun != null)
+            {
+                dryRun.Add(string.Format("{0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType)));
+                return false;
+            }
             LogDebug("Request {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
             if (!Initialized)
             {

@@ -142,6 +142,11 @@ namespace BattletechPerformanceFix
         public static IPromise Unit<T>(this IPromise<T> p)
             => p.Then(x => {});
 
+        public static T Or<T>(this T a, T b)
+        {
+            return a == null ? b : a;
+        }
+
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         public static void Start(string modDirectory, string json)
