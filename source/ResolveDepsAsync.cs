@@ -6,6 +6,7 @@ using BattleTech.Data;
 using BattleTech;
 using BattleTech.Assetbundles;
 using Harmony;
+using Harmony.ILCopying;
 using UnityEngine;
 using System.IO;
 using SVGImporter;
@@ -44,6 +45,10 @@ namespace BattletechPerformanceFix
 
         public static IPromise OfString(this string str, RT type)
             => string.IsNullOrEmpty(str) ? Promise.Resolved() : ResolveDepsAsync.Load(type, str);
+
+
+        public static string AsString(this RT type)
+            => Enum.GetName(typeof(RT), type);
     }
 
     class ResolveDepsAsync : Feature
@@ -51,7 +56,8 @@ namespace BattletechPerformanceFix
         public static bool WantVerify = false;
         public void Activate()
         {
-            var wantTracking = true;
+            Stuff.FigureItOut();
+            var wantTracking = false;
 
             var t = typeof(ResolveDepsAsync);
             harmony.Patch(AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries"), null, new HarmonyMethod(AccessTools.Method(t, nameof(IntegrityCheck))));
@@ -210,15 +216,16 @@ namespace BattletechPerformanceFix
 
                     var np = Trap(() => Resolve(__instance, type, id));
                     LogDebug("Cleanup {0}", idef);
-                    if (ResolveDepsAsync.WantVerify)
+                    
+                    np.Done(() =>
                     {
-                        np.Done(() =>
+
+                        var dl = Trap(() => __instance.DependenciesLoaded(1000000));
+
+                        if (dl) LogDebug("Resolved <?fixme T?> {0}", idef);
+                        else
                         {
-
-                            var dl = Trap(() => __instance.DependenciesLoaded(1000000));
-
-                            if (dl) LogDebug("Resolved <?fixme T?> {0}", idef);
-                            else
+                            if (ResolveDepsAsync.WantVerify)
                             {
                                 RequestDependencies_DryRun = true;
                                 dryRun = new List<string>();
@@ -232,11 +239,13 @@ namespace BattletechPerformanceFix
                                 dryRun = null;
                                 RequestDependencies_DryRun = false;
 
-                                
+
                                 LogError("{0}desynchronized {1} [{2}]", lcopy.Any() ? "is" : "semi-", idef, lcopy);
                             }
-                        });
-                    }
+                            else LogError("is-desynchronized {1}", idef);
+                        }
+                    }); 
+
                     cache[__instance] = np;
                     return np;
                 }
@@ -641,11 +650,50 @@ namespace BattletechPerformanceFix
                     .Add(key, item);
             });
         }
-        
+
         public void LoadAndPublish<T>(RT resourceType, string identifier)
         {
             Load<T>(resourceType, identifier)
                 .Done(res => messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<T>(resourceType, identifier, res)));
+        }
+
+        public static void FigureItOut()
+        {
+            var bttypes = (RT[])Enum.GetValues(typeof(RT));
+            var bttypess = Enum.GetNames(typeof(RT));
+            var dstores = AccessTools.GetDeclaredFields(typeof(DataManager))
+                .Where(field => field.FieldType.FullName.Contains("DictionaryStore"))
+                .ToList();
+
+            bool IsJsonBacked(Type t)
+            {
+                return t.GetInterface(typeof(HBS.Util.IJsonTemplated).FullName) != null;
+            }
+
+            var s = dstores.Partition(field => field.FieldType.GetGenericArguments()[0].Let(storeType => IsJsonBacked(storeType) && bttypess.Contains(storeType.Name)));
+            var dstores_auto = s.Key;
+            var dstores_manual = s.Value;
+
+            var foo = new Dictionary<RT, KeyValuePair<Func<VersionManifestEntry, IPromise<object>>, Action<string>>>();
+            void Add(RT ty, Func<VersionManifestEntry, IPromise<object>> load, Action<string> unload)
+                => foo[ty] = new KeyValuePair<Func<VersionManifestEntry, IPromise<object>>, Action<string>>(load, unload);
+            dstores_auto.ForEach(field =>
+            {
+                var ga = field.FieldType.GetGenericArguments()[0];
+                if (!IsJsonBacked(ga)) LogError("Non JsonBacked item made it to dstores_auto");
+                var bt = (RT)Enum.Parse(typeof(RT), ga.Name);
+
+                Add( bt         
+                   , (entry) => ResolveDepsAsync.stuff.LoadJsonD(entry, ga).Then(x => /* TODO: Add To DictionaryStore */x)
+                   , (str) => {/* TODO: remove from DictionaryStore */}
+                    );
+            });
+             
+            var auto = foo.Keys.Select(key => key.AsString()).ToArray();
+            var manual = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
+
+            Log("Found[Auto {0}]: {1}", auto.Length, Newtonsoft.Json.JsonConvert.SerializeObject(auto));
+            Log("Found[Manual {0}]: {1}", manual.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual));
         }
 
         public static Dictionary<string,object> cache = new Dictionary<string,object>();
@@ -786,7 +834,21 @@ namespace BattletechPerformanceFix
 
             return LoadMapper(entry, resourceType, identifier, Make, (TextAsset r) => Make(r.text));
         }
-        
+
+        public IPromise<object> LoadJsonD(VersionManifestEntry entry, Type t)
+        {
+            object Make(string json)
+            {
+                //FIXME: Verify t here
+                HBS.Util.IJsonTemplated a = (HBS.Util.IJsonTemplated)Activator.CreateInstance(t);
+                a.FromJSON(json);
+                //Log("JSON send");
+                return a;
+            }
+
+            return LoadMapper(entry, (RT)Enum.Parse(typeof(RT), entry.Type), entry.Id, Make, (TextAsset r) => Make(r.text));
+        }
+
         // TODO: Looks like resource and bundle are the same type always, if so reduce them into one selector
         public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<string, T> file, Func<R, T> resource, AcceptReject<T> recover = null) 
             where R : UnityEngine.Object 

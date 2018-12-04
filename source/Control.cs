@@ -147,6 +147,17 @@ namespace BattletechPerformanceFix
             return a == null ? b : a;
         }
 
+        public static K Let<T,K>(this T t, Func<T, K> f)
+            => f(t);
+
+        public static KeyValuePair<List<A>, List<A>> Partition<A>(this IEnumerable<A> xs, Func<A, bool> predicate)
+        {
+            var yes = new List<A>();
+            var no = new List<A>();
+            xs.ForEach(elem => { if (predicate(elem)) yes.Add(elem); else no.Add(elem); });
+            return new KeyValuePair<List<A>, List<A>>(yes, no);
+        }
+
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         public static HarmonyMethod Drop = new HarmonyMethod(AccessTools.Method(typeof(Control), nameof(Drop_Patch)));
@@ -158,7 +169,7 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-Resolver");
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-[REDACTED]-Windows-Edition-(I really am sorry Mac & Linux users :()");
             
             Trap(() =>
             {
@@ -171,13 +182,13 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var WantVersions = new string[] { "1.2.", "1.3." };
+                var WantVersions = new string[] { "1.3." };
                 if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
                 {
                     Log("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion);
                 } else
                 {
-                    LogError("BattletechPerformanceFix expected BattleTech ({0}), but found {1}", string.Join(",", WantVersions), VersionInfo.ProductVersion);
+                    LogError("BattletechPerformanceFix requires BattleTech version ({0}), you are on {1}. You are using the wrong version. Check here: https://github.com/m22spencer/BattletechPerformanceFix/releases", string.Join(" or ", WantVersions), VersionInfo.ProductVersion);
                     return;
                 }
 
@@ -201,7 +212,7 @@ namespace BattletechPerformanceFix
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
                     { typeof(MDDB_InMemoryCache), true },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
-                    { typeof(RemoveMDDB), true },
+                    //{ typeof(RemoveMDDB), true },
                     { typeof(ContractLagFix), true },
                     { typeof(ResolveDepsAsync), true }
                 };
