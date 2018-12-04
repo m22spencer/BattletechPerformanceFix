@@ -56,7 +56,6 @@ namespace BattletechPerformanceFix
         public static bool WantVerify = false;
         public void Activate()
         {
-            Stuff.FigureItOut();
             var wantTracking = false;
 
             var t = typeof(ResolveDepsAsync);
@@ -626,6 +625,9 @@ namespace BattletechPerformanceFix
         public AssetBundleManager bundleManager;
         public MessageCenter messageCenter;
         public TextureManager textureManager;
+
+        public Dictionary<RT, KeyValuePair<Func<VersionManifestEntry, IPromise<object>>, Action<string>>> loadDB;
+
         public Stuff(DataManager dataManager)
         {
             this.dataManager = dataManager;
@@ -633,6 +635,8 @@ namespace BattletechPerformanceFix
             this.dataLoader = new Traverse(dataManager).Field("dataLoader").GetValue<HBS.Data.DataLoader>();
             this.messageCenter = new Traverse(dataManager).Property("MessageCenter").GetValue<MessageCenter>();
             this.textureManager = new Traverse(dataManager).Property("TextureManager").GetValue<TextureManager>();
+
+            loadDB = FigureItOut();
         }
 
         public bool RequestResource(RT type, string id, PrewarmRequest p, bool stack, bool own)
@@ -657,7 +661,7 @@ namespace BattletechPerformanceFix
                 .Done(res => messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<T>(resourceType, identifier, res)));
         }
 
-        public static void FigureItOut()
+        public Dictionary<RT, KeyValuePair<Func<VersionManifestEntry, IPromise<object>>, Action<string>>> FigureItOut()
         {
             var bttypes = (RT[])Enum.GetValues(typeof(RT));
             var bttypess = Enum.GetNames(typeof(RT));
@@ -683,8 +687,36 @@ namespace BattletechPerformanceFix
                 if (!IsJsonBacked(ga)) LogError("Non JsonBacked item made it to dstores_auto");
                 var bt = (RT)Enum.Parse(typeof(RT), ga.Name);
 
-                Add( bt         
-                   , (entry) => ResolveDepsAsync.stuff.LoadJsonD(entry, ga).Then(x => /* TODO: Add To DictionaryStore */x)
+
+                var fldName = field.Name;
+                var DS = new Traverse(dataManager).Field(fldName);
+                if (!DS.GetValueType().FullName.Contains("DictionaryStore"))
+                    LogError("Failed to fetch dictionary store for :field {0} :got {1}", fldName, DS?.GetValueType()?.FullName);
+
+                object AddToStore(VersionManifestEntry entry, object x)
+                {
+                    try
+                    {
+                        LogDebug("Adding to {0} this item {1}:{2}", field.Name, entry.Id, x);
+                        if (DS.Method("Exists", entry.Id).GetValue<bool>())
+                        {
+                            LogDebug("Item already in DM");
+                        } else
+                        {
+                            LogDebug("Adding Item to DM");
+                            Trap(() => DS.Method("Add", entry.Id, x).GetValue());
+                            LogDebug("Added Item to DM");
+                        }
+                    } catch (Exception e)
+                    {
+                        LogException(e);
+                        LogError("Unable to check if item exists");
+                    } 
+                    return x;
+                }
+
+                Add(bt
+                   , (entry) => ResolveDepsAsync.stuff.LoadJsonD(entry, ga).Then(x => AddToStore(entry, x))
                    , (str) => {/* TODO: remove from DictionaryStore */}
                     );
             });
@@ -693,7 +725,14 @@ namespace BattletechPerformanceFix
             var manual = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
 
             Log("Found[Auto {0}]: {1}", auto.Length, Newtonsoft.Json.JsonConvert.SerializeObject(auto));
-            Log("Found[Manual {0}]: {1}", manual.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual));
+            Log("Found[Manual {0}]: {1}", manual.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual, Newtonsoft.Json.Formatting.Indented));
+
+
+            
+            var manual2 = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
+            Log("Missing![Manual {0}]: {1}", manual2.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual2, Newtonsoft.Json.Formatting.Indented));
+
+            return foo;
         }
 
         public static Dictionary<string,object> cache = new Dictionary<string,object>();
@@ -725,87 +764,109 @@ namespace BattletechPerformanceFix
             {
                 LogDebug("Custom load: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
                 var entry = dataManager.ResourceLocator.EntryByID(identifier, resourceType, false);
-                switch (resourceType)
+
+                if (loadDB.TryGetValue(resourceType, out var kvld))
                 {
-                    case RT.ChassisDef: return f("chassisDefs", LoadJson<ChassisDef>(entry, resourceType, identifier));
-                    case RT.VehicleChassisDef: return f("vehicleChassisDefs", LoadJson<VehicleChassisDef>(entry, resourceType, identifier));
-                    case RT.TurretChassisDef: return f("turretChassisDefs", LoadJson<TurretChassisDef>(entry, resourceType, identifier));
-                    case RT.TurretDef: return f("turretDefs", LoadJson<TurretDef>(entry, resourceType, identifier));
-                    case RT.BuildingDef: return f("buildingDefs", LoadJson<BuildingDef>(entry, resourceType, identifier));
-                    case RT.AmmunitionDef: return f("ammoDefs", LoadJson<AmmunitionDef>(entry, resourceType, identifier));
-                    case RT.AmmunitionBoxDef: return f("ammoBoxDefs", LoadJson<AmmunitionBoxDef>(entry, resourceType, identifier));
-                    case RT.JumpJetDef: return f("jumpJetDefs", LoadJson<JumpJetDef>(entry, resourceType, identifier));
-                    case RT.HeatSinkDef: return f("heatSinkDefs", LoadJson<HeatSinkDef>(entry, resourceType, identifier));
-                    case RT.UpgradeDef: return f("upgradeDefs", LoadJson<UpgradeDef>(entry, resourceType, identifier));
-                    case RT.WeaponDef: return f("weaponDefs", LoadJson<WeaponDef>(entry, resourceType, identifier));
-                    case RT.MechDef: return f("mechDefs", LoadJson<MechDef>(entry, resourceType, identifier));
-                    case RT.VehicleDef: return f("vehicleDefs", LoadJson<VehicleDef>(entry, resourceType, identifier));
-                    case RT.PilotDef: return f("pilotDefs", LoadJson<PilotDef>(entry, resourceType, identifier));
-                    case RT.AbilityDef: return f("abilityDefs", LoadJson<AbilityDef>(entry, resourceType, identifier));
-                    case RT.DesignMaskDef: return f("designMaskDefs", LoadJson<DesignMaskDef>(entry, resourceType, identifier));
-                    case RT.MovementCapabilitiesDef: return f("movementCapDefs", LoadJson<MovementCapabilitiesDef>(entry, resourceType, identifier));
-                    case RT.PathingCapabilitiesDef: return f("pathingCapDefs", LoadJson<PathingCapabilitiesDef>(entry, resourceType, identifier));
-                    case RT.HardpointDataDef: return f("hardpointDataDefs", LoadJson<HardpointDataDef>(entry, resourceType, identifier));
-                    case RT.LanceDef: return f("lanceDefs", LoadJson<LanceDef>(entry, resourceType, identifier));
-                    case RT.CastDef: return f("castDefs", LoadJson<CastDef>(entry, resourceType, identifier));
-                    case RT.ConversationContent: return f("conversationDefs", LoadJson<ConversationContent>(entry, resourceType, identifier));
-                    case RT.DialogBucketDef: return f("dialogBucketDefs", LoadJson<DialogBucketDef>(entry, resourceType, identifier));
-                    case RT.SimGameEventDef: return f("simGameEventDefs", LoadJson<SimGameEventDef>(entry, resourceType, identifier));
-                    case RT.SimGameStatDescDef: return f("simGameStatDescDefs", LoadJson<SimGameStatDescDef>(entry, resourceType, identifier));
-                    case RT.LifepathNodeDef: return f("lifepathNodeDefs", LoadJson<LifepathNodeDef>(entry, resourceType, identifier));
-                    //case RT.SimGameStringList: return f("simGameStringLists", LoadJson<SimGameStringList>(entry, resourceType, identifier));
-                    case RT.ContractOverride: return f("contractOverrides", LoadJson<ContractOverride>(entry, resourceType, identifier));
-                    case RT.StarSystemDef: return f("systemDefs", LoadJson<StarSystemDef>(entry, resourceType, identifier));
-                    case RT.ShopDef: return f("shops", LoadJson<ShopDef>(entry, resourceType, identifier));
-                    case RT.MechLabIncludeDef: return f("mechLabIncludeDefs", LoadJson<MechLabIncludeDef>(entry, resourceType, identifier));
-                    case RT.FactionDef: return f("factions", LoadJson<FactionDef>(entry, resourceType, identifier));
-                    case RT.HeraldryDef: return f("heraldries", LoadJson<HeraldryDef>(entry, resourceType, identifier));
-                    //case RT.Conversation: return f("simGameConversations", LoadJson<Conversation>(entry, resourceType, identifier));
-                    //case RT.ConversationSpeakerList: return f("simGameSpeakers", LoadJson<ConversationSpeakerList>(entry, resourceType, identifier));
-                    case RT.GenderedOptionsListDef: return f("genderedOptionsListDefs", LoadJson<GenderedOptionsListDef>(entry, resourceType, identifier));
-                    case RT.AudioEventDef: return f("audioEventDefs", LoadJson<AudioEventDef>(entry, resourceType, identifier));
-                    case RT.SimGameMilestoneDef: return f("simGameMilestones", LoadJson<SimGameMilestoneDef>(entry, resourceType, identifier));
-                    case RT.BackgroundDef: return f("backgroundDefs", LoadJson<BackgroundDef>(entry, resourceType, identifier));
-                    case RT.BackgroundQuestionDef: return f("backgroundQuestionDefs", LoadJson<BackgroundQuestionDef>(entry, resourceType, identifier));
-                    case RT.ShipModuleUpgrade: return f("shipUpgradeDefs", LoadJson<ShipModuleUpgrade>(entry, resourceType, identifier));
-                    case RT.SimGameSubstitutionListDef: return f("simGameSubstitutionDefLists", LoadJson<SimGameSubstitutionListDef>(entry, resourceType, identifier));
-                    case RT.BaseDescriptionDef: return f("baseDescriptionDefs", LoadJson<BaseDescriptionDef>(entry, resourceType, identifier));
-                    case RT.PortraitSettings: return f("portraitSettings", LoadJson<PortraitSettings>(entry, resourceType, identifier));
-                    case RT.SimGameDifficultySettingList: return f("simGameDifficultySettingLists", LoadJson<SimGameDifficultySettingList>(entry, resourceType, identifier));
-                    case RT.FlashpointDef: return f("flashpointDefs", LoadJson<FlashpointDef>(entry, resourceType, identifier));
-                    case RT.SimGameMilestoneSet: return f("milestoneSets", LoadJson<SimGameMilestoneSet>(entry, resourceType, identifier));
-                    //case RT.ItemCollectionDef: return f("itemCollectionDefs", LoadCSV<ItemCollectionDef>(entry, resourceType, identifier));
-                    //case RT.SimpleText: return f("simpleTexts", LoadJson<SimpleText>(entry, resourceType, identifier));
-
-                    /*
-                    case RT.Prefab: return LoadMapper(entry, resourceType, identifier, null, (GameObject go) => go);
-                    case RT.Sprite:
-                    case RT.SVGAsset:
-                    case RT.ColorSwatch:
-                    */
-                    case RT.Texture2D:
-                        /* if (this.TextureManager != null && this.TextureManager.Contains(identifier))
+                    LogDebug("Custom load-db: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
+                    return passthrough(kvld.Key(entry)
+                        .Then(x =>
+                        {
+                            if (x is T)
                             {
-                                obj = this.TextureManager.GetLoadedTexture(identifier);
+                                LogDebug("load-db-success: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
+                                return (T)x;
                             }
-                            */
-                        return passthrough(LoadMapper(entry, resourceType, identifier
-                                                     , null
-                                                     , (Texture2D t) => { textureManager.InsertTexture(identifier, t); return t; }
-                                                     , (yes, no) => textureManager.RequestTexture(identifier, new TextureLoaded(yes), new LoadFailed(err => no(new Exception(err))))));
+                            else
+                            {
+                                LogDebug("load-db-cast-failure: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
+                                throw new Exception(string.Format("Cast failure for {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType)));
+                            }
+                        }));
+                }
+                else
+                {
+                    switch (resourceType)
+                    {
+                        case RT.ChassisDef: return f("chassisDefs", LoadJson<ChassisDef>(entry, resourceType, identifier));
+                        case RT.VehicleChassisDef: return f("vehicleChassisDefs", LoadJson<VehicleChassisDef>(entry, resourceType, identifier));
+                        case RT.TurretChassisDef: return f("turretChassisDefs", LoadJson<TurretChassisDef>(entry, resourceType, identifier));
+                        case RT.TurretDef: return f("turretDefs", LoadJson<TurretDef>(entry, resourceType, identifier));
+                        case RT.BuildingDef: return f("buildingDefs", LoadJson<BuildingDef>(entry, resourceType, identifier));
+                        case RT.AmmunitionDef: return f("ammoDefs", LoadJson<AmmunitionDef>(entry, resourceType, identifier));
+                        case RT.AmmunitionBoxDef: return f("ammoBoxDefs", LoadJson<AmmunitionBoxDef>(entry, resourceType, identifier));
+                        case RT.JumpJetDef: return f("jumpJetDefs", LoadJson<JumpJetDef>(entry, resourceType, identifier));
+                        case RT.HeatSinkDef: return f("heatSinkDefs", LoadJson<HeatSinkDef>(entry, resourceType, identifier));
+                        case RT.UpgradeDef: return f("upgradeDefs", LoadJson<UpgradeDef>(entry, resourceType, identifier));
+                        case RT.WeaponDef: return f("weaponDefs", LoadJson<WeaponDef>(entry, resourceType, identifier));
+                        case RT.MechDef: return f("mechDefs", LoadJson<MechDef>(entry, resourceType, identifier));
+                        case RT.VehicleDef: return f("vehicleDefs", LoadJson<VehicleDef>(entry, resourceType, identifier));
+                        case RT.PilotDef: return f("pilotDefs", LoadJson<PilotDef>(entry, resourceType, identifier));
+                        case RT.AbilityDef: return f("abilityDefs", LoadJson<AbilityDef>(entry, resourceType, identifier));
+                        case RT.DesignMaskDef: return f("designMaskDefs", LoadJson<DesignMaskDef>(entry, resourceType, identifier));
+                        case RT.MovementCapabilitiesDef: return f("movementCapDefs", LoadJson<MovementCapabilitiesDef>(entry, resourceType, identifier));
+                        case RT.PathingCapabilitiesDef: return f("pathingCapDefs", LoadJson<PathingCapabilitiesDef>(entry, resourceType, identifier));
+                        case RT.HardpointDataDef: return f("hardpointDataDefs", LoadJson<HardpointDataDef>(entry, resourceType, identifier));
+                        case RT.LanceDef: return f("lanceDefs", LoadJson<LanceDef>(entry, resourceType, identifier));
+                        case RT.CastDef: return f("castDefs", LoadJson<CastDef>(entry, resourceType, identifier));
+                        case RT.ConversationContent: return f("conversationDefs", LoadJson<ConversationContent>(entry, resourceType, identifier));
+                        case RT.DialogBucketDef: return f("dialogBucketDefs", LoadJson<DialogBucketDef>(entry, resourceType, identifier));
+                        case RT.SimGameEventDef: return f("simGameEventDefs", LoadJson<SimGameEventDef>(entry, resourceType, identifier));
+                        case RT.SimGameStatDescDef: return f("simGameStatDescDefs", LoadJson<SimGameStatDescDef>(entry, resourceType, identifier));
+                        case RT.LifepathNodeDef: return f("lifepathNodeDefs", LoadJson<LifepathNodeDef>(entry, resourceType, identifier));
+                        //case RT.SimGameStringList: return f("simGameStringLists", LoadJson<SimGameStringList>(entry, resourceType, identifier));
+                        case RT.ContractOverride: return f("contractOverrides", LoadJson<ContractOverride>(entry, resourceType, identifier));
+                        case RT.StarSystemDef: return f("systemDefs", LoadJson<StarSystemDef>(entry, resourceType, identifier));
+                        case RT.ShopDef: return f("shops", LoadJson<ShopDef>(entry, resourceType, identifier));
+                        case RT.MechLabIncludeDef: return f("mechLabIncludeDefs", LoadJson<MechLabIncludeDef>(entry, resourceType, identifier));
+                        case RT.FactionDef: return f("factions", LoadJson<FactionDef>(entry, resourceType, identifier));
+                        case RT.HeraldryDef: return f("heraldries", LoadJson<HeraldryDef>(entry, resourceType, identifier));
+                        //case RT.Conversation: return f("simGameConversations", LoadJson<Conversation>(entry, resourceType, identifier));
+                        //case RT.ConversationSpeakerList: return f("simGameSpeakers", LoadJson<ConversationSpeakerList>(entry, resourceType, identifier));
+                        case RT.GenderedOptionsListDef: return f("genderedOptionsListDefs", LoadJson<GenderedOptionsListDef>(entry, resourceType, identifier));
+                        case RT.AudioEventDef: return f("audioEventDefs", LoadJson<AudioEventDef>(entry, resourceType, identifier));
+                        case RT.SimGameMilestoneDef: return f("simGameMilestones", LoadJson<SimGameMilestoneDef>(entry, resourceType, identifier));
+                        case RT.BackgroundDef: return f("backgroundDefs", LoadJson<BackgroundDef>(entry, resourceType, identifier));
+                        case RT.BackgroundQuestionDef: return f("backgroundQuestionDefs", LoadJson<BackgroundQuestionDef>(entry, resourceType, identifier));
+                        case RT.ShipModuleUpgrade: return f("shipUpgradeDefs", LoadJson<ShipModuleUpgrade>(entry, resourceType, identifier));
+                        case RT.SimGameSubstitutionListDef: return f("simGameSubstitutionDefLists", LoadJson<SimGameSubstitutionListDef>(entry, resourceType, identifier));
+                        case RT.BaseDescriptionDef: return f("baseDescriptionDefs", LoadJson<BaseDescriptionDef>(entry, resourceType, identifier));
+                        case RT.PortraitSettings: return f("portraitSettings", LoadJson<PortraitSettings>(entry, resourceType, identifier));
+                        case RT.SimGameDifficultySettingList: return f("simGameDifficultySettingLists", LoadJson<SimGameDifficultySettingList>(entry, resourceType, identifier));
+                        case RT.FlashpointDef: return f("flashpointDefs", LoadJson<FlashpointDef>(entry, resourceType, identifier));
+                        case RT.SimGameMilestoneSet: return f("milestoneSets", LoadJson<SimGameMilestoneSet>(entry, resourceType, identifier));
+                        //case RT.ItemCollectionDef: return f("itemCollectionDefs", LoadCSV<ItemCollectionDef>(entry, resourceType, identifier));
+                        //case RT.SimpleText: return f("simpleTexts", LoadJson<SimpleText>(entry, resourceType, identifier));
 
-                /*
-                case RT.UIModulePrefabs:
-                case RT.AssetBundle: 
-                */
+                        /*
+                        case RT.Prefab: return LoadMapper(entry, resourceType, identifier, null, (GameObject go) => go);
+                        case RT.Sprite:
+                        case RT.SVGAsset:
+                        case RT.ColorSwatch:
+                        */
+                        case RT.Texture2D:
+                            /* if (this.TextureManager != null && this.TextureManager.Contains(identifier))
+                                {
+                                    obj = this.TextureManager.GetLoadedTexture(identifier);
+                                }
+                                */
+                            return passthrough(LoadMapper(entry, resourceType, identifier
+                                                         , null
+                                                         , (Texture2D t) => { textureManager.InsertTexture(identifier, t); return t; }
+                                                         , (yes, no) => textureManager.RequestTexture(identifier, new TextureLoaded(yes), new LoadFailed(err => no(new Exception(err))))));
 
-                    // Grouped
-                    case RT.BehaviorVariableScope:
-                    case RT.ApplicationConstants:
-                    case RT.AudioConstants:
-                    case RT.CombatGameConstants:
-                    case RT.MechStatisticsConstants:
-                    case RT.SimGameConstants: return passthrough(LoadMapper(entry, resourceType, identifier, s => s, (TextAsset t) => t.text).Then(x => Promise<string>.Resolved(x)));
+                        /*
+                        case RT.UIModulePrefabs:
+                        case RT.AssetBundle: 
+                        */
+
+                        // Grouped
+                        case RT.BehaviorVariableScope:
+                        case RT.ApplicationConstants:
+                        case RT.AudioConstants:
+                        case RT.CombatGameConstants:
+                        case RT.MechStatisticsConstants:
+                        case RT.SimGameConstants: return passthrough(LoadMapper(entry, resourceType, identifier, s => s, (TextAsset t) => t.text).Then(x => Promise<string>.Resolved(x)));
+                    }
                 }
                 return Promise<T>.Rejected(new Exception(string.Format("Unhandled RT type {0}", Enum.GetName(typeof(RT), resourceType))));
             }
