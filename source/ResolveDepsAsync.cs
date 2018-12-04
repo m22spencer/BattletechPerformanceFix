@@ -53,6 +53,7 @@ namespace BattletechPerformanceFix
 
     class ResolveDepsAsync : Feature
     {
+        public static bool WantVanilla = false;
         public static bool WantVerify = false;
         public void Activate()
         {
@@ -113,15 +114,18 @@ namespace BattletechPerformanceFix
 
             var resolver = AccessTools.Method(typeof(Resolver<ChassisDef>), "RequestDependencies"); //just using ChassisDef here to reference the static function. It means nothing;
 
-            Assembly.GetAssembly(typeof(HeraldryDef))
-                .GetTypes()
-                .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
-                .ForEach(ildtype =>
-                {
-                    harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), Drop);
-                    //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), Drop);
-                    harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
-                });
+            if (!WantVanilla)
+            {
+                Assembly.GetAssembly(typeof(HeraldryDef))
+                    .GetTypes()
+                    .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
+                    .ForEach(ildtype =>
+                    {
+                        harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), Drop);   // If enabled this will prevent RequestDependency checks that we need temporarily before the data manager is ready.
+                        //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), Drop);
+                        harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
+                    });
+            }
 
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
 
@@ -200,7 +204,7 @@ namespace BattletechPerformanceFix
                 if (ild.GetType() != typeof(T))
                     LogError("Resolve safe wrong ILD type");
                 var __instance = (T)ild;
-                __instance.DataManager = dataManager;
+                __instance.DataManager = ResolveDepsAsync.stuff.dataManager;
                 var dummyload = new DummyLoadRequest(dataManager);
                 new Traverse(__instance).Field("loadRequest").SetValue(dummyload);
                 var idef = string.Format("{0}:{1}", id, Enum.GetName(typeof(RT), type));
@@ -218,7 +222,7 @@ namespace BattletechPerformanceFix
                     
                     np.Done(() =>
                     {
-
+                        LogDebug("Check-Deps {0}", idef);
                         var dl = Trap(() => __instance.DependenciesLoaded(1000000));
 
                         if (dl) LogDebug("Resolved <?fixme T?> {0}", idef);
@@ -255,33 +259,39 @@ namespace BattletechPerformanceFix
             /* This is the patch function which harmony calls for all ILoadDependencies types */
             public static bool RequestDependencies(DataManager.ILoadDependencies __instance, DataManager dataManager, Action onDependenciesLoaded, DataManager.DataManagerLoadRequest loadRequest)
             {
+                //FIXME: loadRequest is coming through with the wrong ID!
+
                 // Something is running a dependency check, we want to ignore it.
-                if (RequestDependencies_DryRun)
+                return Trap(() =>
                 {
-                    LogDebug("Depcheck");
-                    return true;
-                }
+                    if (RequestDependencies_DryRun)
+                    {
+                        LogDebug("Depcheck");
+                        return true;
+                    }
 
-                var t = __instance.GetType();
-                if (resolveMap.TryGetValue(t.FullName, out var rescls))
-                {
-                    // we handle it
-                    LogDebug("Resolver<T>.RequestDependencies where T = {0} && {1}", t.FullName, rescls.GetType().FullName);
-                    var rs = rescls.GetType()
-                        .GetMethod("ResolveSafe");
-                    if (rs == null)
-                        LogError("Unable to find ResolveSafe function");
+                    var t = __instance.GetType();
+                    if (resolveMap.TryGetValue(t.FullName, out var rescls))
+                    {
+                        // we handle it
+                        LogDebug("Resolver<T>.RequestDependencies where T = {0} && {1}", t.FullName, rescls.GetType().FullName);
+                        var rs = rescls.GetType()
+                            .GetMethod("ResolveSafe");
+                        if (rs == null)
+                            LogError("Unable to find ResolveSafe function");
 
-                    var prom = (IPromise)rs.Invoke(rescls, new object[] { __instance, dataManager, loadRequest.ResourceType, loadRequest.ResourceId });
-                    if (!onDependenciesLoaded.Method.DeclaringType.FullName.StartsWith("BattleTechPerformanceFix"))
-                        prom.Done(onDependenciesLoaded);  // This is going to duplicate *a lot* of work.
-                    return false;
-                } else
-                {
-                    // DM handles it
-                    LogDebug("Resolver<T>.RequestDependencies where T = {0} did not resolve and will pass through", t.FullName);
-                    return true;
-                }
+                        var prom = (IPromise)rs.Invoke(rescls, new object[] { __instance, dataManager, loadRequest.ResourceType, loadRequest.ResourceId });
+                        if (!onDependenciesLoaded.Method.DeclaringType.FullName.StartsWith("BattleTechPerformanceFix"))
+                            prom.Done(onDependenciesLoaded);  // This is going to duplicate *a lot* of work.
+                        return false;
+                    }
+                    else
+                    {
+                        // DM handles it
+                        LogDebug("Resolver<T>.RequestDependencies where T = {0} did not resolve and will pass through", t.FullName);
+                        return true;
+                    }
+                });
             }
         }
 
@@ -391,9 +401,13 @@ namespace BattletechPerformanceFix
         {
             internal override IPromise Resolve(MechDef __instance, RT type, string id)
             {
+                // FIXME: id is wrong here, because the loadrequest has the wrong id.
+                if (__instance.Description.Id != id)
+                    LogWarning("ID mismatch {0} but desc says {1}", id, __instance.Description.Id);
                 __instance.meleeWeaponRef.DataManager = __instance.dfaWeaponRef.DataManager = __instance.imaginaryLaserWeaponRef.DataManager = __instance.DataManager;
-                return Promise.All(__instance.ChassisID.OfString(RT.ChassisDef)
-                                  , __instance.Chassis == null ? Promise.Resolved() : __instance.Chassis.Resolve(__instance.DataManager)
+                return Promise.All( __instance.ChassisID.OfString(RT.ChassisDef)
+                                              .Then(() => __instance.Refresh())
+                                              .Then(() => __instance.Chassis.Resolve(__instance.DataManager))
                                   , __instance.HeraldryID.OfString(RT.HeraldryDef)
                                   , Promise.All(__instance.Inventory.Select(inv => inv.Resolve(__instance.DataManager)))
                                   , __instance.meleeWeaponRef.Resolve(__instance.DataManager)
@@ -407,9 +421,12 @@ namespace BattletechPerformanceFix
         {
             internal override IPromise Resolve(VehicleDef __instance, RT type, string id)
             {
+                if (__instance.Description.Id != id)
+                    LogWarning("ID mismatch {0} but desc says {1}", id, __instance.Description.Id);
                 __instance.imaginaryLaserWeaponRef.DataManager = __instance.DataManager;
                 return Promise.All(__instance.ChassisID.OfString(RT.ChassisDef)
-                                  , __instance.Chassis == null ? Promise.Resolved() : __instance.Chassis.Resolve(__instance.DataManager)
+                                             .Then(() => __instance.Refresh())
+                                             .Then(() => __instance.Chassis.Resolve(__instance.DataManager))
                                   , __instance.HeraldryID.OfString(RT.HeraldryDef)
                                   , Promise.All(__instance.Inventory.Select(inv => inv.Resolve(__instance.DataManager)))
                                   , __instance.imaginaryLaserWeaponRef.Resolve(__instance.DataManager));
@@ -527,12 +544,11 @@ namespace BattletechPerformanceFix
 
         public static IPromise Load(RT type, string id)
         {
-            if (type == RT.MechDef)
-            {
-                return stuff.Load<MechDef>(type, id, false).Unit();
-            }
+            LogDebug("ResolveDepsAsync.Load {0}:{1}", id, type.AsString());
             Trap(() => stuff.RequestResource(type, id, new PrewarmRequest(), false, false));
-            return Ensure(id).Unit();
+            var onLoad = Ensure(id);
+            onLoad.Done(x => LogDebug("ResolveDepsAsync.Loaded {0}:{1}", id, type.AsString()));
+            return onLoad.Unit();
         }
 
         public static IPromise<T> Load<T>(RT type, string id)
@@ -547,6 +563,17 @@ namespace BattletechPerformanceFix
             var t = new Traverse(msg);
             var val = t.Property("Resource").GetValue();
             var id = t.Property("ResourceId").GetValue<string>();
+
+            if (val is MechDef)
+            {
+                var mdv = val as MechDef;
+                Log("itc Mechdef[{0}] wanting {1}", id, mdv.ChassisID);
+            }
+
+            if (val is DataManager.ILoadDependencies)
+            {
+                var deps = val as DataManager.ILoadDependencies;
+            }
 
             //FIXME: need to capture any multiple resolved promise here and do some cache correcting
             try
@@ -575,9 +602,9 @@ namespace BattletechPerformanceFix
                 stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
             }
 
-            if (resourceType == RT.MechDef || resourceType == RT.Texture2D || resourceType == RT.SimGameConstants || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
+            if (resourceType == RT.MechDef || resourceType == RT.SimGameConstants || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
             {
-                Log("custom request: {0}", identifier);
+                Log("custom request: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
                 stuff.Load<object>(resourceType, identifier);
                 return false;
             }
@@ -681,6 +708,39 @@ namespace BattletechPerformanceFix
             var foo = new Dictionary<RT, KeyValuePair<Func<VersionManifestEntry, IPromise<object>>, Action<string>>>();
             void Add(RT ty, Func<VersionManifestEntry, IPromise<object>> load, Action<string> unload)
                 => foo[ty] = new KeyValuePair<Func<VersionManifestEntry, IPromise<object>>, Action<string>>(load, unload);
+
+
+            IPromise<object> AddToStore(string fldName, VersionManifestEntry entry, IPromise<object> x)
+            {
+                return x.Then(xv =>
+                {
+                    try
+                    {
+                        var DS = new Traverse(dataManager).Field(fldName);
+                        if (!DS.GetValueType().FullName.Contains("DictionaryStore"))
+                            LogError("Failed to fetch dictionary store for :field {0} :got {1}", fldName, DS?.GetValueType()?.FullName);
+
+                        LogDebug("Adding {1} to {0}", fldName, entry.Id);
+                        if (DS.Method("Exists", entry.Id).GetValue<bool>())
+                        {
+                            LogDebug("Item already in DM");
+                        }
+                        else
+                        {
+                            LogDebug("Adding Item to DM");
+                            Trap(() => DS.Method("Add", entry.Id, xv).GetValue());
+                            LogDebug("Added Item to DM");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        LogException(e);
+                        LogError("Unable to check if item exists");
+                    }
+                    return xv;
+                });
+            }
+
             dstores_auto.ForEach(field =>
             {
                 var ga = field.FieldType.GetGenericArguments()[0];
@@ -688,35 +748,10 @@ namespace BattletechPerformanceFix
                 var bt = (RT)Enum.Parse(typeof(RT), ga.Name);
 
 
-                var fldName = field.Name;
-                var DS = new Traverse(dataManager).Field(fldName);
-                if (!DS.GetValueType().FullName.Contains("DictionaryStore"))
-                    LogError("Failed to fetch dictionary store for :field {0} :got {1}", fldName, DS?.GetValueType()?.FullName);
-
-                object AddToStore(VersionManifestEntry entry, object x)
-                {
-                    try
-                    {
-                        LogDebug("Adding to {0} this item {1}:{2}", field.Name, entry.Id, x);
-                        if (DS.Method("Exists", entry.Id).GetValue<bool>())
-                        {
-                            LogDebug("Item already in DM");
-                        } else
-                        {
-                            LogDebug("Adding Item to DM");
-                            Trap(() => DS.Method("Add", entry.Id, x).GetValue());
-                            LogDebug("Added Item to DM");
-                        }
-                    } catch (Exception e)
-                    {
-                        LogException(e);
-                        LogError("Unable to check if item exists");
-                    } 
-                    return x;
-                }
+                var fldName = field.Name;                
 
                 Add(bt
-                   , (entry) => ResolveDepsAsync.stuff.LoadJsonD(entry, ga).Then(x => AddToStore(entry, x))
+                   , (entry) => AddToStore(fldName, entry, LoadJsonD(entry, ga))
                    , (str) => {/* TODO: remove from DictionaryStore */}
                     );
             });
@@ -727,7 +762,7 @@ namespace BattletechPerformanceFix
             Log("Found[Auto {0}]: {1}", auto.Length, Newtonsoft.Json.JsonConvert.SerializeObject(auto));
             Log("Found[Manual {0}]: {1}", manual.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual, Newtonsoft.Json.Formatting.Indented));
 
-
+            //Add(RT.ItemCollectionDef, (entry) => AddToStore("itemCollectionDef", entry, LoadCSVD(entry, typeof(ItemCollectionDef))), (str) => LogError("NYI CSV unload"));
             
             var manual2 = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
             Log("Missing![Manual {0}]: {1}", manual2.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual2, Newtonsoft.Json.Formatting.Indented));
@@ -774,7 +809,9 @@ namespace BattletechPerformanceFix
                             if (x is T)
                             {
                                 LogDebug("load-db-success: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-                                return (T)x;
+                                if (x is DataManager.ILoadDependencies)
+                                    return (x as DataManager.ILoadDependencies).Resolve(ResolveDepsAsync.stuff.dataManager).Then(() => Promise<T>.Resolved((T)x));
+                                return Promise<T>.Resolved((T)x);
                             }
                             else
                             {
@@ -785,6 +822,7 @@ namespace BattletechPerformanceFix
                 }
                 else
                 {
+                    LogError("old-code");
                     switch (resourceType)
                     {
                         case RT.ChassisDef: return f("chassisDefs", LoadJson<ChassisDef>(entry, resourceType, identifier));
@@ -877,23 +915,21 @@ namespace BattletechPerformanceFix
                 // FIXME: This caching does not seem to be working, test it.
                 LogDebug("Loading {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
                 var v = Go();
-                cache[identifier] = v;
-                return v;
+
+                var withDeps = new Promise<T>();
+
+                // This is just some glue to make the deps calculation be called till we store our own results
+                v.Done(x => { if (x is DataManager.ILoadDependencies) (x as DataManager.ILoadDependencies).RequestDependencies(ResolveDepsAsync.stuff.dataManager, () => withDeps.Resolve(x), null); else withDeps.Resolve(x); });
+                withDeps.Done(x => { }, err => LogException(err));
+                cache[identifier] = withDeps;
+                return withDeps;
             }
         }
 
         public IPromise<T> LoadJson<T>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier)
             where T : class, HBS.Util.IJsonTemplated
         {
-            T Make(string json)
-            {
-                T a = Activator.CreateInstance<T>();
-                a.FromJSON(json);
-                //Log("JSON send");
-                return a;
-            }
-
-            return LoadMapper(entry, resourceType, identifier, Make, (TextAsset r) => Make(r.text));
+            return LoadJsonD(entry, typeof(T)).Then(x => x as T);
         }
 
         public IPromise<object> LoadJsonD(VersionManifestEntry entry, Type t)
@@ -904,6 +940,8 @@ namespace BattletechPerformanceFix
                 HBS.Util.IJsonTemplated a = (HBS.Util.IJsonTemplated)Activator.CreateInstance(t);
                 a.FromJSON(json);
                 //Log("JSON send");
+                if (a == null)
+                    LogError("LoadJsonD resulted in a null value for {0} {1}", entry.Id, t.FullName);
                 return a;
             }
 
