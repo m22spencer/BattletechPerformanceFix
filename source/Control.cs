@@ -150,6 +150,9 @@ namespace BattletechPerformanceFix
         public static K Let<T,K>(this T t, Func<T, K> f)
             => f(t);
 
+        public static T Identity<T>(this T t)
+            => t;
+
         public static KeyValuePair<List<A>, List<A>> Partition<A>(this IEnumerable<A> xs, Func<A, bool> predicate)
         {
             var yes = new List<A>();

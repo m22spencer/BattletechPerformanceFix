@@ -49,6 +49,9 @@ namespace BattletechPerformanceFix
 
         public static string AsString(this RT type)
             => Enum.GetName(typeof(RT), type);
+
+        public static RT ToRT(this string s)
+            => (RT)Enum.Parse(typeof(RT), s);
     }
 
     class ResolveDepsAsync : Feature
@@ -587,6 +590,7 @@ namespace BattletechPerformanceFix
         }
 
         public static List<string> dryRun = null;
+        
         public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
             if (dryRun != null)
@@ -602,10 +606,28 @@ namespace BattletechPerformanceFix
                 stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
             }
 
-            if (resourceType == RT.MechDef || resourceType == RT.SimGameConstants || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
+            if (resourceType == RT.SimGameConstants) //|| resourceType == RT.MechDef || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
             {
+                LogError("SGC requested \n \n\n" + new StackTrace().ToString());
                 Log("custom request: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-                stuff.Load<object>(resourceType, identifier);
+                stuff.LoadObj(resourceType, identifier)
+                     .Done(x =>
+                     {
+                         LogDebug("stuff.Load for {0}:{1}", identifier, resourceType.AsString());
+
+                         var realType = Trap(() => x.GetType());
+
+                         // Need to use reflection here since we don't know the type of x at compile time.
+                         var gt = typeof(DataManagerRequestCompleteMessage<>).MakeGenericType(realType);
+                         var ctor = gt.GetConstructors(AccessTools.all).SingleOrDefault();
+                         if (ctor == null)
+                             LogError("Unable to find DMRCM<?> constructor");
+                         var msg = Trap(() => ctor.Invoke(Array(resourceType, identifier, x)));
+                         LogDebug("Announce type {0}", msg?.GetType()?.FullName);
+
+                         stuff.messageCenter.PublishMessage((MessageCenterMessage)ctor.Invoke(Array(resourceType, identifier, x)));
+                     }
+                     , err => Trap(() => throw err));
                 return false;
             }
 
@@ -616,31 +638,6 @@ namespace BattletechPerformanceFix
         public static int CollectDepsDepth = 0;
         public static bool Halt = false;
         public static Dictionary<string, Promise<object>> reqCache = new Dictionary<string, Promise<object>>();
-        public static bool RequestResources_Internal(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
-        {
-            var stuff = new Stuff(__instance);
-            
-            // Just temporarily testing the waters here before writing the dependency functions
-            if (resourceType == RT.Texture2D || resourceType == RT.SimGameConstants || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
-            {
-                LogDebug("Request {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
-                stuff.Load<object>(resourceType, identifier)
-                     .Done(res =>
-                     {
-                         LogDebug("Loaded {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
-                     },
-                     (ex) =>
-                     {
-                         LogException(ex);
-                     });
-                return false;
-            }
-            else
-            {
-                LogDebug("Unhandled {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
-            }
-            return true;
-        }
     }
 
     delegate void AcceptReject<T>(Action<T> accept, Action<Exception> reject);
@@ -680,12 +677,6 @@ namespace BattletechPerformanceFix
                     .GetValue<DictionaryStore<T>>()
                     .Add(key, item);
             });
-        }
-
-        public void LoadAndPublish<T>(RT resourceType, string identifier)
-        {
-            Load<T>(resourceType, identifier)
-                .Done(res => messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<T>(resourceType, identifier, res)));
         }
 
         public Dictionary<RT, KeyValuePair<Func<VersionManifestEntry, IPromise<object>>, Action<string>>> FigureItOut()
@@ -763,7 +754,10 @@ namespace BattletechPerformanceFix
             Log("Found[Manual {0}]: {1}", manual.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual, Newtonsoft.Json.Formatting.Indented));
 
             //Add(RT.ItemCollectionDef, (entry) => AddToStore("itemCollectionDef", entry, LoadCSVD(entry, typeof(ItemCollectionDef))), (str) => LogError("NYI CSV unload"));
-            
+            Add(RT.SimGameConstants
+               , (entry) => LoadMapper(entry, entry.Type.ToRT(), entry.Id, Control.Identity, (TextAsset text) => text.text).Then(txt => (object)txt)
+               , (str) => LogError("NYI SGC unload"));
+
             var manual2 = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
             Log("Missing![Manual {0}]: {1}", manual2.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual2, Newtonsoft.Json.Formatting.Indented));
 
@@ -771,6 +765,32 @@ namespace BattletechPerformanceFix
         }
 
         public static Dictionary<string,object> cache = new Dictionary<string,object>();
+        
+        public IPromise<object> LoadObj(RT type, string identifier)
+        {
+            LogDebug("Load Obj {0}:{1}", identifier, type.AsString());
+            var entry = dataManager.ResourceLocator.EntryByID(identifier, type, false);
+            LogDebug("Found entry {0}:{1}", identifier, type.AsString());
+            if (loadDB.TryGetValue(type, out var kvld))
+            {
+                LogDebug("Custom load-db2: {0}:{1}", identifier, Enum.GetName(typeof(RT), type));
+                return kvld.Key(entry)
+                    .Then(x =>
+                    {
+                        LogDebug("load-db2-success: {0}:{1}", identifier, Enum.GetName(typeof(RT), type));
+                        if (x is DataManager.ILoadDependencies)
+                            return (x as DataManager.ILoadDependencies).Resolve(ResolveDepsAsync.stuff.dataManager).Then(() => Promise<object>.Resolved(x));
+                        LogDebug("load-db2-not-ild");
+                        var reso = Promise<object>.Resolved(x);
+                        LogDebug("load-db2-after-ild");
+                        return reso;
+                    });
+            } else
+            {
+                return Promise<object>.Rejected(new Exception(string.Format("Don't know how to load {0} yet", type.AsString())));
+            }
+        }
+
         public IPromise<T> Load<T>(BattleTechResourceType resourceType, string identifier, bool publish = true)
         {
             // Store item in datamanager
@@ -790,8 +810,11 @@ namespace BattletechPerformanceFix
             {
                 return p.Then(val =>
                 {
+                    LogDebug("passthrough");
                     if (publish) messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<K>(resourceType, identifier, val));
-                    return (T)(object)val;
+                    var res = (T)(object)val;
+                    LogDebug("passthrough done");
+                    return res;
                 });
             }
 
@@ -811,6 +834,7 @@ namespace BattletechPerformanceFix
                                 LogDebug("load-db-success: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
                                 if (x is DataManager.ILoadDependencies)
                                     return (x as DataManager.ILoadDependencies).Resolve(ResolveDepsAsync.stuff.dataManager).Then(() => Promise<T>.Resolved((T)x));
+                                LogDebug("load-db-not-ild");
                                 return Promise<T>.Resolved((T)x);
                             }
                             else
@@ -822,7 +846,7 @@ namespace BattletechPerformanceFix
                 }
                 else
                 {
-                    LogError("old-code");
+                    LogError("old-code for: {0}:{1}", identifier, resourceType.AsString());
                     switch (resourceType)
                     {
                         case RT.ChassisDef: return f("chassisDefs", LoadJson<ChassisDef>(entry, resourceType, identifier));
@@ -916,13 +940,17 @@ namespace BattletechPerformanceFix
                 LogDebug("Loading {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
                 var v = Go();
 
-                var withDeps = new Promise<T>();
+                return Trap(() =>
+                {
+                    var withDeps = new Promise<T>();
 
-                // This is just some glue to make the deps calculation be called till we store our own results
-                v.Done(x => { if (x is DataManager.ILoadDependencies) (x as DataManager.ILoadDependencies).RequestDependencies(ResolveDepsAsync.stuff.dataManager, () => withDeps.Resolve(x), null); else withDeps.Resolve(x); });
-                withDeps.Done(x => { }, err => LogException(err));
-                cache[identifier] = withDeps;
-                return withDeps;
+                    // This is just some glue to make the deps calculation be called till we store our own results
+                    v.Done(x => { if (x is DataManager.ILoadDependencies) (x as DataManager.ILoadDependencies).RequestDependencies(ResolveDepsAsync.stuff.dataManager, () => withDeps.Resolve(x), null); else withDeps.Resolve(x); });
+                    withDeps.Done(x => { }, err => LogException(err));
+                    cache[identifier] = withDeps;
+                    LogDebug("With-dsp redirect\n {0}\n\n", new System.Diagnostics.StackTrace().ToString());
+                    return withDeps;
+                });
             }
         }
 
