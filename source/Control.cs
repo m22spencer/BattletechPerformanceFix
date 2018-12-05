@@ -120,6 +120,21 @@ namespace BattletechPerformanceFix
             try { return f(); } catch (Exception e) { Log("Exception {0}", e); return default(T);  }
         }
 
+        public static T Trap<T>(string message, Func<T> f)
+        {
+            try { return f(); } catch (Exception e) { Log("Exception({0}) {1}", message, e); return default(T); }
+        }
+
+        public static void Trap(string message, Action f)
+        {
+            try { f(); } catch (Exception e) { Log("Exception({0}) {1}", message, e); }
+        }
+
+        public static bool Throws(Action f)
+        {
+            try { f(); return false; } catch { return true; }
+        }
+
         public static T TrapAndTerminate<T>(string msg, Func<T> f)
         {
             try {
@@ -129,6 +144,16 @@ namespace BattletechPerformanceFix
                 TerminateImmediately();
                 return default(T);
             }
+        }
+
+        public static string Dump<T>(this T t, bool indented = true, int depth = 1)
+        {
+            return JsonConvert.SerializeObject(t, indented ? Formatting.Indented : Formatting.None, new JsonSerializerSettings
+            {
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                MaxDepth = depth,
+                Error = (serializer, err) => err.ErrorContext.Handled = true
+            });
         }
 
         public static T[] Array<T>(params T[] p) => p;

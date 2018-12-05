@@ -26,22 +26,41 @@ namespace BattletechPerformanceFix
     /* Just to set the load request for the dependency verification */
     class DummyLoadRequest : DataManager.ResourceLoadRequest<object>
     {
-        public DummyLoadRequest(DataManager dataManager) : base(dataManager, RT.AbilityDef, "dummy_load_request_for_weight", 10000, null) { }
+        public DummyLoadRequest(DataManager dataManager, string id = "dummy_load_request_for_weight") : base(dataManager, RT.AbilityDef, id, 10000, null) { }
         public override bool AlreadyLoaded { get => true; }
 
         public void Complete()
         {
+            LogDebug("Complete dummy {0}", Enum.GetName(typeof(DataManager.DataManagerLoadRequest.RequestState), this.State));
             this.State = DataManager.DataManagerLoadRequest.RequestState.Complete;
+        }
+
+        public override void Load()
+        {
+            LogDebug("Load dummy");
+        }
+
+        public override void NotifyLoadComplete()
+        {
+            LogDebug("NotifyLoadComplete dummy");
         }
 
         public override void SendLoadCompleteMessage()
         {
-           
+            LogDebug("SendLoadCompleteMessage dummy");
+        }
+
+        public override void OnLoaded()
+        {
+            LogDebug("OnLoaded dummy");
         }
     }
 
     static class ResolveExt
     {
+        public static IPromise<object> PromiseObject<T>(this IPromise<T> p)
+            => p.Then(x => (object)x);
+
         public static IPromise Resolve(this DataManager.ILoadDependencies cls, DataManager dm)
         {
             LogDebug("Attempt to resolve {0}", cls.GetType());
@@ -52,7 +71,7 @@ namespace BattletechPerformanceFix
             cls.RequestDependencies(cls.DataManager, prom.Resolve, new DummyLoadRequest(dm));
             return prom;
         }
-
+        
         public static IPromise OfString(this string str, RT type)
             => string.IsNullOrEmpty(str) ? Promise.Resolved() : ResolveDepsAsync.Load(type, str);
 
@@ -62,6 +81,16 @@ namespace BattletechPerformanceFix
 
         public static RT ToRT(this string s)
             => (RT)Enum.Parse(typeof(RT), s);
+
+        public static T ToRTMap<T>(this string s, Func<RT,T> succ, Func<T> fail)
+        {
+            try { return succ(s.ToRT()); } catch { return fail(); }
+        }
+
+        public static void ToRTMap(this string s, Action<RT> succ, Action fail)
+        {
+            try { succ(s.ToRT()); } catch { fail(); }
+        }
     }
 
     class ResolveDepsAsync : Feature
@@ -109,8 +138,7 @@ namespace BattletechPerformanceFix
 
                 harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SimGameOptionsMenu), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(t, "Summary")));
                 harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(TrackRequestResource))));
-
-
+                
                 //harmony.Patch(AccessTools.Method(typeof(DataManager), "Update"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Update))));
             }
 
@@ -122,13 +150,28 @@ namespace BattletechPerformanceFix
             */
             harmony.Patch(AccessTools.Method(typeof(BattleTech.IntroCinematicLauncher), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(t, "IntroAdded")));
 
+            //harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(ProcessRequests))));
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
 
+
+            var ttt = typeof(DictionaryStore<>).MakeGenericType(typeof(MechDef));
+            var mde = ttt.GetMethod("Exists", AccessTools.all);
+            harmony.Patch(mde,  new HarmonyMethod(AccessTools.Method(t, nameof(MechDef_Exists))));
+
+
+            harmony.Patch(AccessTools.Method(typeof(SVGCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SVGCache_Contains))));
+            harmony.Patch(AccessTools.Method(typeof(SpriteCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SpriteCache_Contains))));
+            harmony.Patch(AccessTools.Method(typeof(TextureManager), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(TextureManager_Contains))));
+            harmony.Patch(AccessTools.Method(typeof(PrefabCache), "IsPrefabInPool"), new HarmonyMethod(AccessTools.Method(t, nameof(PrefabCache_IsPrefabInPool))));
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "Exists"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Exists))));
+
+            return;
             Log("CDAL fix on");
 
             var resolver = AccessTools.Method(typeof(Resolver<ChassisDef>), "RequestDependencies"); //just using ChassisDef here to reference the static function. It means nothing;
 
-            harmony.Patch(AccessTools.Method(typeof(DataManager), "PooledInstantiate"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(PooledInstantiate))));
-            harmony.Patch(AccessTools.Method(typeof(DataManager.QueuedPoolHelper), "SpawnNext"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(SpawnNext)))); 
+            //harmony.Patch(AccessTools.Method(typeof(DataManager), "PooledInstantiate"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(PooledInstantiate))));
+            //harmony.Patch(AccessTools.Method(typeof(DataManager.QueuedPoolHelper), "SpawnNext"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(SpawnNext)))); 
 
             if (WantVanilla)
                 return;
@@ -143,9 +186,11 @@ namespace BattletechPerformanceFix
                     harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
                 });
 
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "ProcessAsyncRequests"), Drop);
 
-            harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
             
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "ProcessRequests"), new HarmonyMethod(AccessTools.Method(t, nameof(ProcessRequests))));
+
             new ChassisDefResolver();
             new HeraldryDefResolver();
             new AbilityDefResolver();
@@ -162,6 +207,331 @@ namespace BattletechPerformanceFix
             new FactionDefResolver();
             new BackgroundDefResolver();
             new UpgradeDefResolver();
+        } 
+
+        public static void PrefabCache_IsPrefabInPool(string id, Dictionary<string,object> ___prefabPool)
+        {
+            Trap("PrefabCache_IsPrefabInPool", () => InterceptAssetChecks.DoCore(id, RT.Prefab, ___prefabPool.ContainsKey, ___prefabPool.GetValueSafe, ___prefabPool.Add));
+            return;
+
+            LogDebug("IsPrefabInPool {0}:Texture", id);
+            if (Fatal) return;
+            if (___prefabPool.ContainsKey(id))
+                return;
+
+            if (depsdb != null)
+            {
+                depsdb.Add(id + ":Prefab");
+                return;
+            }
+        }
+
+        public static void TextureManager_Contains(string resourceId, Dictionary<string, object> ___loadedTextures)
+        {
+            Trap("TextureManager_Contains", () => InterceptAssetChecks.DoCore(resourceId, RT.Texture2D, ___loadedTextures.ContainsKey, ___loadedTextures.GetValueSafe, ___loadedTextures.Add));
+            return;
+            LogDebug("Contains {0}:Texture", resourceId);
+
+            if (Fatal) return;
+            if (___loadedTextures.ContainsKey(resourceId))
+                return;
+
+            if(depsdb != null)
+            {
+                depsdb.Add(resourceId + ":Texture2D");
+                return;
+            }
+
+
+            // Until we can handle files too this needs to just fail.
+            return;
+
+            LogDebug("Intercepting texture fetch {0}", resourceId);
+            var entry = stuff.dataManager.ResourceLocator.EntryByID(resourceId, RT.Texture2D, false);
+            stuff.LoadMapper(entry, RT.Texture2D, resourceId, null, (Texture2D tex) => tex)
+                .Done(x => { ___loadedTextures.Add(resourceId, x); LogDebug("Found {0}", resourceId); }
+                     , err => LogException(err));
+            LogDebug("Complete {0}");
+        }
+
+        static List<string> depsdb = null;
+        static bool Fatal = false;
+
+        class InterceptAssetChecks
+        {
+            public static Dictionary<RT, Type> Json = Assembly.GetAssembly(typeof(RT))
+                .GetTypes()
+                .Where(ty => ty.GetInterface(typeof(HBS.Util.IJsonTemplated).FullName) != null)
+                .Where(ty => !Throws(() => ty.Name.ToRT()))
+                .ToDictionary(ty => ty.Name.ToRT());
+
+            public static IPromise<object> Ensure(VersionManifestEntry entry, RT type, string id)
+            {
+                if (Json.TryGetValue(type, out var jtype)) return stuff.LoadJsonD(entry, jtype);
+                else if (type == RT.Sprite) return EnsureSprite(entry, type, id).PromiseObject();
+                else if (type == RT.Texture2D) return EnsureTexture2D(entry, type, id).PromiseObject();
+                else if (type == RT.Prefab) return EnsureTexture2D(entry, type, id).PromiseObject();
+                else return Promise<object>.Rejected(new Exception("Unhandled RT type"));
+            }
+
+            public static IPromise<Texture2D> EnsureTexture2D(VersionManifestEntry entry, RT type, string id)
+            {
+                return stuff.LoadMapper(entry, RT.Texture2D, id, null, (Texture2D tex) => tex);
+            }
+
+            public static IPromise<Sprite> EnsureSprite(VersionManifestEntry entry, RT type, string id)
+            {
+                var texentry = stuff.dataManager.ResourceLocator.EntryByID(id, RT.Texture2D, false);
+                if (texentry != null)
+                {
+                    return EnsureTexture2D(entry, RT.Texture2D, id)
+                        .Then(texture => Sprite.Create(texture, new UnityEngine.Rect(0f, 0f, (float)texture.width, (float)texture.height), new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect, Vector4.zero));
+                }
+                else
+                {
+                    return stuff.LoadMapper(entry, RT.Sprite, id, null, (Sprite s) => s, (yes, no) => yes(Stuff.SpriteFromDisk(entry.FilePath)));
+                }
+            }
+
+            public static IPromise<GameObject> EnsurePrefab(VersionManifestEntry entry, RT type, string id)
+            {
+                return stuff.LoadMapper(entry, RT.Prefab, id, null, (GameObject go) => go);
+            }
+
+            public static void DoCore(string id, RT type, Func<string,bool> Check, Func<string, object> Get, Action<string, object> Set)
+            {
+                if (Fatal || Check(id))
+                {
+                    if (depsdb != null) LogDebug("Item {0}:{1} - OK {2}", id, type.AsString(), Get(id).Dump(false));
+                }
+                else
+                {
+                    if (depsdb != null) LogDebug("Item {0}:{1} - MISSING", id, type.AsString());
+                    if (depsdb != null)
+                    {
+                        Trap(() => depsdb.Add(id + ":" + type.AsString()));
+                    }
+
+                    var entry = stuff.dataManager.ResourceLocator.EntryByID(id, type, false);
+                    var Triggered = false;
+                    void CheckDependencies(DataManager.ILoadDependencies item)
+                    {
+                        var yes = Trap("DepsCheck1", () => item.DependenciesLoaded(100000));
+                        if (yes)
+                        {
+                            LogDebug("Checked deps of {0} -- OK", id);
+                        }
+                        else
+                        {
+                            var ddbbackup = depsdb;
+                            depsdb = new List<string>();
+                            Trap("DepsCheck2", () => item.DependenciesLoaded(100000));
+                            var depsbak = depsdb;
+                            depsdb = ddbbackup;
+                            Trap("ReportDeps", () => LogError("Checked deps of {0} -- MISSING: {1}\n{2}\n\n"
+                                    , id, depsbak.Dump(false), item.Dump()));
+                            if (depsdb == null)
+                            {
+                                LogError("------------ FATAL ------------");
+                                Fatal = true;
+                            }
+                        }
+                    }
+
+                    void Success(object result)
+                    {
+                        Triggered = true;
+
+                        Trap("SetDataManager", () => new Traverse(result).Field("dataManager").SetValue(stuff.dataManager));
+                        Trap("SetDataManager", () => new Traverse(result).Field("DataManager").SetValue(stuff.dataManager));
+                        Trap("SetLoadRequest", () => new Traverse(result).Field("loadRequest").SetValue(new DummyLoadRequest(stuff.dataManager)));
+                        Trap("AddToDB", () => Set(id, result));
+
+                        if (result is DataManager.ILoadDependencies) Trap("CheckDependencies", () => CheckDependencies(result as DataManager.ILoadDependencies));
+                    }
+
+                    void Failure(Exception error)
+                    {
+                        LogException(error);
+                        Triggered = true;
+                    }
+
+                    Ensure(entry, type, id)
+                        .Done(Success, Failure);
+
+                    if (!Triggered) LogException(new Exception(string.Format("DoCore async load for {0}:{1} :entry {2}", id, type.AsString(), entry.Dump(false))));
+                }
+            }
+        }
+
+        public static bool SVGCache_Contains(string id, Dictionary<string, object> ___cache)
+        {
+            Trap("SVGCache_Contains", () => InterceptAssetChecks.DoCore(id, RT.Sprite, ___cache.ContainsKey, ___cache.GetValueSafe, ___cache.Add));
+            return true;
+        }
+
+        public static bool SpriteCache_Contains(string id, Dictionary<string, object> ___cache)
+        {
+            Trap("SpriteCache_Contains", () => InterceptAssetChecks.DoCore(id, RT.Sprite, ___cache.ContainsKey, ___cache.GetValueSafe, ___cache.Add));
+            return true;
+
+            LogDebug("Contains {0}:Sprite", id);
+            if (Fatal) return true;
+            if (___cache.TryGetValue(id, out var mdef))
+            {
+                LogDebug("Found sprite");
+                return true;
+            }
+            else
+            {
+                LogDebug("No sprite");
+                if (depsdb != null)
+                {
+                    LogDebug("dcheck");
+                    Trap(() => depsdb.Add(id + ":Sprite"));
+                    return true;
+                }
+
+                void Add(Sprite s)
+                    => Trap("AddSprite", () => { LogDebug("Adding sprite {0}", s == null ? "null" : id); ___cache[id] = s; });
+
+                // FIXME! IMPORTANT! Sprite has Unlocks and such. DLC? 
+                Trap("Rest", () =>
+                {
+                    var texentry = stuff.dataManager.ResourceLocator.EntryByID(id, RT.Texture2D, false);
+                    if (texentry != null)
+                    {
+                        if (stuff.textureManager.Contains(id))
+                        {
+                            var texture = stuff.textureManager.GetLoadedTexture(id);
+                            Add(Sprite.Create(texture, new UnityEngine.Rect(0f, 0f, (float)texture.width, (float)texture.height), new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect, Vector4.zero));
+                        }
+                    }
+                    else
+                    {
+                        var triggered = false;
+                        var entry = stuff.dataManager.ResourceLocator.EntryByID(id, RT.Sprite, false);
+                        stuff.LoadMapper(entry, RT.Sprite, id, null, (Sprite s) => s, (yes, no) => yes(Stuff.SpriteFromDisk(entry.FilePath)))
+                            .Done(x => { triggered = true; Add(x); }, err => LogException(err));
+
+                        if (!triggered) LogException(new Exception(string.Format("Loading of sprite was async {0} :entry {1}", id, entry.Dump(false))));
+                    }
+                });
+                return true;
+            }
+        }
+
+        public static void DataManager_Exists(RT resourceType, string id)
+        {
+            if (resourceType == RT.Prefab)
+                stuff.dataManager.IsPrefabInPool(id);
+        }
+        
+        public static bool MechDef_Exists(object __instance, string id, Dictionary<string, object> ___items)
+        {
+            var gtt = Trap("GetGenericArgs", () => __instance.GetType().GetGenericArguments()[0]);
+            gtt.Name.ToRTMap(type => Trap("MDE", () => InterceptAssetChecks.DoCore(id, type, ___items.ContainsKey, ___items.GetValueSafe, ___items.Add))
+                            , () => Trap(() => LogWarning("MDE no resolve for {0}", gtt.Name)));
+            
+            return true;
+
+            if (Fatal) return true;
+            LogDebug("Looking for id {0}", id);
+            void CheckDeps(DataManager.ILoadDependencies d)
+            {
+
+                LogDebug("Check deps");
+                var yes = Trap("DepsCheck1", () => d.DependenciesLoaded(100000));
+                if (yes) {
+                    LogDebug("Checked deps of {0} -- OK", id);
+                }
+                else
+                {
+                    depsdb = new List<string>();
+                    Trap("DepsCheck2", () => d.DependenciesLoaded(100000));
+                    var depsbak = depsdb;
+                    depsdb = null;
+                    Trap("ReportDeps", () => LogError("Checked deps of {0} -- MISSING: {1}\n{2}\n\n"
+                            , id, depsbak.Dump(false), d.Dump()));
+                    Fatal = true;
+                }
+            }
+
+            // We already hook exists, so we can know what something failed to load in the dependency check.
+            Trap("Outer", () =>
+            {
+                if (___items.TryGetValue(id, out var mdef))
+                {
+
+                    return;
+                }
+                else
+                {
+                    var gt = Trap("GetGenericArgs", () => __instance.GetType().GetGenericArguments()[0]);
+                    LogDebug("Tracking: {0}", gt.FullName);
+                    if (depsdb != null)
+                    {
+                        depsdb.Add(id + ":" + gt.Name);
+                        return;
+                    }
+                    
+                    if (gt.GetInterface(typeof(HBS.Util.IJsonTemplated).FullName) != null)
+                    {
+                        LogDebug("IJsonTemplated {0}", gt.Name);
+                        var succ = gt.Name.ToRTMap(type =>
+                        {
+                            LogDebug("Fulltype", type);
+                            var entry = stuff.dataManager.ResourceLocator.EntryByID(id, type, false);
+                            LogDebug("Derived intercepting lookup of {0}", id);
+                            stuff.LoadJsonD(entry, gt).Done(x =>
+                            {
+                                LogDebug("Loaded {0}={1} of {2}", x.GetType().Name, gt.Name, id);
+                                Trap("SetDataManager", () => new Traverse(x).Field("dataManager").SetValue(stuff.dataManager));
+                                Trap("SetLoadRequest", () => new Traverse(x).Field("loadRequest").SetValue(new DummyLoadRequest(stuff.dataManager)));
+                                Trap("AddToDB", () => ___items.Add(id, x));
+                            //x.Chassis = stuff.dataManager.ChassisDefs.Exists(x.ChassisID) ? stuff.dataManager.ChassisDefs.Get(x.ChassisID) : null;
+                            if (x is DataManager.ILoadDependencies) CheckDeps(x as DataManager.ILoadDependencies);
+                            });
+                            LogDebug("Assuming direct control {0}");
+                            return true;
+                        }
+                            , () => { LogError("Failed autoderive for: {0}", gt.Name); return false; }
+                            );
+                        if (succ)
+                            return;
+                    }
+                    LogDebug("IJSTL failed for {0}", gt.Name);
+
+                    if (__instance is DictionaryStore<MechDef>)
+                    {
+                        var entry = stuff.dataManager.ResourceLocator.EntryByID(id, RT.MechDef, false);
+                        LogDebug("Intercepting lookup of {0}", id);
+                        stuff.LoadJson<MechDef>(entry, RT.MechDef, id).Done(x =>
+                        {
+                            LogDebug("Loaded mechdef of {0}", id);
+                            x.DataManager = stuff.dataManager;
+                            ___items.Add(id, x);
+                            x.Chassis = stuff.dataManager.ChassisDefs.Exists(x.ChassisID) ? stuff.dataManager.ChassisDefs.Get(x.ChassisID) : null;
+                            CheckDeps(x);
+                        });
+                        LogDebug("Assuming direct control {0}");
+                    }
+                    else if (__instance is DictionaryStore<ChassisDef>)
+                    {
+                        var entry = stuff.dataManager.ResourceLocator.EntryByID(id, RT.ChassisDef, false);
+                        LogDebug("Intercepting lookup of {0}", id);
+                        stuff.LoadJson<ChassisDef>(entry, RT.ChassisDef, id).Done(x =>
+                        {
+                            LogDebug("Loaded of {0}", id);
+                            x.DataManager = stuff.dataManager;
+                            ___items.Add(id, x);
+                            CheckDeps(x);
+                        });
+                        LogDebug("Assuming direct control");
+                    }
+                }
+            });
+            return true;
         }
 
         public static bool SpawnNext(ref bool __result, int ___currentCount, int ___poolCount)
@@ -617,23 +987,66 @@ namespace BattletechPerformanceFix
         }
 
         // General idea: Build a queue as RR_I is called
-        //   ProcessRequests() waits for the queue to complete + 1 frame and then dispatches a datamanagerloaded message
+        //    waits for the queue to complete + 1 frame and then dispatches a datamanagerloaded message
+        public static bool ProcessRequests(List<DataManager.DataManagerLoadRequest> ___backgroundRequestsList, List<DataManager.DataManagerLoadRequest> ___foregroundRequestsList)
+        {
+            LogDebug("ProcessRequests from\n{0}\n\n", new StackTrace().ToString());
+            LogDebug("FRL {0}", Newtonsoft.Json.JsonConvert.SerializeObject(___foregroundRequestsList, Newtonsoft.Json.Formatting.Indented));
+            LogDebug("BRL {0}", Newtonsoft.Json.JsonConvert.SerializeObject(___backgroundRequestsList, Newtonsoft.Json.Formatting.Indented));
+
+            return false;
+        }
+
+        public static void LoadCompleteMessage(MessageCenterMessage msg)
+        {
+            LogDebug("LoadCompleteMessage");
+        }
+
+        public static void AsyncLoadCompleteMessage(MessageCenterMessage msg)
+        {
+            LogDebug("AsyncLoadCompleteMessage");
+        }
 
         public static List<string> dryRun = null;     
         public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
+            if (!Initialized)
+            {
+                stuff = new Stuff(__instance);
+                Initialized = true;
+                //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
+                //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerLoadCompleteMessage, new ReceiveMessageCenterMessage(LoadCompleteMessage));
+                //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerAsyncLoadCompleteMessage, new ReceiveMessageCenterMessage(AsyncLoadCompleteMessage));
+            }
+
+            var entry = stuff.dataManager.ResourceLocator.EntryByID(identifier, resourceType, false);
+            if (resourceType == RT.MechDef || resourceType == RT.ChassisDef)
+                return false;
+
+            LogDebug("Request {0}:{1}", identifier, resourceType.AsString());
+
+            if (depsdb != null)
+            {
+                depsdb.Add(identifier);
+                return true;
+            }
+
+            return true;
+
+
             if (dryRun != null)
             {
                 dryRun.Add(string.Format("{0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType)));
                 return false;
             }
             LogDebug("Request {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-            if (!Initialized)
-            {
-                stuff = new Stuff(__instance);
-                Initialized = true;
-                stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
-            }
+
+            
+
+            //if (resourceType == RT.MechDef)
+            //    return false;
+
+            return true;
 
             if (stuff.CanHandleType(resourceType)) //resourceType == RT.SimGameConstants || resourceType == RT.MechDef || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
             {
@@ -641,7 +1054,7 @@ namespace BattletechPerformanceFix
                 LogDebug("custom request: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
 
                 // This is glue to keep the DataManagerLoadComplete request intact, until we handle all the calls
-                var dlr = new DummyLoadRequest(__instance);
+                var dlr = new DummyLoadRequest(__instance, string.Format("{0}:{1}", identifier, resourceType.AsString()));
                 new Traverse(__instance).Method("AddForegroundLoadRequest", resourceType, identifier, dlr).GetValue();
 
                 stuff.LoadObj(resourceType, identifier)
@@ -659,12 +1072,15 @@ namespace BattletechPerformanceFix
                          var msg = Trap(() => ctor.Invoke(Array(resourceType, identifier, x)));
                          LogDebug("Announce type {0}", msg?.GetType()?.FullName);
 
-                         stuff.messageCenter.PublishMessage((MessageCenterMessage)ctor.Invoke(Array(resourceType, identifier, x)));
-
-
                          // FIXME: Instead of all the above, have the dummyloadrequest do it.
                          // Note: This can cause issues since the vent triggers *before* the rest of the dependency chain resolves
-                         //   This will be fixed when no longer utilizing DataManager.
+                         //   This will be fixed when no longer utilizing DataManager.                      
+                         stuff.messageCenter.PublishMessage((MessageCenterMessage)ctor.Invoke(Array(resourceType, identifier, x)));
+
+                         LogDebug("CompleteDummyLoaderRequest: {0}", identifier, dlr.ResourceId);
+                        
+                         // This is a problem, we need to wait on dependencies since battletech doesn't actually use the Promises.
+
                          dlr.Complete();
                      }
                      , err => Trap(() => throw err));
@@ -826,16 +1242,23 @@ namespace BattletechPerformanceFix
 
             // FIXME: Sprite does some funky stuff with texture2d.
             //   it tries to load a texture2d with the exact same id. I don't like this
-            Add(RT.Sprite
+            Add( RT.Sprite
                 , (entry) => LoadMapper(entry, entry.Type.ToRT(), entry.Id, null, (Sprite sprite) => (object)sprite, (yes, no) => SpriteFromDisk(entry.FilePath))
                 , (str) => LogError("NYI sprite unload"));
 
+            Trap(() =>
+            {
+                Add(RT.ColorSwatch
+                    , (entry) => AddToStore("colorSwatches", entry, LoadMapper(entry, entry.Type.ToRT(), entry.Id, null, (ColorSwatch cs) => (object)cs))
+                    , (str) => LogError("NYI ColorSwatch unload"));
+            });
 
             var manual2 = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
             Log("!Missing![Manual {0}/{1}]: {2}", manual2.Length, bttypes.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual2, Newtonsoft.Json.Formatting.Indented));
 
             return foo;
         }
+        
 
         public static Dictionary<string,IPromise<object>> cache = new Dictionary<string,IPromise<object>>();
         public IPromise<object> LoadObj(RT type, string identifier)
@@ -853,7 +1276,7 @@ namespace BattletechPerformanceFix
             if (loadDB.TryGetValue(type, out var kvld))
             {
                 LogDebug("Custom load-db2: {0}:{1}", identifier, Enum.GetName(typeof(RT), type));
-                var prom = kvld.Key(entry)
+                var prom = Trap(() => kvld.Key(entry)
                     .Then(x =>
                     {
                         LogDebug("load-db2-success: {0}:{1}", identifier, Enum.GetName(typeof(RT), type));
@@ -863,7 +1286,7 @@ namespace BattletechPerformanceFix
                         var reso = Promise<object>.Resolved(x);
                         LogDebug("load-db2-after-ild");
                         return reso;
-                    });
+                    }));
                 cache[identifier] = prom;
                 return prom;
             } else
@@ -893,7 +1316,6 @@ namespace BattletechPerformanceFix
 
             return LoadMapper(entry, (RT)Enum.Parse(typeof(RT), entry.Type), entry.Id, Make, (TextAsset r) => Make(r.text));
         }
-
 
         // TODO: Looks like resource and bundle are the same type always, if so reduce them into one selector
         public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<string, T> file, Func<R, T> resource, AcceptReject<T> recover = null) 
