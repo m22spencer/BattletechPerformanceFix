@@ -248,15 +248,13 @@ namespace BattletechPerformanceFix
 
         class InterceptAssetChecks
         {
-            public static void CST(bool success, ref bool localRef)
+            public static bool IsCheckingDeps(bool wantState)
             {
-                LogDebug("CST on {0}", new StackTrace().ToString());
-                if (!success)
-                    localRef = false;
+                return wantState;
             }
 
             // FIXME: patch is okay, but should only apply when checking dependencies.
-            public static IEnumerable<CodeInstruction> DependenciesLoaded(IEnumerable<CodeInstruction> ins)
+            public static IEnumerable<CodeInstruction> DependenciesLoaded2(IEnumerable<CodeInstruction> ins)
             {
                 LogError("DependenciesLoaded: Transpiler patch is destructive. Will cause all dependency checks to fail");
                 var body = ins.SelectMany(i =>
@@ -283,36 +281,37 @@ namespace BattletechPerformanceFix
              *       ret
              *    to:
              *       X
-             *       ldloc temp
-             *       call CST
+             *       call `IsCheckingDeps`
+             *       brtrue :continue
+             *       ldc_i4_0
+             *       ret
+             *       :continue
              */
-            public static IEnumerable<CodeInstruction> DependenciesLoaded2(ILGenerator generator, IEnumerable<CodeInstruction> ins)
+            public static IEnumerable<CodeInstruction> DependenciesLoaded(ILGenerator gen, IEnumerable<CodeInstruction> ins)
             {
+                var loc = gen.DeclareLocal(typeof(bool));
+
                 return Trap(() =>
                 {
-                    var retloc = generator.DeclareLocal(typeof(bool));
-
-                    // Set temporary variable to true at the start
-                    var start = Sequence(new CodeInstruction(O.Ldc_I4_0), new CodeInstruction(O.Stloc, retloc));
-
                     // Return state of temporary variable
-                    var end = Sequence(new CodeInstruction(O.Ldloc, retloc), new CodeInstruction(O.Ret));
+                    var start = Sequence(new CodeInstruction(O.Ldc_I4_1), new CodeInstruction(O.Stloc, loc));
+                    var end = Sequence(new CodeInstruction(O.Ldloc, loc), new CodeInstruction(O.Ret));
 
-                    var middle = ins.SelectMany(i =>
+                    var body = ins.SelectMany(i =>
                     {
                         if (i.opcode == O.Ret)
                         {
-                            i.opcode = O.Ldloc;
-                            i.operand = retloc;
+                            i.opcode = O.Stloc;
+                            i.operand = loc;
 
-                            return Sequence(i, new CodeInstruction(O.Call, AccessTools.Method(typeof(InterceptAssetChecks), "CST")));
+                            return Sequence(i);
                         }
                         else
                         {
                             return Sequence(i);
                         }
                     });
-                    return start.Concat(middle).Concat(end);
+                    return start.Concat(body).Concat(end);
                 });
             }
 
@@ -398,14 +397,19 @@ namespace BattletechPerformanceFix
                                 LogError("------------ FATAL ------------");
                                 Fatal = true;
 
-                                var prettyDeps = "Dependency chain(non-recursive)\n";
-                                prettyDeps += id + " can't find: \n";
-                                depsbak.ForEach(dep =>
+                                var prettyDeps = "";
+                                void AddL(string str)
                                 {
-                                    prettyDeps += "+ " + dep + "\n";
+                                    // Thanks for the tip about tags @Morphyum
+                                    prettyDeps += "<align=\"left\">" + str + "</align>\n";
+                                }
+                                AddL(id);
+                                depsbak.Distinct().ForEach(dep =>
+                                {
+                                    AddL("<mspace=10>+ </mspace><color=\"red\">" + dep + "</color>");
                                 });
 
-                                GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Asset Error", prettyDeps);
+                                GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Missing Dependencies", prettyDeps);
                                 genericPopupBuilder.Render();
                             }
                         }
