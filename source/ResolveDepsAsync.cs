@@ -28,6 +28,16 @@ namespace BattletechPerformanceFix
     {
         public DummyLoadRequest(DataManager dataManager) : base(dataManager, RT.AbilityDef, "dummy_load_request_for_weight", 10000, null) { }
         public override bool AlreadyLoaded { get => true; }
+
+        public void Complete()
+        {
+            this.State = DataManager.DataManagerLoadRequest.RequestState.Complete;
+        }
+
+        public override void SendLoadCompleteMessage()
+        {
+           
+        }
     }
 
     static class ResolveExt
@@ -117,21 +127,25 @@ namespace BattletechPerformanceFix
 
             var resolver = AccessTools.Method(typeof(Resolver<ChassisDef>), "RequestDependencies"); //just using ChassisDef here to reference the static function. It means nothing;
 
-            if (!WantVanilla)
-            {
-                Assembly.GetAssembly(typeof(HeraldryDef))
-                    .GetTypes()
-                    .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
-                    .ForEach(ildtype =>
-                    {
-                        harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), Drop);   // If enabled this will prevent RequestDependency checks that we need temporarily before the data manager is ready.
-                        //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), Drop);
-                        harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
-                    });
-            }
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "PooledInstantiate"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(PooledInstantiate))));
+            harmony.Patch(AccessTools.Method(typeof(DataManager.QueuedPoolHelper), "SpawnNext"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(SpawnNext)))); 
+
+            if (WantVanilla)
+                return;
+
+            Assembly.GetAssembly(typeof(HeraldryDef))
+                .GetTypes()
+                .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
+                .ForEach(ildtype =>
+                {
+                    harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), Drop);   // If enabled this will prevent RequestDependency checks that we need temporarily before the data manager is ready.
+                    //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), Drop);
+                    harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
+                });
+
 
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
-
+            
             new ChassisDefResolver();
             new HeraldryDefResolver();
             new AbilityDefResolver();
@@ -149,7 +163,20 @@ namespace BattletechPerformanceFix
             new BackgroundDefResolver();
             new UpgradeDefResolver();
         }
-    
+
+        public static bool SpawnNext(ref bool __result, int ___currentCount, int ___poolCount)
+        {
+            Log("SpawnNext: {0}/{1}", ___currentCount, ___poolCount);
+            __result = true;
+            return false;
+        }
+
+        public static bool PooledInstantiate(string id)
+        {
+            Log("PooledInsantiate: {0}", id);
+            return true;
+        }
+
         public static void DataManager_Update(DataManager __instance, Dictionary<string, object> ___poolNextUpdate
             , Dictionary<BattleTechResourceType, Dictionary<string, object>> ___foregroundRequests
             , Dictionary<BattleTechResourceType, Dictionary<string, object>> ___backgroundRequests) {
@@ -304,7 +331,7 @@ namespace BattletechPerformanceFix
         {
             internal override IPromise Resolve(T __instance, RT type, string id)
             {
-                Log("ProxyResolveStart {0}", __instance == null ? "null" : "ok");
+                LogDebug("ProxyResolveStart {0}", __instance == null ? "null" : "ok");
                 var t = __instance.GetType();
                 var k = typeof(K);
                 if (resolveMap.TryGetValue(k.FullName, out var rescls))
@@ -570,7 +597,7 @@ namespace BattletechPerformanceFix
             if (val is MechDef)
             {
                 var mdv = val as MechDef;
-                Log("itc Mechdef[{0}] wanting {1}", id, mdv.ChassisID);
+                LogDebug("itc Mechdef[{0}] wanting {1}", id, mdv.ChassisID);
             }
 
             if (val is DataManager.ILoadDependencies)
@@ -589,8 +616,7 @@ namespace BattletechPerformanceFix
             }
         }
 
-        public static List<string> dryRun = null;
-        
+        public static List<string> dryRun = null;     
         public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
             if (dryRun != null)
@@ -606,10 +632,17 @@ namespace BattletechPerformanceFix
                 stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
             }
 
-            if (resourceType == RT.SimGameConstants) //|| resourceType == RT.MechDef || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
+            if (stuff.CanHandleType(resourceType)) //resourceType == RT.SimGameConstants || resourceType == RT.MechDef || resourceType == RT.BaseDescriptionDef || resourceType == RT.SimGameMilestoneDef || resourceType == RT.ShipModuleUpgrade || resourceType == RT.PortraitSettings)
             {
-                LogError("SGC requested \n \n\n" + new StackTrace().ToString());
-                Log("custom request: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
+                var st = new StackTrace();
+                LogDebug("custom request: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
+                if (resourceType == RT.Prefab)
+                    LogWarning("{0}\n", st.ToString());
+
+                // This is glue to keep the DataManagerLoadComplete request intact, until we handle all the calls
+                var dlr = new DummyLoadRequest(__instance);
+                new Traverse(__instance).Method("AddForegroundLoadRequest", resourceType, identifier, dlr).GetValue();
+
                 stuff.LoadObj(resourceType, identifier)
                      .Done(x =>
                      {
@@ -626,11 +659,12 @@ namespace BattletechPerformanceFix
                          LogDebug("Announce type {0}", msg?.GetType()?.FullName);
 
                          stuff.messageCenter.PublishMessage((MessageCenterMessage)ctor.Invoke(Array(resourceType, identifier, x)));
+
+                         dlr.Complete();
                      }
                      , err => Trap(() => throw err));
                 return false;
             }
-
             return true;
         }
 
@@ -661,6 +695,11 @@ namespace BattletechPerformanceFix
             this.textureManager = new Traverse(dataManager).Property("TextureManager").GetValue<TextureManager>();
 
             loadDB = FigureItOut();
+        }
+
+        public bool CanHandleType(RT type)
+        {
+            return loadDB.ContainsKey(type);
         }
 
         public bool RequestResource(RT type, string id, PrewarmRequest p, bool stack, bool own)
@@ -750,25 +789,35 @@ namespace BattletechPerformanceFix
             var auto = foo.Keys.Select(key => key.AsString()).ToArray();
             var manual = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
 
-            Log("Found[Auto {0}]: {1}", auto.Length, Newtonsoft.Json.JsonConvert.SerializeObject(auto));
-            Log("Found[Manual {0}]: {1}", manual.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual, Newtonsoft.Json.Formatting.Indented));
+            Log("Found[Auto {0}/{1}]: {2}", auto.Length, bttypes.Length, Newtonsoft.Json.JsonConvert.SerializeObject(auto));
+            Log("Found[Manual {0}/{1}]: {2}", manual.Length, bttypes.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual, Newtonsoft.Json.Formatting.Indented));
 
             //Add(RT.ItemCollectionDef, (entry) => AddToStore("itemCollectionDef", entry, LoadCSVD(entry, typeof(ItemCollectionDef))), (str) => LogError("NYI CSV unload"));
             Add(RT.SimGameConstants
                , (entry) => LoadMapper(entry, entry.Type.ToRT(), entry.Id, Control.Identity, (TextAsset text) => text.text).Then(txt => (object)txt)
                , (str) => LogError("NYI SGC unload"));
+            Add(RT.Prefab
+               , (entry) => dataManager.IsPrefabInPool(entry.Id) ? Promise<object>.Resolved(dataManager.GetPooledPrefab(entry.Id)) : LoadMapper(entry, entry.Type.ToRT(), entry.Id, null, (GameObject prefab) => { dataManager.AddPrefabToPool(entry.Id, prefab); return (object)prefab; })
+               , (str) => LogError("NYI Prefab unload"));
 
             var manual2 = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
-            Log("Missing![Manual {0}]: {1}", manual2.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual2, Newtonsoft.Json.Formatting.Indented));
+            Log("!Missing![Manual {0}/{1}]: {2}", manual.Length, bttypes.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual, Newtonsoft.Json.Formatting.Indented));
 
             return foo;
         }
 
         public static Dictionary<string,object> cache = new Dictionary<string,object>();
-        
+
+
+        public static HashSet<string> loaded = new HashSet<string>();
         public IPromise<object> LoadObj(RT type, string identifier)
         {
-            LogDebug("Load Obj {0}:{1}", identifier, type.AsString());
+            if (loaded.Contains(identifier)) LogDebug("DuplicateLoad Obj {0}:{1}", identifier, type.AsString());
+            else
+            {
+                LogDebug("Load Obj {0}:{1}", identifier, type.AsString());
+                loaded.Add(identifier);
+            }
             var entry = dataManager.ResourceLocator.EntryByID(identifier, type, false);
             LogDebug("Found entry {0}:{1}", identifier, type.AsString());
             if (loadDB.TryGetValue(type, out var kvld))
@@ -975,6 +1024,7 @@ namespace BattletechPerformanceFix
 
             return LoadMapper(entry, (RT)Enum.Parse(typeof(RT), entry.Type), entry.Id, Make, (TextAsset r) => Make(r.text));
         }
+
 
         // TODO: Looks like resource and bundle are the same type always, if so reduce them into one selector
         public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<string, T> file, Func<R, T> resource, AcceptReject<T> recover = null) 
