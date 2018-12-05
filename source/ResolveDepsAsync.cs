@@ -70,7 +70,7 @@ namespace BattletechPerformanceFix
         public static bool WantVerify = false;
         public void Activate()
         {
-            var wantTracking = false;
+            var wantTracking = true;
 
             var t = typeof(ResolveDepsAsync);
             harmony.Patch(AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries"), null, new HarmonyMethod(AccessTools.Method(t, nameof(IntegrityCheck))));
@@ -616,6 +616,9 @@ namespace BattletechPerformanceFix
             }
         }
 
+        // General idea: Build a queue as RR_I is called
+        //   ProcessRequests() waits for the queue to complete + 1 frame and then dispatches a datamanagerloaded message
+
         public static List<string> dryRun = null;     
         public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
@@ -636,8 +639,6 @@ namespace BattletechPerformanceFix
             {
                 var st = new StackTrace();
                 LogDebug("custom request: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-                if (resourceType == RT.Prefab)
-                    LogWarning("{0}\n", st.ToString());
 
                 // This is glue to keep the DataManagerLoadComplete request intact, until we handle all the calls
                 var dlr = new DummyLoadRequest(__instance);
@@ -660,6 +661,10 @@ namespace BattletechPerformanceFix
 
                          stuff.messageCenter.PublishMessage((MessageCenterMessage)ctor.Invoke(Array(resourceType, identifier, x)));
 
+
+                         // FIXME: Instead of all the above, have the dummyloadrequest do it.
+                         // Note: This can cause issues since the vent triggers *before* the rest of the dependency chain resolves
+                         //   This will be fixed when no longer utilizing DataManager.
                          dlr.Complete();
                      }
                      , err => Trap(() => throw err));
@@ -796,34 +801,59 @@ namespace BattletechPerformanceFix
             Add(RT.SimGameConstants
                , (entry) => LoadMapper(entry, entry.Type.ToRT(), entry.Id, Control.Identity, (TextAsset text) => text.text).Then(txt => (object)txt)
                , (str) => LogError("NYI SGC unload"));
+
+            // Prefabs will require special handling as they must be cloned.
             Add(RT.Prefab
                , (entry) => dataManager.IsPrefabInPool(entry.Id) ? Promise<object>.Resolved(dataManager.GetPooledPrefab(entry.Id)) : LoadMapper(entry, entry.Type.ToRT(), entry.Id, null, (GameObject prefab) => { dataManager.AddPrefabToPool(entry.Id, prefab); return (object)prefab; })
                , (str) => LogError("NYI Prefab unload"));
 
+            // FIXME: Requires caching, has DLC checks
+            // Odd interaction here.
+            Add(RT.Texture2D
+                , (entry) =>
+                {
+                    var prom = new Promise<Texture2D>();
+                    if (entry.IsFileAsset) textureManager.RequestTexture(entry.Id, new TextureLoaded(prom.Resolve), new LoadFailed(err => prom.Reject(new System.Exception("Texture2d(manager) failed " + err))));
+                    else LoadMapper(entry, entry.Type.ToRT(), entry.Id, null, (Texture2D t) => { textureManager.InsertTexture(entry.Id, t); return t; })
+                       .Done(x => prom.Resolve(x), prom.Reject);
+                    return prom.Then(x => (object)x);
+                }
+                , (str) => LogError("NYI Texture unload"));
+
+            Add(RT.SVGAsset
+               , (entry) => LoadMapper(entry, entry.Type.ToRT(), entry.Id, null, (SVGAsset svg) => (object)svg)
+               , (str) => LogError("NYI SVG unload"));
+
+            // FIXME: Sprite does some funky stuff with texture2d.
+            //   it tries to load a texture2d with the exact same id. I don't like this
+            Add(RT.Sprite
+                , (entry) => LoadMapper(entry, entry.Type.ToRT(), entry.Id, null, (Sprite sprite) => (object)sprite, (yes, no) => SpriteFromDisk(entry.FilePath))
+                , (str) => LogError("NYI sprite unload"));
+
+
             var manual2 = bttypes.Where(ty => !foo.Keys.Contains(ty)).Select(key => key.AsString()).ToArray();
-            Log("!Missing![Manual {0}/{1}]: {2}", manual.Length, bttypes.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual, Newtonsoft.Json.Formatting.Indented));
+            Log("!Missing![Manual {0}/{1}]: {2}", manual2.Length, bttypes.Length, Newtonsoft.Json.JsonConvert.SerializeObject(manual2, Newtonsoft.Json.Formatting.Indented));
 
             return foo;
         }
 
-        public static Dictionary<string,object> cache = new Dictionary<string,object>();
-
-
-        public static HashSet<string> loaded = new HashSet<string>();
+        public static Dictionary<string,IPromise<object>> cache = new Dictionary<string,IPromise<object>>();
         public IPromise<object> LoadObj(RT type, string identifier)
         {
-            if (loaded.Contains(identifier)) LogDebug("DuplicateLoad Obj {0}:{1}", identifier, type.AsString());
-            else
+            // FIXME: If prefab, pull it out of the cache so it can load again.
+            //    or preferably duplicate it without going to disk (this works right?)
+
+            if (cache.TryGetValue(identifier, out var cached))
             {
-                LogDebug("Load Obj {0}:{1}", identifier, type.AsString());
-                loaded.Add(identifier);
+                LogDebug("cached Obj {0}:{1}", identifier, type.AsString());
+                return cached;
             }
             var entry = dataManager.ResourceLocator.EntryByID(identifier, type, false);
             LogDebug("Found entry {0}:{1}", identifier, type.AsString());
             if (loadDB.TryGetValue(type, out var kvld))
             {
                 LogDebug("Custom load-db2: {0}:{1}", identifier, Enum.GetName(typeof(RT), type));
-                return kvld.Key(entry)
+                var prom = kvld.Key(entry)
                     .Then(x =>
                     {
                         LogDebug("load-db2-success: {0}:{1}", identifier, Enum.GetName(typeof(RT), type));
@@ -834,172 +864,11 @@ namespace BattletechPerformanceFix
                         LogDebug("load-db2-after-ild");
                         return reso;
                     });
+                cache[identifier] = prom;
+                return prom;
             } else
             {
                 return Promise<object>.Rejected(new Exception(string.Format("Don't know how to load {0} yet", type.AsString())));
-            }
-        }
-
-        public IPromise<T> Load<T>(BattleTechResourceType resourceType, string identifier, bool publish = true)
-        {
-            // Store item in datamanager
-            // It's likely necessary to clear the cache based on the dm field, since items may be removed from dm
-            IPromise<T> f<K>(string field, IPromise<K> p)
-                where K : new()
-            {
-                return p.Then(x =>
-                {
-                    Trap(() => new Traverse(dataManager).Field(field).GetValue<DictionaryStore<K>>().Add(identifier, x));
-                    if(publish) messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<K>(resourceType, identifier, x));
-                    return (T)(object)x;
-                });
-            }
-
-            IPromise<T> passthrough<K>(IPromise<K> p)
-            {
-                return p.Then(val =>
-                {
-                    LogDebug("passthrough");
-                    if (publish) messageCenter.PublishMessage(new DataManagerRequestCompleteMessage<K>(resourceType, identifier, val));
-                    var res = (T)(object)val;
-                    LogDebug("passthrough done");
-                    return res;
-                });
-            }
-
-            IPromise<T> Go()
-            {
-                LogDebug("Custom load: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-                var entry = dataManager.ResourceLocator.EntryByID(identifier, resourceType, false);
-
-                if (loadDB.TryGetValue(resourceType, out var kvld))
-                {
-                    LogDebug("Custom load-db: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-                    return passthrough(kvld.Key(entry)
-                        .Then(x =>
-                        {
-                            if (x is T)
-                            {
-                                LogDebug("load-db-success: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-                                if (x is DataManager.ILoadDependencies)
-                                    return (x as DataManager.ILoadDependencies).Resolve(ResolveDepsAsync.stuff.dataManager).Then(() => Promise<T>.Resolved((T)x));
-                                LogDebug("load-db-not-ild");
-                                return Promise<T>.Resolved((T)x);
-                            }
-                            else
-                            {
-                                LogDebug("load-db-cast-failure: {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType));
-                                throw new Exception(string.Format("Cast failure for {0}:{1}", identifier, Enum.GetName(typeof(RT), resourceType)));
-                            }
-                        }));
-                }
-                else
-                {
-                    LogError("old-code for: {0}:{1}", identifier, resourceType.AsString());
-                    switch (resourceType)
-                    {
-                        case RT.ChassisDef: return f("chassisDefs", LoadJson<ChassisDef>(entry, resourceType, identifier));
-                        case RT.VehicleChassisDef: return f("vehicleChassisDefs", LoadJson<VehicleChassisDef>(entry, resourceType, identifier));
-                        case RT.TurretChassisDef: return f("turretChassisDefs", LoadJson<TurretChassisDef>(entry, resourceType, identifier));
-                        case RT.TurretDef: return f("turretDefs", LoadJson<TurretDef>(entry, resourceType, identifier));
-                        case RT.BuildingDef: return f("buildingDefs", LoadJson<BuildingDef>(entry, resourceType, identifier));
-                        case RT.AmmunitionDef: return f("ammoDefs", LoadJson<AmmunitionDef>(entry, resourceType, identifier));
-                        case RT.AmmunitionBoxDef: return f("ammoBoxDefs", LoadJson<AmmunitionBoxDef>(entry, resourceType, identifier));
-                        case RT.JumpJetDef: return f("jumpJetDefs", LoadJson<JumpJetDef>(entry, resourceType, identifier));
-                        case RT.HeatSinkDef: return f("heatSinkDefs", LoadJson<HeatSinkDef>(entry, resourceType, identifier));
-                        case RT.UpgradeDef: return f("upgradeDefs", LoadJson<UpgradeDef>(entry, resourceType, identifier));
-                        case RT.WeaponDef: return f("weaponDefs", LoadJson<WeaponDef>(entry, resourceType, identifier));
-                        case RT.MechDef: return f("mechDefs", LoadJson<MechDef>(entry, resourceType, identifier));
-                        case RT.VehicleDef: return f("vehicleDefs", LoadJson<VehicleDef>(entry, resourceType, identifier));
-                        case RT.PilotDef: return f("pilotDefs", LoadJson<PilotDef>(entry, resourceType, identifier));
-                        case RT.AbilityDef: return f("abilityDefs", LoadJson<AbilityDef>(entry, resourceType, identifier));
-                        case RT.DesignMaskDef: return f("designMaskDefs", LoadJson<DesignMaskDef>(entry, resourceType, identifier));
-                        case RT.MovementCapabilitiesDef: return f("movementCapDefs", LoadJson<MovementCapabilitiesDef>(entry, resourceType, identifier));
-                        case RT.PathingCapabilitiesDef: return f("pathingCapDefs", LoadJson<PathingCapabilitiesDef>(entry, resourceType, identifier));
-                        case RT.HardpointDataDef: return f("hardpointDataDefs", LoadJson<HardpointDataDef>(entry, resourceType, identifier));
-                        case RT.LanceDef: return f("lanceDefs", LoadJson<LanceDef>(entry, resourceType, identifier));
-                        case RT.CastDef: return f("castDefs", LoadJson<CastDef>(entry, resourceType, identifier));
-                        case RT.ConversationContent: return f("conversationDefs", LoadJson<ConversationContent>(entry, resourceType, identifier));
-                        case RT.DialogBucketDef: return f("dialogBucketDefs", LoadJson<DialogBucketDef>(entry, resourceType, identifier));
-                        case RT.SimGameEventDef: return f("simGameEventDefs", LoadJson<SimGameEventDef>(entry, resourceType, identifier));
-                        case RT.SimGameStatDescDef: return f("simGameStatDescDefs", LoadJson<SimGameStatDescDef>(entry, resourceType, identifier));
-                        case RT.LifepathNodeDef: return f("lifepathNodeDefs", LoadJson<LifepathNodeDef>(entry, resourceType, identifier));
-                        //case RT.SimGameStringList: return f("simGameStringLists", LoadJson<SimGameStringList>(entry, resourceType, identifier));
-                        case RT.ContractOverride: return f("contractOverrides", LoadJson<ContractOverride>(entry, resourceType, identifier));
-                        case RT.StarSystemDef: return f("systemDefs", LoadJson<StarSystemDef>(entry, resourceType, identifier));
-                        case RT.ShopDef: return f("shops", LoadJson<ShopDef>(entry, resourceType, identifier));
-                        case RT.MechLabIncludeDef: return f("mechLabIncludeDefs", LoadJson<MechLabIncludeDef>(entry, resourceType, identifier));
-                        case RT.FactionDef: return f("factions", LoadJson<FactionDef>(entry, resourceType, identifier));
-                        case RT.HeraldryDef: return f("heraldries", LoadJson<HeraldryDef>(entry, resourceType, identifier));
-                        //case RT.Conversation: return f("simGameConversations", LoadJson<Conversation>(entry, resourceType, identifier));
-                        //case RT.ConversationSpeakerList: return f("simGameSpeakers", LoadJson<ConversationSpeakerList>(entry, resourceType, identifier));
-                        case RT.GenderedOptionsListDef: return f("genderedOptionsListDefs", LoadJson<GenderedOptionsListDef>(entry, resourceType, identifier));
-                        case RT.AudioEventDef: return f("audioEventDefs", LoadJson<AudioEventDef>(entry, resourceType, identifier));
-                        case RT.SimGameMilestoneDef: return f("simGameMilestones", LoadJson<SimGameMilestoneDef>(entry, resourceType, identifier));
-                        case RT.BackgroundDef: return f("backgroundDefs", LoadJson<BackgroundDef>(entry, resourceType, identifier));
-                        case RT.BackgroundQuestionDef: return f("backgroundQuestionDefs", LoadJson<BackgroundQuestionDef>(entry, resourceType, identifier));
-                        case RT.ShipModuleUpgrade: return f("shipUpgradeDefs", LoadJson<ShipModuleUpgrade>(entry, resourceType, identifier));
-                        case RT.SimGameSubstitutionListDef: return f("simGameSubstitutionDefLists", LoadJson<SimGameSubstitutionListDef>(entry, resourceType, identifier));
-                        case RT.BaseDescriptionDef: return f("baseDescriptionDefs", LoadJson<BaseDescriptionDef>(entry, resourceType, identifier));
-                        case RT.PortraitSettings: return f("portraitSettings", LoadJson<PortraitSettings>(entry, resourceType, identifier));
-                        case RT.SimGameDifficultySettingList: return f("simGameDifficultySettingLists", LoadJson<SimGameDifficultySettingList>(entry, resourceType, identifier));
-                        case RT.FlashpointDef: return f("flashpointDefs", LoadJson<FlashpointDef>(entry, resourceType, identifier));
-                        case RT.SimGameMilestoneSet: return f("milestoneSets", LoadJson<SimGameMilestoneSet>(entry, resourceType, identifier));
-                        //case RT.ItemCollectionDef: return f("itemCollectionDefs", LoadCSV<ItemCollectionDef>(entry, resourceType, identifier));
-                        //case RT.SimpleText: return f("simpleTexts", LoadJson<SimpleText>(entry, resourceType, identifier));
-
-                        /*
-                        case RT.Prefab: return LoadMapper(entry, resourceType, identifier, null, (GameObject go) => go);
-                        case RT.Sprite:
-                        case RT.SVGAsset:
-                        case RT.ColorSwatch:
-                        */
-                        case RT.Texture2D:
-                            /* if (this.TextureManager != null && this.TextureManager.Contains(identifier))
-                                {
-                                    obj = this.TextureManager.GetLoadedTexture(identifier);
-                                }
-                                */
-                            return passthrough(LoadMapper(entry, resourceType, identifier
-                                                         , null
-                                                         , (Texture2D t) => { textureManager.InsertTexture(identifier, t); return t; }
-                                                         , (yes, no) => textureManager.RequestTexture(identifier, new TextureLoaded(yes), new LoadFailed(err => no(new Exception(err))))));
-
-                        /*
-                        case RT.UIModulePrefabs:
-                        case RT.AssetBundle: 
-                        */
-
-                        // Grouped
-                        case RT.BehaviorVariableScope:
-                        case RT.ApplicationConstants:
-                        case RT.AudioConstants:
-                        case RT.CombatGameConstants:
-                        case RT.MechStatisticsConstants:
-                        case RT.SimGameConstants: return passthrough(LoadMapper(entry, resourceType, identifier, s => s, (TextAsset t) => t.text).Then(x => Promise<string>.Resolved(x)));
-                    }
-                }
-                return Promise<T>.Rejected(new Exception(string.Format("Unhandled RT type {0}", Enum.GetName(typeof(RT), resourceType))));
-            }
-
-            if (cache.TryGetValue(identifier, out var promise)) return (Promise<T>)promise;
-            else
-            {
-                // FIXME: This caching does not seem to be working, test it.
-                LogDebug("Loading {0} {1}", Enum.GetName(typeof(RT), resourceType), identifier);
-                var v = Go();
-
-                return Trap(() =>
-                {
-                    var withDeps = new Promise<T>();
-
-                    // This is just some glue to make the deps calculation be called till we store our own results
-                    v.Done(x => { if (x is DataManager.ILoadDependencies) (x as DataManager.ILoadDependencies).RequestDependencies(ResolveDepsAsync.stuff.dataManager, () => withDeps.Resolve(x), null); else withDeps.Resolve(x); });
-                    withDeps.Done(x => { }, err => LogException(err));
-                    cache[identifier] = withDeps;
-                    LogDebug("With-dsp redirect\n {0}\n\n", new System.Diagnostics.StackTrace().ToString());
-                    return withDeps;
-                });
             }
         }
 
@@ -1036,8 +905,16 @@ namespace BattletechPerformanceFix
                 if (entry.IsFileAsset && file != null) dataLoader.LoadResource(entry.FilePath, c => res.Resolve(file(c)));
                 else if (entry.IsResourcesAsset && resource != null) res.Resolve(resource(Resources.Load<R>(entry.ResourcesLoadPath)));
                 else if (entry.IsAssetBundled && resource != null) bundleManager.RequestAsset<R>(resourceType, identifier, b => res.Resolve(resource(b)));
-                else if (recover != null) recover(res.Resolve, res.Reject);
-                else throw new System.Exception(string.Format("Unhandled file, resource, or asset", identifier));
+                else if (recover != null)
+                {   try
+                    {
+                        recover(res.Resolve, res.Reject);
+                    } catch (Exception e)
+                    {
+                        res.Reject(e);
+                    }
+                }
+                else throw new System.Exception(string.Format("Unhandled file, resource, or asset {0}:{1} via {2}", identifier, resourceType.AsString(), entry.IsFileAsset ? "file" : entry.IsResourcesAsset ? "resource" : entry.IsAssetBundled ? "bundle" : "unknown"));
             } catch (Exception e)
             {
                 res.Reject(e);
