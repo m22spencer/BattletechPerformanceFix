@@ -15,11 +15,14 @@ using RSG;
 using System.Diagnostics;
 using System.Reflection;
 using BattleTech;
+using BattleTech.UI;
 using BattleTech.Portraits;
 using BattleTech.Framework;
 using RT = BattleTech.BattleTechResourceType;
 using BattleTech.Rendering.MechCustomization;
 using static BattletechPerformanceFix.Control;
+using System.Reflection.Emit;
+using O = System.Reflection.Emit.OpCodes;
 
 namespace BattletechPerformanceFix
 {
@@ -114,11 +117,14 @@ namespace BattletechPerformanceFix
                     .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
                     .ForEach(ild =>
                     {
-
                         harmony.Patch(AccessTools.Method(ild, "CheckDependenciesAfterLoad"), pre, post);
                         harmony.Patch(AccessTools.Method(ild, "DependenciesLoaded"), pre, post);
-                        harmony.Patch(AccessTools.Method(ild, "RequestDependencies"), pre, post);
+                        //harmony.Patch(AccessTools.Method(ild, "RequestDependencies"), pre, post);
+
                     });
+
+
+
 
                 Assembly.GetAssembly(typeof(DataManager))
                     .GetTypes()
@@ -142,6 +148,23 @@ namespace BattletechPerformanceFix
                 //harmony.Patch(AccessTools.Method(typeof(DataManager), "Update"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Update))));
             }
 
+
+            Assembly.GetAssembly(typeof(HeraldryDef))
+                    .GetTypes()
+                    .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
+                    .ForEach(ild =>
+                    {
+                        var methx = AccessTools.Method(ild, "DependenciesLoaded");
+                        if (methx == null)
+                            LogError("DependenciesLoaded is null");
+                        Log("Hooking {0}.DependenciesLoaded", ild.FullName);
+                        Trap(() => harmony.Patch(methx, null, null, new HarmonyMethod(typeof(InterceptAssetChecks), nameof(InterceptAssetChecks.DependenciesLoaded))));
+                        if (!harmony.GetPatchInfo(methx).Transpilers.Any())
+                            LogError("Transpiler failed to hook");
+                    });
+
+            
+
             /*
             harmony.Patch(AccessTools.Method(typeof(HBS.Threading.SimpleThreadPool), "Worker"), new HarmonyMethod(drop));
             harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.AVPVideoPlayer), "ForcePlayVideo"), new HarmonyMethod(drop));
@@ -152,6 +175,7 @@ namespace BattletechPerformanceFix
 
             harmony.Patch(AccessTools.Method(typeof(DataManager), "ProcessRequests"), new HarmonyMethod(AccessTools.Method(t, nameof(ProcessRequests))));
             harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(RequestResources_Internal2))));
+            harmony.Patch(AccessTools.Method(typeof(DataManager), "Update"), new HarmonyMethod(AccessTools.Method(t, nameof(Update))));
 
 
             var ttt = typeof(DictionaryStore<>).MakeGenericType(typeof(MechDef));
@@ -224,6 +248,75 @@ namespace BattletechPerformanceFix
 
         class InterceptAssetChecks
         {
+            public static void CST(bool success, ref bool localRef)
+            {
+                LogDebug("CST on {0}", new StackTrace().ToString());
+                if (!success)
+                    localRef = false;
+            }
+
+            // FIXME: patch is okay, but should only apply when checking dependencies.
+            public static IEnumerable<CodeInstruction> DependenciesLoaded(IEnumerable<CodeInstruction> ins)
+            {
+                LogError("DependenciesLoaded: Transpiler patch is destructive. Will cause all dependency checks to fail");
+                var body = ins.SelectMany(i =>
+                {
+                    if (i.opcode == O.Ret)
+                    {
+                        i.opcode = O.Pop;
+                        i.operand = null;
+                        return Sequence(i);
+                    }
+                    else
+                    {
+                        return Sequence(i);
+                    }
+                });
+
+                return body.Concat(Sequence(new CodeInstruction(O.Ldc_I4_0), new CodeInstruction(O.Ret)));
+            }
+
+            /* Goal here is to remove the immediate returns of DependenciesLoaded
+             *    we want to find all of the depdencies
+             *    change: 
+             *       X
+             *       ret
+             *    to:
+             *       X
+             *       ldloc temp
+             *       call CST
+             */
+            public static IEnumerable<CodeInstruction> DependenciesLoaded2(ILGenerator generator, IEnumerable<CodeInstruction> ins)
+            {
+                return Trap(() =>
+                {
+                    var retloc = generator.DeclareLocal(typeof(bool));
+
+                    // Set temporary variable to true at the start
+                    var start = Sequence(new CodeInstruction(O.Ldc_I4_0), new CodeInstruction(O.Stloc, retloc));
+
+                    // Return state of temporary variable
+                    var end = Sequence(new CodeInstruction(O.Ldloc, retloc), new CodeInstruction(O.Ret));
+
+                    var middle = ins.SelectMany(i =>
+                    {
+                        if (i.opcode == O.Ret)
+                        {
+                            i.opcode = O.Ldloc;
+                            i.operand = retloc;
+
+                            return Sequence(i, new CodeInstruction(O.Call, AccessTools.Method(typeof(InterceptAssetChecks), "CST")));
+                        }
+                        else
+                        {
+                            return Sequence(i);
+                        }
+                    });
+                    return start.Concat(middle).Concat(end);
+                });
+            }
+
+
             public static Dictionary<RT, Type> Json = Assembly.GetAssembly(typeof(RT))
                 .GetTypes()
                 .Where(ty => ty.GetInterface(typeof(HBS.Util.IJsonTemplated).FullName) != null)
@@ -265,6 +358,8 @@ namespace BattletechPerformanceFix
 
             public static void DoCore(string id, RT type, Func<string,bool> Check, Func<string, object> Get, Action<string, object> Set)
             {
+                if (Fatal)
+                    return;
                 if (Check(id))
                 {
                     //LogDebug("Item {0}:{1} - OK {2}", id, type.AsString(), Get(id) == null ? "null" : "...");
@@ -293,12 +388,25 @@ namespace BattletechPerformanceFix
                             Trap("DepsCheck2", () => item.DependenciesLoaded(100000));
                             var depsbak = depsdb;
                             depsdb = ddbbackup;
-                            Trap("ReportDeps", () => LogError("Checked deps of {0} -- MISSING: {1}\n{2}\n\n"
-                                    , id, depsbak.Dump(false), depsbak.Count() == 0 ? item.Dump() : ""));
+
+                            var depsinfo = string.Format("Checked deps of {0} -- MISSING: {1}\n{2}\n\n"
+                                    , id, depsbak.Dump(false), depsbak.Count() == 0 ? item.Dump() : "");
+
+                            Trap("ReportDeps", () => LogError(depsinfo));
                             if (depsdb == null)
                             {
                                 LogError("------------ FATAL ------------");
                                 Fatal = true;
+
+                                var prettyDeps = "Dependency chain(non-recursive)\n";
+                                prettyDeps += id + " can't find: \n";
+                                depsbak.ForEach(dep =>
+                                {
+                                    prettyDeps += "+ " + dep + "\n";
+                                });
+
+                                GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Asset Error", prettyDeps);
+                                genericPopupBuilder.Render();
                             }
                         }
                     }
@@ -748,7 +856,15 @@ namespace BattletechPerformanceFix
                 .Select(g => string.Format("{0}:{1}", g.First(), g.Count()));
 
 
-            Control.Log("(File-duplicates {0})", string.Join(" ", counts.ToArray()));
+            Control.Log("(File-duplicates {0})", counts.Dump());
+            track.Clear();
+
+            var counts2 = Stuff.LoadMapper_hits.GroupBy(s => s)
+               .Where(g => g.Count() > 1)
+               .Select(g => string.Format("{0}:{1}", g.First(), g.Count()));
+
+
+            Control.Log("(Load-duplicates {0})", counts2.Dump());
             track.Clear();
         }
 
@@ -836,6 +952,13 @@ namespace BattletechPerformanceFix
             LogDebug("AsyncLoadCompleteMessage");
         }
 
+        public static bool Update()
+        {
+            if (Fatal)
+                return false;
+            return true;
+        }
+
         public static List<string> dryRun = null;     
         public static bool RequestResources_Internal2(MethodInfo __originalMethod, DataManager __instance, BattleTechResourceType resourceType, string identifier, PrewarmRequest prewarm, bool allowRequestStacking, bool filterByOwnership)
         {
@@ -849,7 +972,7 @@ namespace BattletechPerformanceFix
             }
 
             var entry = stuff.dataManager.ResourceLocator.EntryByID(identifier, resourceType, false);
-            if (resourceType == RT.MechDef || resourceType == RT.ChassisDef || resourceType == RT.Prefab)
+            if (resourceType == RT.MechDef || resourceType == RT.ChassisDef || resourceType == RT.Prefab || resourceType == RT.WeaponDef)
                 return false;
 
             LogDebug("Request {0}:{1}", identifier, resourceType.AsString());
@@ -1146,10 +1269,14 @@ namespace BattletechPerformanceFix
             return LoadMapper(entry, (RT)Enum.Parse(typeof(RT), entry.Type), entry.Id, Make, (TextAsset r) => Make(r.text));
         }
 
+
+        public static Dictionary<string, int> LoadMapper_hits = new Dictionary<string,int>();
         // TODO: Looks like resource and bundle are the same type always, if so reduce them into one selector
         public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<string, T> file, Func<R, T> resource, AcceptReject<T> recover = null) 
             where R : UnityEngine.Object 
         {
+            if (LoadMapper_hits.ContainsKey(identifier)) LoadMapper_hits[identifier]++;
+            LoadMapper_hits[identifier] = 0;
             var res = new Promise<T>();
             try
             {
@@ -1160,12 +1287,18 @@ namespace BattletechPerformanceFix
                 }
                 if (entry.IsFileAsset && file != null) dataLoader.LoadResource(entry.FilePath, c => res.Resolve(file(c)));
                 else if (entry.IsResourcesAsset && resource != null) res.Resolve(resource(Resources.Load<R>(entry.ResourcesLoadPath)));
-                else if (entry.IsAssetBundled && resource != null) bundleManager.RequestAsset<R>(resourceType, identifier, b => res.Resolve(resource(b)));
+                else if (entry.IsAssetBundled && resource != null)
+                {
+                    bundleManager.RequestAsset<R>(resourceType, identifier, b => res.Resolve(resource(b)));
+                    Trap(() => new Traverse(bundleManager).Method("ProcessAssetRequests").GetValue());
+                }
                 else if (recover != null)
-                {   try
+                {
+                    try
                     {
                         recover(res.Resolve, res.Reject);
-                    } catch (Exception e)
+                    }
+                    catch (Exception e)
                     {
                         res.Reject(e);
                     }
