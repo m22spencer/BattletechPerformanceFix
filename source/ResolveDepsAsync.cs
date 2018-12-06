@@ -247,60 +247,25 @@ namespace BattletechPerformanceFix
         static bool Fatal = false;
 
         class InterceptAssetChecks
-        {
-            public static bool IsCheckingDeps(bool wantState)
-            {
-                return wantState;
-            }
-
-            // FIXME: patch is okay, but should only apply when checking dependencies.
-            public static IEnumerable<CodeInstruction> DependenciesLoaded2(IEnumerable<CodeInstruction> ins)
-            {
-                LogError("DependenciesLoaded: Transpiler patch is destructive. Will cause all dependency checks to fail");
-                var body = ins.SelectMany(i =>
-                {
-                    if (i.opcode == O.Ret)
-                    {
-                        i.opcode = O.Pop;
-                        i.operand = null;
-                        return Sequence(i);
-                    }
-                    else
-                    {
-                        return Sequence(i);
-                    }
-                });
-
-                return body.Concat(Sequence(new CodeInstruction(O.Ldc_I4_0), new CodeInstruction(O.Ret)));
-            }
-
-            /* Goal here is to remove the immediate returns of DependenciesLoaded
-             *    we want to find all of the depdencies
-             *    change: 
-             *       X
-             *       ret
-             *    to:
-             *       X
-             *       call `IsCheckingDeps`
-             *       brtrue :continue
-             *       ldc_i4_0
-             *       ret
-             *       :continue
-             */
+        {                        
             public static IEnumerable<CodeInstruction> DependenciesLoaded(ILGenerator gen, IEnumerable<CodeInstruction> ins)
             {
                 var loc = gen.DeclareLocal(typeof(bool));
 
                 return Trap(() =>
                 {
-                    // Return state of temporary variable
+                    // Set temporary var to true
                     var start = Sequence(new CodeInstruction(O.Ldc_I4_1), new CodeInstruction(O.Stloc, loc));
+
+                    // return whatever the temporary is
                     var end = Sequence(new CodeInstruction(O.Ldloc, loc), new CodeInstruction(O.Ret));
 
                     var body = ins.SelectMany(i =>
                     {
                         if (i.opcode == O.Ret)
                         {
+                            // Normally this would return, we just change the return to set our local variable
+                            // FIXME: not great, since we'd really only want to store if the value on stack is false
                             i.opcode = O.Stloc;
                             i.operand = loc;
 
@@ -388,10 +353,12 @@ namespace BattletechPerformanceFix
                             var depsbak = depsdb;
                             depsdb = ddbbackup;
 
-                            var depsinfo = string.Format("Checked deps of {0} -- MISSING: {1}\n{2}\n\n"
-                                    , id, depsbak.Dump(false), depsbak.Count() == 0 ? item.Dump() : "");
+                            var hasDepsList = depsbak.Count() != 0;
 
-                            Trap("ReportDeps", () => LogError(depsinfo));
+                            var depsinfo = string.Format("Checked deps of {0} -- MISSING: {1}\n{2}\n\n"
+                                    , id, depsbak.Dump(false), !hasDepsList ? item.Dump() : "");
+
+                            Trap("ReportDeps", () => LogError("REPORT {0}", depsinfo));
                             if (depsdb == null)
                             {
                                 LogError("------------ FATAL ------------");
@@ -409,7 +376,7 @@ namespace BattletechPerformanceFix
                                     AddL("<mspace=10>+ </mspace><color=\"red\">" + dep + "</color>");
                                 });
 
-                                GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Missing Dependencies", prettyDeps);
+                                GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Missing Dependencies" + (hasDepsList ? "" : " -- CHECK LOGS"), prettyDeps);
                                 genericPopupBuilder.Render();
                             }
                         }
@@ -1293,8 +1260,7 @@ namespace BattletechPerformanceFix
                 else if (entry.IsResourcesAsset && resource != null) res.Resolve(resource(Resources.Load<R>(entry.ResourcesLoadPath)));
                 else if (entry.IsAssetBundled && resource != null)
                 {
-                    bundleManager.RequestAsset<R>(resourceType, identifier, b => res.Resolve(resource(b)));
-                    Trap(() => new Traverse(bundleManager).Method("ProcessAssetRequests").GetValue());
+                    res.Resolve(resource(bundleManager.GetAssetFromBundle<R>(entry.Id, entry.AssetBundleName)));
                 }
                 else if (recover != null)
                 {
