@@ -247,10 +247,19 @@ namespace BattletechPerformanceFix
         static bool Fatal = false;
 
         class InterceptAssetChecks
-        {                        
-            public static IEnumerable<CodeInstruction> DependenciesLoaded(ILGenerator gen, IEnumerable<CodeInstruction> ins)
+        {                   
+            public static bool SetWhen(bool singleItemSuccessful, bool everythingSuccessful)
             {
+                if (everythingSuccessful == true) return singleItemSuccessful;
+                else return false;
+            }
+
+            public static IEnumerable<CodeInstruction> DependenciesLoaded(ILGenerator gen, MethodBase method, IEnumerable<CodeInstruction> ins)
+            {
+                Trap(() => Log("Patching {0}.{1}", method.DeclaringType.FullName, method.Name));
                 var loc = gen.DeclareLocal(typeof(bool));
+
+                var stwhen = AccessTools.Method(typeof(InterceptAssetChecks), nameof(SetWhen));
 
                 return Trap(() =>
                 {
@@ -259,27 +268,29 @@ namespace BattletechPerformanceFix
 
                     // return whatever the temporary is
                     var end = Sequence(new CodeInstruction(O.Ldloc, loc), new CodeInstruction(O.Ret));
-
+                                        
                     var body = ins.SelectMany(i =>
                     {
                         if (i.opcode == O.Ret)
                         {
                             // Normally this would return, we just change the return to set our local variable
                             // FIXME: not great, since we'd really only want to store if the value on stack is false
-                            i.opcode = O.Stloc;
+                            i.opcode = O.Ldloc;
                             i.operand = loc;
-
-                            return Sequence(i);
+                            var meth = new CodeInstruction(O.Call, stwhen);
+                            var stloc = new CodeInstruction(O.Stloc, loc);
+                            return Sequence(i, meth, stloc);
                         }
                         else
                         {
                             return Sequence(i);
                         }
                     });
+                    LogDebug("");
+
                     return start.Concat(body).Concat(end);
                 });
             }
-
 
             public static Dictionary<RT, Type> Json = Assembly.GetAssembly(typeof(RT))
                 .GetTypes()
