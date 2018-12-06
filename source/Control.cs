@@ -142,6 +142,10 @@ namespace BattletechPerformanceFix
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
+
+            Log("Harmony? {0}", Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version);
+            Log("Unity? {0}", UnityEngine.Application.unityVersion);
+            Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
             
             Trap(() =>
