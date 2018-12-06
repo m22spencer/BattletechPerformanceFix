@@ -304,6 +304,7 @@ namespace BattletechPerformanceFix
                 else if (type == RT.Sprite) return EnsureSprite(entry, type, id).PromiseObject();
                 else if (type == RT.Texture2D) return EnsureTexture2D(entry, type, id).PromiseObject();
                 else if (type == RT.Prefab) return EnsurePrefab(entry, type, id).PromiseObject();
+                else if (type == RT.SVGAsset) return stuff.LoadMapper(entry, type, id, null, (SVGAsset svg) => svg).PromiseObject();
                 else return Promise<object>.Rejected(new Exception("Unhandled RT type " + type.AsString()));
             }
 
