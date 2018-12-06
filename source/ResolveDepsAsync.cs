@@ -124,6 +124,11 @@ namespace BattletechPerformanceFix
 
                     });
 
+                //harmony.Patch(AccessTools.Method(typeof(BattleTech.Save.SkirmishUnitsAndLances), "UnMountMemoryStore"), pre, post);
+
+
+                var mstore = AccessTools.Method(typeof(BattleTech.Save.SkirmishUnitsAndLances), "UnMountMemoryStore");
+                harmony.Patch(mstore, new HarmonyMethod(AccessTools.Method(t, "UnmountMemoryStore_Pre")), new HarmonyMethod(AccessTools.Method(t, "UnmountMemoryStore_Post")));
 
 
 
@@ -146,7 +151,7 @@ namespace BattletechPerformanceFix
                 harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SimGameOptionsMenu), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(t, "Summary")));
                 harmony.Patch(AccessTools.Method(typeof(DataManager), "RequestResource_Internal"), new HarmonyMethod(AccessTools.Method(t, nameof(TrackRequestResource))));
                 
-                //harmony.Patch(AccessTools.Method(typeof(DataManager), "Update"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Update))));
+                harmony.Patch(AccessTools.Method(typeof(DataManager), "Update"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Update))));
             }
 
 
@@ -226,10 +231,19 @@ namespace BattletechPerformanceFix
             */
         } 
 
+        static Stopwatch umms = new Stopwatch();
+        public static void UnmountMemoryStore_Pre() {
+            umms.Start();
+        }
+
+        public static void UnmountMemoryStore_Post() {
+            umms.Stop();
+        }
+
         public static void PrefabCache_IsPrefabInPool(string id, Dictionary<string,object> ___prefabPool)
         {
             // FIXME: Critically slow path, but we have to resolve the resource type somehow.
-            var type = Trap(() => stuff.dataManager.ResourceLocator.AllEntries().Where(entry => entry.Id == id).Single().Type.ToRT());
+            var type = Trap(() => ResolveDepsAsync.cachedManifest[id].Type.ToRT());
             Trap("PrefabCache_IsPrefabInPool", () => InterceptAssetChecks.DoCore(id, type, ___prefabPool.ContainsKey, ___prefabPool.GetValueSafe, ___prefabPool.Add));
         }
 
@@ -295,10 +309,15 @@ namespace BattletechPerformanceFix
 
             public static IPromise<object> Ensure(VersionManifestEntry entry, RT type, string id)
             {
-                if (Json.TryGetValue(type, out var jtype)) return stuff.LoadJsonD(entry, jtype);
+                var mstoreovd = stuff.dataManager.ResourceLocator.GetMemoryStoreContainingEntry(type, id, type.AsString());
+                if (mstoreovd != null) { LogDebug($"Override for {id}");
+                                         var prom = new Promise<object>();
+                                         mstoreovd.GetLoadMethod(type)(id, val => prom.Resolve((object)val));
+                                         return prom; }
+                else if (Json.TryGetValue(type, out var jtype)) return stuff.LoadJsonD(entry, jtype);
                 else if (type == RT.Sprite) return EnsureSprite(entry, type, id).PromiseObject();
                 else if (type == RT.Texture2D) return EnsureTexture2D(entry, type, id).PromiseObject();
-                else if (type == RT.Prefab) return EnsurePrefab(entry, type, id).PromiseObject();
+                else if (type == RT.Prefab || type == RT.UIModulePrefabs) return EnsurePrefab(entry, type, id).PromiseObject();
                 else if (type == RT.SVGAsset) return stuff.LoadMapper(entry, type, id, null, (SVGAsset svg) => svg).PromiseObject();
                 else if (type == RT.ColorSwatch) return stuff.LoadMapper(entry, type, id, null, (ColorSwatch cs) => cs).PromiseObject();
                 else if (type == RT.SimpleText) return stuff.LoadMapper(entry, type, id, Control.Identity, (TextAsset ta) => ta.text).Then(t => new SimpleText(t)).PromiseObject();
@@ -416,7 +435,9 @@ namespace BattletechPerformanceFix
                     }
 
                     var entry = stuff.dataManager.ResourceLocator.EntryByID(id, type, false);
-                    if (entry == null) { LogError($"Unable to locate asset for {id}:{type.AsString()}"); }
+                    if (entry == null) { LogError($"Unable to locate asset for {id}:{type.AsString()}");
+                                         //LogError("Found the following entires with same id {0}", stuff.dataManager.ResourceLocator.AllEntries().Where(e => e.Id == id).ToArray().Dump()); }
+                    }
                     else { Ensure(entry, type, id)
                                .Done(Success, Failure);
                            if (!Triggered) LogException(new Exception(string.Format("DoCore async load for {0}:{1} :entry {2}", id, type.AsString(), entry.Dump(false)))); }
@@ -471,12 +492,11 @@ namespace BattletechPerformanceFix
             return true;
         }
 
-        public static void DataManager_Update(DataManager __instance, Dictionary<string, object> ___poolNextUpdate
-            , Dictionary<BattleTechResourceType, Dictionary<string, object>> ___foregroundRequests
-            , Dictionary<BattleTechResourceType, Dictionary<string, object>> ___backgroundRequests) {
-            int f(Dictionary<BattleTechResourceType, Dictionary<string, object>> req)
-                => req.SelectMany(r => r.Value).Count();
-            Trap(() => Log("Pool, foreground, background: {0}, {1}, {2}", ___poolNextUpdate.Count, f(___foregroundRequests), f(___backgroundRequests)));
+        // FIXME: DM update is a problem, it doesn't keep the loads coming fast enough.
+        //      Consider broadcasting the loadcomplete from ProcessRequests with a stack depth check to avoid overflows
+        public static void DataManager_Update() {
+            //UnityEngine.QualitySettings.vSyncCount = 0;
+            //Trap(() => Log("Pool, foreground, background: {0}, {1}, {2}", ___poolNextUpdate.Count, f(___foregroundRequests), f(___backgroundRequests)));
         }
 
         public static bool IntroAdded(IntroCinematicLauncher __instance)
@@ -799,9 +819,12 @@ namespace BattletechPerformanceFix
             track[key]++;
         }
 
+        public static Dictionary<string, VersionManifestEntry> cachedManifest = null;
         public static void IntegrityCheck(BattleTechResourceLocator __instance) {
             Trap(() => { 
                 var manifest = new Traverse(__instance).Field("baseManifest").GetValue<Dictionary<BattleTechResourceType, Dictionary<string, VersionManifestEntry>>>();
+                cachedManifest = new Dictionary<string, VersionManifestEntry>();
+                manifest.AsEnumerable().ForEach(types => types.Value.AsEnumerable().ForEach(kv => cachedManifest[kv.Key] = kv.Value));
 
                 Control.Log("----------------- Manifest integrity check ---------------------------");
                 var wrongIdents = manifest.SelectMany(type => type.Value.Where(entry => entry.Value.Id != entry.Key));
@@ -852,6 +875,10 @@ namespace BattletechPerformanceFix
 
 
             Control.Log("(Load-duplicates {0})", counts2.Dump());
+
+
+            Control.Log($"Umms: {umms.Elapsed.TotalMilliseconds}");
+
             track.Clear();
         }
 
@@ -958,7 +985,12 @@ namespace BattletechPerformanceFix
                 //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerAsyncLoadCompleteMessage, new ReceiveMessageCenterMessage(AsyncLoadCompleteMessage));
             }
 
-            if (resourceType == RT.SimGameConstants)
+            var mstoreovd = stuff.dataManager.ResourceLocator.GetMemoryStoreContainingEntry(resourceType, identifier, resourceType.AsString());
+            if (mstoreovd != null)
+                LogWarning($"Override for {identifier}:{resourceType.AsString()}");
+
+
+            if (resourceType == RT.SimGameConstants || resourceType == RT.CombatGameConstants)
                 return true;
 
             return false;
