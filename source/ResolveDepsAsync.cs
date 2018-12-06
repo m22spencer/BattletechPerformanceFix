@@ -257,24 +257,25 @@ namespace BattletechPerformanceFix
             public static IEnumerable<CodeInstruction> DependenciesLoaded(ILGenerator gen, MethodBase method, IEnumerable<CodeInstruction> ins)
             {
                 Trap(() => Log("Patching {0}.{1}", method.DeclaringType.FullName, method.Name));
+
+                // var loc;
                 var loc = gen.DeclareLocal(typeof(bool));
 
                 var stwhen = AccessTools.Method(typeof(InterceptAssetChecks), nameof(SetWhen));
 
                 return Trap(() =>
                 {
-                    // Set temporary var to true
+                    // loc = true;
                     var start = Sequence(new CodeInstruction(O.Ldc_I4_1), new CodeInstruction(O.Stloc, loc));
 
-                    // return whatever the temporary is
+                    // return loc;
                     var end = Sequence(new CodeInstruction(O.Ldloc, loc), new CodeInstruction(O.Ret));
                                         
                     var body = ins.SelectMany(i =>
                     {
                         if (i.opcode == O.Ret)
                         {
-                            // Normally this would return, we just change the return to set our local variable
-                            // FIXME: not great, since we'd really only want to store if the value on stack is false
+                            // `return _;`  to  `loc = SetWhen(_, loc);`
                             i.opcode = O.Ldloc;
                             i.operand = loc;
                             var meth = new CodeInstruction(O.Call, stwhen);
@@ -286,7 +287,6 @@ namespace BattletechPerformanceFix
                             return Sequence(i);
                         }
                     });
-                    LogDebug("");
 
                     return start.Concat(body).Concat(end);
                 });
