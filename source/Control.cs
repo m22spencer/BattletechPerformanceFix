@@ -149,11 +149,29 @@ namespace BattletechPerformanceFix
         public static string Dump<T>(this T t, bool indented = true, int depth = 1)
         {
             return JsonConvert.SerializeObject(t, indented ? Formatting.Indented : Formatting.None, new JsonSerializerSettings
-            {
-                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                MaxDepth = depth,
-                Error = (serializer, err) => err.ErrorContext.Handled = true
-            });
+                {
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                    MaxDepth = depth,
+                    Error = (serializer, err) => err.ErrorContext.Handled = true
+                });
+        }
+
+        public static void PatchAndDumpSelf(this Type type, string method) {
+            if (type == null)
+                LogError($"Patch and dump recieved a null type");
+            LogDebug($"PatchAndDumpSelf hooking {type.FullName} {method}");
+            var meths = type.GetMethods(AccessTools.all)
+                            .Where(meth => !meth.IsGenericMethod && !meth.IsGenericMethodDefinition)
+                            .Where(meth => meth.Name == method);
+            if (meths.Any()) {
+                meths.ForEach(meth => harmony.Patch(meth, new HarmonyMethod(typeof(Control), nameof(HarmonyDumpSelf))));
+            } else {
+                LogError("$PatchAndSumpSelf({typename}, {method}) was unable to find a matching method on the type");
+            }
+        }
+
+        public static void HarmonyDumpSelf(object __instance) {
+            Log("PatchAndDumpSelf {0}", __instance.Dump());
         }
 
         public static T[] Array<T>(params T[] p) => p;

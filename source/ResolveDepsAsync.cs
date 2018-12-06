@@ -11,6 +11,7 @@ using UnityEngine;
 using System.IO;
 using SVGImporter;
 using HBS.Data;
+using HBS.Text;
 using RSG;
 using System.Diagnostics;
 using System.Reflection;
@@ -178,28 +179,17 @@ namespace BattletechPerformanceFix
             harmony.Patch(AccessTools.Method(typeof(DataManager), "Update"), new HarmonyMethod(AccessTools.Method(t, nameof(Update))));
 
 
-            var ttt = typeof(DictionaryStore<>).MakeGenericType(typeof(MechDef));
-            var mde = ttt.GetMethod("Exists", AccessTools.all);
-            harmony.Patch(mde,  new HarmonyMethod(AccessTools.Method(t, nameof(MechDef_Exists))));
-
+            var ttt = typeof(DictionaryStore<>).MakeGenericType(typeof(object));
+            harmony.Patch(ttt.GetMethod("Exists", AccessTools.all),  new HarmonyMethod(AccessTools.Method(t, nameof(ResolveDepsAsync.DictionaryStore_Exists))));
+            harmony.Patch(ttt.GetMethod("Get", AccessTools.all),  new HarmonyMethod(AccessTools.Method(t, nameof(ResolveDepsAsync.DictionaryStore_Exists))));
 
             harmony.Patch(AccessTools.Method(typeof(SVGCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SVGCache_Contains))));
             harmony.Patch(AccessTools.Method(typeof(SpriteCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SpriteCache_Contains))));
             harmony.Patch(AccessTools.Method(typeof(TextureManager), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(TextureManager_Contains))));
             harmony.Patch(AccessTools.Method(typeof(PrefabCache), "IsPrefabInPool"), new HarmonyMethod(AccessTools.Method(t, nameof(PrefabCache_IsPrefabInPool))));
             harmony.Patch(AccessTools.Method(typeof(DataManager), "Exists"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Exists))));
-
-            return;
-            Log("CDAL fix on");
-
-            var resolver = AccessTools.Method(typeof(Resolver<ChassisDef>), "RequestDependencies"); //just using ChassisDef here to reference the static function. It means nothing;
-
-            //harmony.Patch(AccessTools.Method(typeof(DataManager), "PooledInstantiate"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(PooledInstantiate))));
-            //harmony.Patch(AccessTools.Method(typeof(DataManager.QueuedPoolHelper), "SpawnNext"), new HarmonyMethod(AccessTools.Method(typeof(ResolveDepsAsync), nameof(SpawnNext)))); 
-
-            if (WantVanilla)
-                return;
-
+            
+            
             Assembly.GetAssembly(typeof(HeraldryDef))
                 .GetTypes()
                 .Where(ty => ty.GetInterface(typeof(DataManager.ILoadDependencies).FullName) != null)
@@ -207,8 +197,10 @@ namespace BattletechPerformanceFix
                 {
                     harmony.Patch(AccessTools.Method(ildtype, "CheckDependenciesAfterLoad"), Drop);   // If enabled this will prevent RequestDependency checks that we need temporarily before the data manager is ready.
                     //harmony.Patch(AccessTools.Method(ildtype, "DependenciesLoaded"), Drop);
-                    harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), new HarmonyMethod(resolver));
+                    harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), Drop);
                 });
+
+            /*
 
             harmony.Patch(AccessTools.Method(typeof(DataManager), "ProcessAsyncRequests"), Drop);
 
@@ -231,11 +223,14 @@ namespace BattletechPerformanceFix
             new FactionDefResolver();
             new BackgroundDefResolver();
             new UpgradeDefResolver();
+            */
         } 
 
         public static void PrefabCache_IsPrefabInPool(string id, Dictionary<string,object> ___prefabPool)
         {
-            Trap("PrefabCache_IsPrefabInPool", () => InterceptAssetChecks.DoCore(id, RT.Prefab, ___prefabPool.ContainsKey, ___prefabPool.GetValueSafe, ___prefabPool.Add));
+            // FIXME: Critically slow path, but we have to resolve the resource type somehow.
+            var type = Trap(() => stuff.dataManager.ResourceLocator.AllEntries().Where(entry => entry.Id == id).Single().Type.ToRT());
+            Trap("PrefabCache_IsPrefabInPool", () => InterceptAssetChecks.DoCore(id, type, ___prefabPool.ContainsKey, ___prefabPool.GetValueSafe, ___prefabPool.Add));
         }
 
         public static void TextureManager_Contains(string resourceId, Dictionary<string, object> ___loadedTextures)
@@ -305,6 +300,8 @@ namespace BattletechPerformanceFix
                 else if (type == RT.Texture2D) return EnsureTexture2D(entry, type, id).PromiseObject();
                 else if (type == RT.Prefab) return EnsurePrefab(entry, type, id).PromiseObject();
                 else if (type == RT.SVGAsset) return stuff.LoadMapper(entry, type, id, null, (SVGAsset svg) => svg).PromiseObject();
+                else if (type == RT.ColorSwatch) return stuff.LoadMapper(entry, type, id, null, (ColorSwatch cs) => cs).PromiseObject();
+                else if (type == RT.SimpleText) return stuff.LoadMapper(entry, type, id, Control.Identity, (TextAsset ta) => ta.text).Then(t => new SimpleText(t)).PromiseObject();
                 else return Promise<object>.Rejected(new Exception("Unhandled RT type " + type.AsString()));
             }
 
@@ -334,6 +331,7 @@ namespace BattletechPerformanceFix
 
             public static void DoCore(string id, RT type, Func<string,bool> Check, Func<string, object> Get, Action<string, object> Set)
             {
+                LogDebug("DoCore {0}", id);
                 if (Fatal)
                     return;
                 if (Check(id))
@@ -345,6 +343,7 @@ namespace BattletechPerformanceFix
                     //LogDebug("Item {0}:{1} - NEEDSLOAD", id, type.AsString());
                     if (depsdb != null)
                     {
+                        LogDebug("DepsCheck :depth {0}", new StackTrace().FrameCount);
                         Trap(() => depsdb.Add(id + ":" + type.AsString()));
                     }
 
@@ -417,10 +416,10 @@ namespace BattletechPerformanceFix
                     }
 
                     var entry = stuff.dataManager.ResourceLocator.EntryByID(id, type, false);
-                    Ensure(entry, type, id)
-                        .Done(Success, Failure);
-
-                    if (!Triggered) LogException(new Exception(string.Format("DoCore async load for {0}:{1} :entry {2}", id, type.AsString(), entry.Dump(false))));
+                    if (entry == null) { LogError($"Unable to locate asset for {id}:{type.AsString()}"); }
+                    else { Ensure(entry, type, id)
+                               .Done(Success, Failure);
+                           if (!Triggered) LogException(new Exception(string.Format("DoCore async load for {0}:{1} :entry {2}", id, type.AsString(), entry.Dump(false)))); }
                 }
             }
         }
@@ -446,10 +445,15 @@ namespace BattletechPerformanceFix
 
             return true;
         }
-        
-        public static void MechDef_Exists(object __instance, string id, Dictionary<string, object> ___items)
+
+        /* TODO: This hook does some odd stuff..
+         *    - Single hook works for all generic methods
+         *    - Causes DictionaryStore to see object, may have implications
+         */
+        public static void DictionaryStore_Exists(object __instance, string id, Dictionary<string, object> ___items)
         {
             var gtt = Trap("GetGenericArgs", () => __instance.GetType().GetGenericArguments()[0]);
+            //LogDebug("MDE hit {0}:{1}", id, gtt.FullName);
             gtt.Name.ToRTMap(type => Trap("MDE", () => InterceptAssetChecks.DoCore(id, type, ___items.ContainsKey, ___items.GetValueSafe, ___items.Add))
                             , () => Trap(() => LogWarning("MDE no resolve for {0}", gtt.Name)));
         }
@@ -954,6 +958,11 @@ namespace BattletechPerformanceFix
                 //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerAsyncLoadCompleteMessage, new ReceiveMessageCenterMessage(AsyncLoadCompleteMessage));
             }
 
+            if (resourceType == RT.SimGameConstants)
+                return true;
+
+            return false;
+
             var entry = stuff.dataManager.ResourceLocator.EntryByID(identifier, resourceType, false);
             if (resourceType == RT.MechDef || resourceType == RT.ChassisDef || resourceType == RT.Prefab || resourceType == RT.WeaponDef)
                 return false;
@@ -1240,8 +1249,12 @@ namespace BattletechPerformanceFix
         {
             object Make(string json)
             {
+                if (t == null)
+                    LogError($"LoadJsonD: type is null");
                 //FIXME: Verify t here
                 HBS.Util.IJsonTemplated a = (HBS.Util.IJsonTemplated)Activator.CreateInstance(t);
+                if (a == null)
+                    LogError($"LoadJsonD: No type from activator for type {t.FullName}");
                 a.FromJSON(json);
                 //Log("JSON send");
                 if (a == null)
@@ -1274,10 +1287,7 @@ namespace BattletechPerformanceFix
                 {
                     res.Resolve(resource(bundleManager.GetAssetFromBundle<R>(entry.Id, entry.AssetBundleName)));
                 }
-                else if (recover != null)
-                {
-                    try
-                    {
+                else if (recover != null) { try {
                         recover(res.Resolve, res.Reject);
                     }
                     catch (Exception e)
