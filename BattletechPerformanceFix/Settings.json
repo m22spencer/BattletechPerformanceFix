@@ -4,9 +4,11 @@
     "LoadFixes": true,
     "NoSalvageSoftlock": true,
     "MissingAssetsContinueLoad": true,
+    "DataLoaderGetEntryCheck": true,
     "DynamicTagsFix": true,
     "BTLightControllerThrottle": false,
     "ShopTabLagFix": true,
-    "MDDB_InMemoryCache": false
+    "MDDB_InMemoryCache": true,
+    "ContractLagFix": true
   }
 }
