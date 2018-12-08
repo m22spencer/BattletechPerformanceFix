@@ -188,6 +188,7 @@ namespace BattletechPerformanceFix
             var ttt = typeof(DictionaryStore<>).MakeGenericType(typeof(object));
             harmony.Patch(ttt.GetMethod("Exists", AccessTools.all),  new HarmonyMethod(AccessTools.Method(t, nameof(ResolveDepsAsync.DictionaryStore_Exists))));
             harmony.Patch(ttt.GetMethod("Get", AccessTools.all),  new HarmonyMethod(AccessTools.Method(t, nameof(ResolveDepsAsync.DictionaryStore_Exists))));
+            harmony.Patch(ttt.GetProperty("Keys", AccessTools.all).GetGetMethod(),  new HarmonyMethod(AccessTools.Method(t, nameof(ResolveDepsAsync.DictionaryStore_Keys))));
 
             harmony.Patch(AccessTools.Method(typeof(SVGCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SVGCache_Contains))));
             harmony.Patch(AccessTools.Method(typeof(SpriteCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SpriteCache_Contains))));
@@ -238,7 +239,7 @@ namespace BattletechPerformanceFix
             Trap("PrefabCache_IsPrefabInPool", () => InterceptAssetChecks.DoCore(id, type, ___prefabPool.ContainsKey, ___prefabPool.GetValueSafe, ___prefabPool.Add));
         }
 
-        public static bool PrefabCache_PooledInstantiate(PrefabCache __instance, GameObject __result, Dictionary<string, GameObject> ___prefabPool, string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
+        public static bool PrefabCache_PooledInstantiate(PrefabCache __instance, ref GameObject __result, Dictionary<string, GameObject> ___prefabPool, string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
             // FIXME: This needs some work.
             __instance.IsPrefabInPool(id); // Load hook
             if (___prefabPool.TryGetValue(id, out var prefab)) {
@@ -326,13 +327,15 @@ namespace BattletechPerformanceFix
                 else if (type == RT.Prefab || type == RT.UIModulePrefabs) return EnsurePrefab(entry, type, id).PromiseObject();
                 else if (type == RT.SVGAsset) return stuff.LoadMapper(entry, type, id, null, (SVGAsset svg) => svg).PromiseObject();
                 else if (type == RT.ColorSwatch) return stuff.LoadMapper(entry, type, id, null, (ColorSwatch cs) => cs).PromiseObject();
-                else if (type == RT.SimpleText) return stuff.LoadMapper(entry, type, id, Control.Identity, (TextAsset ta) => ta.text).Then(t => new SimpleText(t)).PromiseObject();
+                else if (type == RT.SimpleText) return stuff.LoadMapper(entry, type, id, System.Text.Encoding.UTF8.GetString, (TextAsset ta) => ta.text).Then(t => new SimpleText(t)).PromiseObject();
                 else return Promise<object>.Rejected(new Exception("Unhandled RT type " + type.AsString()));
             }
 
             public static IPromise<Texture2D> EnsureTexture2D(VersionManifestEntry entry, RT type, string id)
             {
-                return stuff.LoadMapper(entry, RT.Texture2D, id, null, (Texture2D tex) => tex);
+                return stuff.LoadMapper( entry, RT.Texture2D, id
+                                       , bytes => new Traverse(typeof(TextureManager)).Method("TextureFromBytes", bytes).GetValue<Texture2D>()
+                                       , (Texture2D tex) => tex);
             }
 
             public static IPromise<Sprite> EnsureSprite(VersionManifestEntry entry, RT type, string id)
@@ -356,7 +359,7 @@ namespace BattletechPerformanceFix
 
             public static void DoCore(string id, RT type, Func<string,bool> Check, Func<string, object> Get, Action<string, object> Set)
             {
-                LogDebug("DoCore {0}", id);
+                LogDebug("DoCore {0}:{1}", id, type.AsString());
                 if (Fatal)
                     return;
                 if (Check(id))
@@ -413,8 +416,8 @@ namespace BattletechPerformanceFix
                                     AddL("<mspace=10>+ </mspace><color=\"red\">" + dep + "</color>");
                                 });
 
-                                GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Missing Dependencies" + (hasDepsList ? "" : " -- CHECK LOGS"), prettyDeps);
-                                genericPopupBuilder.Render();
+                                if (!Fatal) { GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Missing Dependencies" + (hasDepsList ? "" : " -- CHECK LOGS"), prettyDeps);
+                                              genericPopupBuilder.Render(); }
                             }
                         }
                     }
@@ -485,6 +488,22 @@ namespace BattletechPerformanceFix
             gtt.Name.ToRTMap(type => Trap("MDE", () => InterceptAssetChecks.DoCore(id, type, ___items.ContainsKey, ___items.GetValueSafe, ___items.Add))
                             , () => Trap(() => LogWarning("MDE no resolve for {0}", gtt.Name)));
         }
+
+        public static bool DictionaryStore_Keys(object __instance, ref IEnumerable<string> __result)
+        {
+            var gtt = Trap("GetGenericArgs", () => __instance.GetType().GetGenericArguments()[0]);
+
+            if(gtt == typeof(FactionDef)) {
+                __result = ResolveDepsAsync.stuff.dataManager.ResourceLocator.AllEntriesOfResource(RT.FactionDef).Select(entry => entry.Id);   //FIXME: Filter by ownership
+                return false;
+            }
+
+            LogWarning($"DictionaryStore<{gtt.Name}>.Keys likely needs to be handled");
+            __result = Enumerable.Empty<string>();
+
+            return false;
+        }
+
 
         public static bool SpawnNext(ref bool __result, int ___currentCount, int ___poolCount)
         {
@@ -590,6 +609,7 @@ namespace BattletechPerformanceFix
 
 
             Control.Log($"Umms: {umms.Elapsed.TotalMilliseconds}");
+            umms = new Stopwatch();
 
             track.Clear();
         }
@@ -814,11 +834,12 @@ namespace BattletechPerformanceFix
                 return a;
             }
 
-            return LoadMapper(entry, (RT)Enum.Parse(typeof(RT), entry.Type), entry.Id, Make, (TextAsset r) => Make(r.text));
+            return LoadMapper(entry, (RT)Enum.Parse(typeof(RT), entry.Type), entry.Id, bytes => Make(System.Text.Encoding.UTF8.GetString(bytes)), (TextAsset r) => Make(r.text));
         }
 
+        public static readonly string BundlesPath = Path.Combine(Application.streamingAssetsPath, "data/assetbundles");
         public static string AssetBundleNameToFilePath(string assetBundleName)
-            => new Traverse(typeof(AssetBundleManager)).Method(nameof(AssetBundleNameToFilePath), assetBundleName).GetValue<string>();
+            => Path.Combine(BundlesPath, assetBundleName);
 
         public static IEnumerable<string> GetBundleDependencies(string bundleName)
             => new Traverse(ResolveDepsAsync.stuff.bundleManager).Field("manifest").GetValue<AssetBundleManifest>().GetAllDependencies(bundleName);
@@ -837,7 +858,7 @@ namespace BattletechPerformanceFix
 
         public static Dictionary<string, int> LoadMapper_hits = new Dictionary<string,int>();
         // TODO: Looks like resource and bundle are the same type always, if so reduce them into one selector
-        public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<string, T> file, Func<R, T> resource, AcceptReject<T> recover = null) 
+        public IPromise<T> LoadMapper<T, R>(VersionManifestEntry entry, BattleTechResourceType resourceType, string identifier, Func<byte[], T> file, Func<R, T> resource, AcceptReject<T> recover = null) 
             where R : UnityEngine.Object 
         {
             if (LoadMapper_hits.ContainsKey(identifier)) LoadMapper_hits[identifier]++;
@@ -850,7 +871,7 @@ namespace BattletechPerformanceFix
                     res.Reject(new Exception(string.Format("Null entry for {0}:{1}", identifier, resourceType.AsString())));
                     return res;
                 }
-                if (entry.IsFileAsset && file != null) dataLoader.LoadResource(entry.FilePath, c => res.Resolve(file(c)));
+                if (entry.IsFileAsset && file != null) File.ReadAllBytes(entry.FilePath).Let(c => res.Resolve(file(c)));
                 else if (entry.IsResourcesAsset && resource != null) res.Resolve(resource(Resources.Load<R>(entry.ResourcesLoadPath)));
                 else if (entry.IsAssetBundled && resource != null)
                 {

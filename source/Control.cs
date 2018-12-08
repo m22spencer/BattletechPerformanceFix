@@ -204,6 +204,9 @@ namespace BattletechPerformanceFix
         public static K Let<T,K>(this T t, Func<T, K> f)
             => f(t);
 
+        public static void Let<T>(this T t, Action<T> f)
+            => f(t);
+
         public static T Identity<T>(this T t)
             => t;
 
