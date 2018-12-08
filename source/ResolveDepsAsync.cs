@@ -12,6 +12,7 @@ using System.IO;
 using SVGImporter;
 using HBS.Data;
 using HBS.Text;
+using HBS.Util;
 using RSG;
 using System.Diagnostics;
 using System.Reflection;
@@ -191,7 +192,9 @@ namespace BattletechPerformanceFix
             harmony.Patch(ttt.GetProperty("Keys", AccessTools.all).GetGetMethod(),  new HarmonyMethod(AccessTools.Method(t, nameof(ResolveDepsAsync.DictionaryStore_Keys))));
 
             harmony.Patch(AccessTools.Method(typeof(SVGCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SVGCache_Contains))));
+            harmony.Patch(AccessTools.Method(typeof(SVGCache), "GetAsset"), new HarmonyMethod(AccessTools.Method(t, nameof(SVGCache_Contains))));
             harmony.Patch(AccessTools.Method(typeof(SpriteCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SpriteCache_Contains))));
+            harmony.Patch(AccessTools.Method(typeof(SpriteCache), "GetSprite"), new HarmonyMethod(AccessTools.Method(t, nameof(SpriteCache_Contains))));
             harmony.Patch(AccessTools.Method(typeof(TextureManager), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(TextureManager_Contains))));
             harmony.Patch(AccessTools.Method(typeof(PrefabCache), "IsPrefabInPool"), new HarmonyMethod(AccessTools.Method(t, nameof(PrefabCache_IsPrefabInPool))));
             harmony.Patch(AccessTools.Method(typeof(PrefabCache), "PooledInstantiate"), new HarmonyMethod(AccessTools.Method(t, nameof(PrefabCache_PooledInstantiate))));
@@ -248,7 +251,7 @@ namespace BattletechPerformanceFix
                                                            , position == null ? t.position : position.Value
                                                            , rotation == null ? t.rotation : rotation.Value);
                 if (parent != null)
-                    t.SetParent(parent);
+                    go.transform.SetParent(parent);
                 __result = go;
             } 
             return false;
@@ -328,6 +331,16 @@ namespace BattletechPerformanceFix
                 else if (type == RT.SVGAsset) return stuff.LoadMapper(entry, type, id, null, (SVGAsset svg) => svg).PromiseObject();
                 else if (type == RT.ColorSwatch) return stuff.LoadMapper(entry, type, id, null, (ColorSwatch cs) => cs).PromiseObject();
                 else if (type == RT.SimpleText) return stuff.LoadMapper(entry, type, id, System.Text.Encoding.UTF8.GetString, (TextAsset ta) => ta.text).Then(t => new SimpleText(t)).PromiseObject();
+                else if (type == RT.SimGameStringList) return stuff.LoadMapper(entry, type, id, System.Text.Encoding.UTF8.GetString
+                                                                              , (TextAsset ta) => ta.text).Then(str => new SimGameStringList().Let(ss => { ss.ID = id;
+                                                                                                                                                           ss.Load(str);
+                                                                                                                                                           return (object)ss; }));
+                else if (type == RT.SimGameConversations) return stuff.LoadMapper<isogame.Conversation, GameObject>( entry, type, id
+                                                                                                                   , SimGameConversationManager.LoadConversationFromBytes
+                                                                                                                   , null).PromiseObject();
+                else if (type == RT.SimGameSpeakers) return stuff.LoadMapper<isogame.ConversationSpeakerList, GameObject>( entry, type, id
+                                                                                                                         , bytes => new SerializationStream(bytes).Let(SimGameConversationManager.LoadSpeakerListFromStream)
+                                                                                                                         , null).PromiseObject();
                 else return Promise<object>.Rejected(new Exception("Unhandled RT type " + type.AsString()));
             }
 
@@ -444,10 +457,9 @@ namespace BattletechPerformanceFix
                         Triggered = true;
                     }
 
-                    var entry = stuff.dataManager.ResourceLocator.EntryByID(id, type, false);
+                    var entry = stuff.dataManager.ResourceLocator.EntryByID(type == RT.SimGameConversations ? $"{id}.convo" : id, type, false);
                     if (entry == null) { LogError($"Unable to locate asset for {id}:{type.AsString()}");
-                                         //LogError("Found the following entires with same id {0}", stuff.dataManager.ResourceLocator.AllEntries().Where(e => e.Id == id).ToArray().Dump()); }
-                    }
+                                         LogError("Found the following entires with same id {0}", ResolveDepsAsync.stuff.dataManager.ResourceLocator.AllEntries().Where(e => e.Id == id).ToArray().Dump()); }
                     else { Ensure(entry, type, id)
                                .Done(Success, Failure);
                            if (!Triggered) LogException(new Exception(string.Format("DoCore async load for {0}:{1} :entry {2}", id, type.AsString(), entry.Dump(false)))); }
@@ -483,18 +495,38 @@ namespace BattletechPerformanceFix
          */
         public static void DictionaryStore_Exists(object __instance, string id, Dictionary<string, object> ___items)
         {
+            // FIXME: Custom resolve is required for Conversations. They don't use the asset ID, but instead the convo line ID
+
             var gtt = Trap("GetGenericArgs", () => __instance.GetType().GetGenericArguments()[0]);
-            //LogDebug("MDE hit {0}:{1}", id, gtt.FullName);
+            if (gtt == typeof(isogame.ConversationSpeakerList)) { InterceptAssetChecks.DoCore(id, RT.SimGameSpeakers, ___items.ContainsKey, ___items.GetValueSafe, ___items.Add);
+                                                                  return; }
+            if (gtt == typeof(isogame.Conversation)) { InterceptAssetChecks.DoCore(id, RT.SimGameConversations, ___items.ContainsKey, ___items.GetValueSafe, ___items.Add);
+                                                       return; }
             gtt.Name.ToRTMap(type => Trap("MDE", () => InterceptAssetChecks.DoCore(id, type, ___items.ContainsKey, ___items.GetValueSafe, ___items.Add))
                             , () => Trap(() => LogWarning("MDE no resolve for {0}", gtt.Name)));
-        }
+                    }
 
         public static bool DictionaryStore_Keys(object __instance, ref IEnumerable<string> __result)
         {
             var gtt = Trap("GetGenericArgs", () => __instance.GetType().GetGenericArguments()[0]);
 
-            if(gtt == typeof(FactionDef)) {
-                __result = ResolveDepsAsync.stuff.dataManager.ResourceLocator.AllEntriesOfResource(RT.FactionDef).Select(entry => entry.Id);   //FIXME: Filter by ownership
+            LogWarning($"Strict load of Keys for {gtt.FullName} originated from \n{new StackTrace().ToString()}\n\n");
+
+            RT? rtt = 
+                gtt == typeof(FactionDef) ? (RT?)RT.FactionDef
+                : gtt == typeof(StarSystemDef) ? (RT?)RT.StarSystemDef
+                : gtt == typeof(LifepathNodeDef) ? (RT?)RT.LifepathNodeDef
+                : gtt == typeof(SimGameMilestoneDef) ? (RT?)RT.SimGameMilestoneDef
+                : gtt == typeof(SimGameStringList) ? (RT?)RT.SimGameStringList
+                : gtt == typeof(isogame.ConversationSpeakerList) ? (RT?)RT.SimGameSpeakers
+                : gtt == typeof(isogame.Conversation) ? (RT?)RT.SimGameConversations
+                : gtt == typeof(SimGameSubstitutionListDef) ? (RT?)RT.SimGameSubstitutionListDef
+                : null;
+                
+            if(rtt != null) {
+                // FIXME: We don't really want to do a full manifest pull here. Some of this requires writing simgame state
+                //     but until then, this should be based off the requests made to datamanager
+                __result = ResolveDepsAsync.stuff.dataManager.ResourceLocator.AllEntriesOfResource(rtt.Value).Select(entry => entry.Id);   //FIXME: Filter by ownership
                 return false;
             }
 
@@ -721,6 +753,7 @@ namespace BattletechPerformanceFix
             if (mstoreovd != null)
                 LogWarning($"Override for {identifier}:{resourceType.AsString()}");
 
+            LogDebug($"RRI: {identifier}:{resourceType.AsString()}");
 
             if (resourceType == RT.SimGameConstants || resourceType == RT.CombatGameConstants || resourceType == RT.MechStatisticsConstants)
                 return true;
