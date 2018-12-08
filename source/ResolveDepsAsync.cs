@@ -436,7 +436,6 @@ namespace BattletechPerformanceFix
                             if (depsdb == null)
                             {
                                 LogError("------------ FATAL ------------");
-                                Fatal = true;
 
                                 var prettyDeps = "";
                                 void AddL(string str)
@@ -452,6 +451,7 @@ namespace BattletechPerformanceFix
 
                                 if (!Fatal) { GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Missing Dependencies" + (hasDepsList ? "" : " -- CHECK LOGS"), prettyDeps);
                                               genericPopupBuilder.Render(); }
+                                Fatal = true;
                             }
                         }
                     }
