@@ -19,6 +19,7 @@ using BattleTech;
 using BattleTech.UI;
 using BattleTech.Portraits;
 using BattleTech.Framework;
+using UnityEngine;
 using RT = BattleTech.BattleTechResourceType;
 using BattleTech.Rendering.MechCustomization;
 using static BattletechPerformanceFix.Control;
@@ -192,7 +193,12 @@ namespace BattletechPerformanceFix
             harmony.Patch(AccessTools.Method(typeof(SpriteCache), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(SpriteCache_Contains))));
             harmony.Patch(AccessTools.Method(typeof(TextureManager), "Contains"), new HarmonyMethod(AccessTools.Method(t, nameof(TextureManager_Contains))));
             harmony.Patch(AccessTools.Method(typeof(PrefabCache), "IsPrefabInPool"), new HarmonyMethod(AccessTools.Method(t, nameof(PrefabCache_IsPrefabInPool))));
+            harmony.Patch(AccessTools.Method(typeof(PrefabCache), "PooledInstantiate"), new HarmonyMethod(AccessTools.Method(t, nameof(PrefabCache_PooledInstantiate))));
             harmony.Patch(AccessTools.Method(typeof(DataManager), "Exists"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Exists))));
+
+
+            var tdm = typeof(DataManager);
+            harmony.Patch(AccessTools.Method(tdm, "Clear"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Clear))));
             
             
             Assembly.GetAssembly(typeof(HeraldryDef))
@@ -231,6 +237,16 @@ namespace BattletechPerformanceFix
             */
         } 
 
+
+        public static bool DM_ClearLock = false;
+        public static bool DataManager_Clear() {
+            if (DM_ClearLock) return false;
+            DM_ClearLock = true;
+            LogDebug("DataManager.Clear is allowed (first init)");
+
+            return true;
+        }
+
         static Stopwatch umms = new Stopwatch();
         public static void UnmountMemoryStore_Pre() {
             umms.Start();
@@ -245,6 +261,21 @@ namespace BattletechPerformanceFix
             // FIXME: Critically slow path, but we have to resolve the resource type somehow.
             var type = Trap(() => ResolveDepsAsync.cachedManifest[id].Type.ToRT());
             Trap("PrefabCache_IsPrefabInPool", () => InterceptAssetChecks.DoCore(id, type, ___prefabPool.ContainsKey, ___prefabPool.GetValueSafe, ___prefabPool.Add));
+        }
+
+        public static bool PrefabCache_PooledInstantiate(PrefabCache __instance, GameObject __result, Dictionary<string, GameObject> ___prefabPool, string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
+            // FIXME: This needs some work.
+            __instance.IsPrefabInPool(id); // Load hook
+            if (___prefabPool.TryGetValue(id, out var prefab)) {
+                var t = prefab.transform;
+                var go = (GameObject)GameObject.Instantiate( prefab
+                                                           , position == null ? t.position : position.Value
+                                                           , rotation == null ? t.rotation : rotation.Value);
+                if (parent != null)
+                    t.SetParent(parent);
+                __result = go;
+            } 
+            return false;
         }
 
         public static void TextureManager_Contains(string resourceId, Dictionary<string, object> ___loadedTextures)
@@ -369,7 +400,8 @@ namespace BattletechPerformanceFix
                     void CheckDependencies(DataManager.ILoadDependencies item)
                     {
                         LogDebug("Load deps of {0}", id);
-                        var yes = Trap("DepsCheck1", () => item.DependenciesLoaded(100000));
+                        // Dependencies sometimes have to be checked twice as some of them do the refresh code post Deps check
+                        var yes = Trap("DepsCheck1", () => item.DependenciesLoaded(100000) ? true : item.DependenciesLoaded(100000));
                         if (yes)
                         {
                             LogDebug("Checked deps of {0} -- OK", id);
@@ -385,8 +417,8 @@ namespace BattletechPerformanceFix
 
                             var hasDepsList = depsbak.Count() != 0;
 
-                            var depsinfo = string.Format("Checked deps of {0} -- MISSING: {1}\n{2}\n\n"
-                                    , id, depsbak.Dump(false), !hasDepsList ? item.Dump() : "");
+                            var depsinfo = string.Format("Checked deps of {0} -- MISSING: {1}"
+                                                        , id, depsbak.Dump(false));
 
                             Trap("ReportDeps", () => LogError("REPORT {0}", depsinfo));
                             if (depsdb == null)
@@ -990,7 +1022,7 @@ namespace BattletechPerformanceFix
                 LogWarning($"Override for {identifier}:{resourceType.AsString()}");
 
 
-            if (resourceType == RT.SimGameConstants || resourceType == RT.CombatGameConstants)
+            if (resourceType == RT.SimGameConstants || resourceType == RT.CombatGameConstants || resourceType == RT.MechStatisticsConstants)
                 return true;
 
             return false;
@@ -1297,6 +1329,23 @@ namespace BattletechPerformanceFix
             return LoadMapper(entry, (RT)Enum.Parse(typeof(RT), entry.Type), entry.Id, Make, (TextAsset r) => Make(r.text));
         }
 
+        public static string AssetBundleNameToFilePath(string assetBundleName)
+            => new Traverse(typeof(AssetBundleManager)).Method(nameof(AssetBundleNameToFilePath), assetBundleName).GetValue<string>();
+
+        public static IEnumerable<string> GetBundleDependencies(string bundleName)
+            => new Traverse(ResolveDepsAsync.stuff.bundleManager).Field("manifest").GetValue<AssetBundleManifest>().GetAllDependencies(bundleName);
+
+        public static Dictionary<string, AssetBundle> Bundles = new Dictionary<string, AssetBundle>();
+        public static AssetBundle LoadBundle(string bundleName) {
+            if (Bundles.TryGetValue(bundleName, out var bundle)) return bundle;
+            else { GetBundleDependencies(bundleName).ForEach(depName => LoadBundle(depName));
+                   var newBundle =  AssetBundle.LoadFromFile(AssetBundleNameToFilePath(bundleName)).NullCheckError($"Missing bundle {bundleName}");
+                   Bundles[bundleName] = newBundle;
+                   return newBundle; }
+        }
+
+        public static UnityEngine.Object LoadAssetFromBundle(string assetName, string bundleName)
+            => LoadBundle(bundleName)?.LoadAsset(assetName).NullCheckError($"Unable to load {assetName} from bundle {bundleName}");
 
         public static Dictionary<string, int> LoadMapper_hits = new Dictionary<string,int>();
         // TODO: Looks like resource and bundle are the same type always, if so reduce them into one selector
@@ -1317,7 +1366,7 @@ namespace BattletechPerformanceFix
                 else if (entry.IsResourcesAsset && resource != null) res.Resolve(resource(Resources.Load<R>(entry.ResourcesLoadPath)));
                 else if (entry.IsAssetBundled && resource != null)
                 {
-                    res.Resolve(resource(bundleManager.GetAssetFromBundle<R>(entry.Id, entry.AssetBundleName)));
+                    res.Resolve(resource(LoadAssetFromBundle(entry.Id, entry.AssetBundleName).SafeCast<R>()));
                 }
                 else if (recover != null) { try {
                         recover(res.Resolve, res.Reject);

@@ -113,6 +113,14 @@ namespace BattletechPerformanceFix
             Log("[Exception] {0}", values);
         }
 
+        public static T NullCheckError<T>(this T t, string msg) {
+            if (t == null) LogError(msg);
+            return t;
+        }
+
+        public static K SafeCast<K>(this object t) where K : class 
+            => (t as K).NullCheckError($"Safe cast failed of object to {typeof(K).FullName}");
+
         public static void Trap(Action f)
         {
             try { f(); } catch (Exception e) { Log("Exception {0}", e); }
@@ -427,7 +435,7 @@ namespace BattletechPerformanceFix
         public override string ToString()
         {
             return $"{Name} ({Directory})";
-        }
+        }
     }
 
     public class ModSettings
