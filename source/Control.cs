@@ -11,6 +11,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
+using System.Reflection;
 using System.Reflection.Emit;
 using System.IO;
 using HBS.Util;
@@ -36,6 +37,8 @@ namespace BattletechPerformanceFix
         public static readonly string ModPack = "com.github.m22spencer";
         public static readonly string ModFullName = string.Format("{0}.{1}", ModPack, ModName);
         public static readonly string ModDir = "./Mods/BattletechPerformanceFix";
+
+        public static Type ModTekType = AppDomain.CurrentDomain.GetAssemblies().SelectMany(ty => ty.GetTypes()).FirstOrDefault(ty => ty.FullName == "ModTek.ModTek");
 
         private static StreamWriter LogStream;
 
@@ -146,7 +149,8 @@ namespace BattletechPerformanceFix
             Log("Harmony? {0}", Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version);
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-[soon to be redacted]-MDDB-Windows-No-Copy-Required-Edition");
             
             Trap(() =>
             {
@@ -185,12 +189,11 @@ namespace BattletechPerformanceFix
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
-                    //{ typeof(DataLoaderGetEntryCheck), false },  // A bit too dangerous to enable at the moment.
+                    { typeof(DataLoaderGetEntryCheck), true },
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
-                    //{ typeof(MDDB_InMemoryCache), true },        // Currently don't have a good way to ship sqlite, and ModTek interactions become odd with this patch.
-                    //{ typeof(RemoveMDDB), true },
+                    { typeof(MDDB_InMemoryCache), true },
                     { typeof(ContractLagFix), true }
                 };
                                

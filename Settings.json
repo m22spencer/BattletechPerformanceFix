@@ -1,12 +1,14 @@
 {
   "logLevel": "Debug",
   "features": {
-    "LazyRoomInitialization": true,
     "LoadFixes": true,
     "NoSalvageSoftlock": true,
     "MissingAssetsContinueLoad": true,
     "DataLoaderGetEntryCheck": true,
     "DynamicTagsFix": true,
     "BTLightControllerThrottle": true,
+    "ShopTabLagFix": true,
+    "MDDB_InMemoryCache": true,
+    "ContractLagFix": true
   }
 }

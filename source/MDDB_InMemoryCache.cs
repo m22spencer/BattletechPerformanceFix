@@ -8,6 +8,7 @@ using BattleTech.Data;
 using HBS.Data;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Reflection.Emit;
 using BattleTech.Rendering;
 using UnityEngine;
@@ -24,8 +25,18 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            var precull = Control.CheckPatch( AccessTools.Method(typeof(BTCustomRenderer), "OnPreCull")
-                                            , "2d4664901a7bde11ee58911347847642c51dd41958b7b57bf08caa9a821f017f");
+            var modtek = Control.ModTekType;
+            Control.Log("Found modtek? {0}", modtek?.FullName);
+
+            if (modtek == null)
+                throw new Exception("Aborting MDDB_InMEmoryCache patch: Could not find ModTek");
+
+            var path = System.Environment.GetEnvironmentVariable("PATH");
+            var editor_folder = Path.GetFullPath(Control.ModDir); // "./BattleTech_Data/StreamingAssets/editor");
+            System.Environment.SetEnvironmentVariable("PATH", path + $";{editor_folder}");
+
+            try { new SQLiteConnection("Data Source=:memory:"); }
+            catch(Exception e) { Control.LogError("SQlite dependencies not found. Aborting MDDB patch."); Control.LogException(e); return; }
 
             Control.Trap(() =>
             Control.harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Open")
@@ -41,7 +52,9 @@ namespace BattletechPerformanceFix
             Control.harmony.Patch(AccessTools.Method(typeof(MapsAndEncounters_MDDExtensions), "GetMapByPath")
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), "GetMapByPath"));
 
-            Control.harmony.Patch(AccessTools.Method(typeof(ModTek.ModTek), "WriteJsonFile")
+            
+
+            Control.harmony.Patch(AccessTools.Method(modtek, "WriteJsonFile")
                                  , null
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), nameof(MDDB_InMemoryCache.SaveToDisk)));
             Control.harmony.Patch(AccessTools.Method(typeof(BattleTech.OnGameShutdown), "ShutdownFileIO")
