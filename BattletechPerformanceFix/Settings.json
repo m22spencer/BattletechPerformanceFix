@@ -6,7 +6,7 @@
     "MissingAssetsContinueLoad": true,
     "DataLoaderGetEntryCheck": true,
     "DynamicTagsFix": true,
-    "BTLightControllerThrottle": true,
+    "BTLightControllerThrottle": false,
     "ShopTabLagFix": true,
     "MDDB_InMemoryCache": true,
     "ContractLagFix": true
