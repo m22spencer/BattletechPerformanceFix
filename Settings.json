@@ -1,5 +1,5 @@
 {
-  "logLevel": "Debug",
+  "logLevel": "Log",
   "features": {
     "LoadFixes": true,
     "NoSalvageSoftlock": true,

@@ -201,9 +201,20 @@ namespace BattletechPerformanceFix
             harmony.Patch(AccessTools.Method(typeof(DataManager), "Exists"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Exists))));
 
 
+
+
             var tdm = typeof(DataManager);
             harmony.Patch(AccessTools.Method(tdm, "Clear"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Clear))));
-            
+
+            Assembly.GetAssembly(typeof(RT))
+                    .GetTypes()
+                    .Where(ty => !ty.IsAbstract && !ty.IsInterface && !ty.IsGenericTypeDefinition)
+                    .SelectMany(ty => ty.GetMethods())
+                    .Where(meth => meth.Name == "Awake" || meth.Name == "Start")
+                    .Where(meth => !meth.IsGenericMethod && !meth.IsGenericMethodDefinition)
+                    .ForEach(meth => { LogDebug($"Try patch {meth.DeclaringType}.{meth.Name}");
+                                       Trap(() => harmony.Patch(meth, new HarmonyMethod(AccessTools.Method(t, nameof(Tag)))));
+                                     });
             
             Assembly.GetAssembly(typeof(HeraldryDef))
                 .GetTypes()
@@ -215,6 +226,15 @@ namespace BattletechPerformanceFix
                     harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), Drop);
                 });
         } 
+
+        public static string Caller(int c = 2) {
+            var frm = new StackFrame(c).GetMethod();
+            return $"{frm.DeclaringType.FullName}.{frm.Name}";
+        }
+
+        public static void Tag() {
+            LogDebug($"Tagged {Caller(3)} {Caller(4)}");
+        }
 
 
         public static bool DM_ClearLock = false;
@@ -237,6 +257,7 @@ namespace BattletechPerformanceFix
 
         public static void PrefabCache_IsPrefabInPool(string id, Dictionary<string,object> ___prefabPool)
         {
+            LogDebug($"IsPrefabInPool {Caller(5)}");
             // FIXME: Critically slow path, but we have to resolve the resource type somehow.
             var type = Trap(() => ResolveDepsAsync.cachedManifest[id].Type.ToRT());
             Trap("PrefabCache_IsPrefabInPool", () => InterceptAssetChecks.DoCore(id, type, ___prefabPool.ContainsKey, ___prefabPool.GetValueSafe, ___prefabPool.Add));
@@ -372,7 +393,7 @@ namespace BattletechPerformanceFix
 
             public static void DoCore(string id, RT type, Func<string,bool> Check, Func<string, object> Get, Action<string, object> Set)
             {
-                LogDebug("DoCore {0}:{1}", id, type.AsString());
+                LogDebug($"{Caller(3)} DoCore {0}:{1}", id, type.AsString());
                 if (Fatal)
                     return;
                 if (Check(id))
@@ -458,7 +479,7 @@ namespace BattletechPerformanceFix
                     }
 
                     var entry = stuff.dataManager.ResourceLocator.EntryByID(type == RT.SimGameConversations ? $"{id}.convo" : id, type, false);
-                    if (entry == null) { LogError($"Unable to locate asset for {id}:{type.AsString()}");
+                    if (entry == null) { LogError($"Unable to locate asset for {id}:{type.AsString()} from {new StackTrace().ToString()}");
                                          LogError("Found the following entires with same id {0}", ResolveDepsAsync.stuff.dataManager.ResourceLocator.AllEntries().Where(e => e.Id == id).ToArray().Dump()); }
                     else { Ensure(entry, type, id)
                                .Done(Success, Failure);
@@ -553,8 +574,7 @@ namespace BattletechPerformanceFix
         // FIXME: DM update is a problem, it doesn't keep the loads coming fast enough.
         //      Consider broadcasting the loadcomplete from ProcessRequests with a stack depth check to avoid overflows
         public static void DataManager_Update() {
-            //UnityEngine.QualitySettings.vSyncCount = 0;
-            //Trap(() => Log("Pool, foreground, background: {0}, {1}, {2}", ___poolNextUpdate.Count, f(___foregroundRequests), f(___backgroundRequests)));
+            LogDebug($"Spin :frame {Time.frameCount} :renderFrame {Time.renderedFrameCount} :ms {Time.unscaledTime} :fps {Application.targetFrameRate}");
         }
 
         public static bool IntroAdded(IntroCinematicLauncher __instance)
@@ -718,6 +738,8 @@ namespace BattletechPerformanceFix
                 LogDebug("Process requests started empty queue message");
                 stuff.messageCenter.PublishMessage(new DataManagerLoadCompleteMessage());
             }
+
+            LogDebug($"ProcessRequests from: {new StackTrace().ToString()}");
         }
 
         public static void LoadCompleteMessage(MessageCenterMessage msg)
@@ -747,13 +769,16 @@ namespace BattletechPerformanceFix
                 //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerRequestCompleteMessage, new ReceiveMessageCenterMessage(DispatchAssetLoad));
                 //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerLoadCompleteMessage, new ReceiveMessageCenterMessage(LoadCompleteMessage));
                 //stuff.messageCenter.AddSubscriber(MessageCenterMessageType.DataManagerAsyncLoadCompleteMessage, new ReceiveMessageCenterMessage(AsyncLoadCompleteMessage));
+
+
+                stuff.messageCenter.AddSubscriber(MessageCenterMessageType.LevelLoadComplete, new ReceiveMessageCenterMessage(msg => LogDebug("Load complete")));
             }
 
             var mstoreovd = stuff.dataManager.ResourceLocator.GetMemoryStoreContainingEntry(resourceType, identifier, resourceType.AsString());
             if (mstoreovd != null)
                 LogWarning($"Override for {identifier}:{resourceType.AsString()}");
 
-            LogDebug($"RRI: {identifier}:{resourceType.AsString()}");
+            LogDebug($"{Caller(3)} RRI: {identifier}:{resourceType.AsString()}");
 
             if (resourceType == RT.SimGameConstants || resourceType == RT.CombatGameConstants || resourceType == RT.MechStatisticsConstants)
                 return true;

@@ -119,7 +119,7 @@ namespace BattletechPerformanceFix
         }
 
         public static K SafeCast<K>(this object t) where K : class 
-            => (t as K).NullCheckError($"Safe cast failed of object to {typeof(K).FullName}");
+            => (t as K).NullCheckError($"Safe cast failed of {t.GetType().FullName} to {typeof(K).FullName}");
 
         public static void Trap(Action f)
         {
