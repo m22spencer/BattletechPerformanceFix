@@ -36,7 +36,9 @@ namespace BattletechPerformanceFix
             System.Environment.SetEnvironmentVariable("PATH", path + $";{editor_folder}");
 
             try { new SQLiteConnection("Data Source=:memory:"); }
-            catch(Exception e) { Control.LogError("SQlite dependencies not found. Aborting MDDB patch."); Control.LogException(e); return; }
+            catch(Exception e) { Control.LogWarning("SQlite dependencies not found. Aborting MDDB patch.");
+                                 Control.LogException(e);
+                                 throw new Exception("MDDB Patch aborted (This is okay, you just won't get the performance improvement)"); }
 
             Control.Trap(() =>
             Control.harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Open")
