@@ -90,9 +90,6 @@
     <Reference Include="System.Data.SQLite.Linq, Version=1.0.109.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
       <HintPath>packages\System.Data.SQLite.Linq.1.0.109.0\lib\net20\System.Data.SQLite.Linq.dll</HintPath>
     </Reference>
-    <Reference Include="UniRx, Version=5.4.1.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>packages\UniRx.5.4.1.0\lib\UniRx.dll</HintPath>
-    </Reference>
     <Reference Include="UnityEngine">
       <HintPath>$(BTechData)UnityEngine.dll</HintPath>
       <Private>False</Private>
@@ -106,7 +103,6 @@
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
-    <Compile Include="LoadResourceRemoveIntermediate.cs" />
     <Compile Include="MDDB_InMemoryCache.cs" />
     <Compile Include="Control.cs" />
     <Compile Include="BTLightControllerThrottle.cs" />
@@ -116,7 +112,6 @@
     <Compile Include="NoSalvageSoftlock.cs" />
     <Compile Include="LazyRoomInitialization.cs" />
     <Compile Include="LoadFixes.cs" />
-    <Compile Include="RemoveMDDB.cs" />
     <Compile Include="ResolveDepsAsync.cs" />
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
