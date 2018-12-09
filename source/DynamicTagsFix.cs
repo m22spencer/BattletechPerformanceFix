@@ -13,7 +13,7 @@ namespace BattletechPerformanceFix
         {
             Trap(() =>
             {
-                var harmony = Control.harmony;
+                var harmony = Main.harmony;
                 harmony.Patch(AccessTools.Method(typeof(LanceOverride), "RunMadLibs")
                                      , new HarmonyMethod(typeof(DynamicTagsFix), nameof(LanceOverride_RunMadLibs)));
 

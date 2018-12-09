@@ -28,7 +28,7 @@ namespace BattletechPerformanceFix
                     var tpatch = new HarmonyMethod(typeof(ContractLagFix), nameof(Transpile));
                     tpatch.prioritiy = Priority.First;
 
-                    Control.harmony.Patch(meth
+                    Main.harmony.Patch(meth
                                          , new HarmonyMethod(typeof(ContractLagFix), nameof(Pre))
                                          , new HarmonyMethod(typeof(ContractLagFix), nameof(Post))
                                          , tpatch);
@@ -38,7 +38,7 @@ namespace BattletechPerformanceFix
             typeof(EncounterLayerData).GetConstructors()
                 .ToList()
                 .ForEach(con =>
-                    Control.harmony.Patch(con
+                    Main.harmony.Patch(con
                                          , null, new HarmonyMethod(typeof(ContractLagFix), nameof(EncounterLayerData_Constructor))));
 
         }

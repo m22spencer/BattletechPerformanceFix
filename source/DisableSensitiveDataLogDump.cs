@@ -13,7 +13,7 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            Control.harmony.Patch(AccessTools.Method(typeof(UnityGameInstance), nameof(OnInternetConnectivityResult))
+            Main.harmony.Patch(AccessTools.Method(typeof(UnityGameInstance), nameof(OnInternetConnectivityResult))
                                  , new HarmonyMethod(typeof(DisableSensitiveDataLogDump), nameof(OnInternetConnectivityResult)));
 
             /* Mods are hooked too late to guard this

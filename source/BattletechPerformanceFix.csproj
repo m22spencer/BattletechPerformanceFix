@@ -93,7 +93,7 @@
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="MDDB_InMemoryCache.cs" />
-    <Compile Include="Control.cs" />
+    <Compile Include="Main.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="BTLightControllerThrottle.cs" />
     <Compile Include="HarmonyExt.cs" />

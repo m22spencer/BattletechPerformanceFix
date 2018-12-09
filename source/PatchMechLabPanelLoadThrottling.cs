@@ -14,13 +14,13 @@ namespace BattletechPerformanceFix
                     .Field("requestsPerFrame")
                     .SetValue(3);
             try {
-                Control.harmony.Unpatch(WaitForLoads_MoveNext, InterceptMoveNextMI);
+                Main.harmony.Unpatch(WaitForLoads_MoveNext, InterceptMoveNextMI);
                 
             } catch(Exception e) {
                 LogError(string.Format("[MechLabLoadThrottling] Not patched: {0}", e));
             }
             LogDebug("[MechLabLoadThrottling] Patching WaitForLoads");
-            Control.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
+            Main.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
         }
 
         // cache a few things for performance reasons.
@@ -32,7 +32,7 @@ namespace BattletechPerformanceFix
                                             , MethodBase __originalMethod
                                             , ref bool __result
                                             ) {
-            Control.harmony.Unpatch(__originalMethod, InterceptMoveNextMI);
+            Main.harmony.Unpatch(__originalMethod, InterceptMoveNextMI);
             var hasItems = true;
             Stopwatch sw = new Stopwatch();
             sw.Start();
@@ -49,7 +49,7 @@ namespace BattletechPerformanceFix
                 __result = false;
                 LogDebug(string.Format("[MechLabLoadThrottling] WaitForLoads complete and unpatched"));
             } else {
-                Control.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
+                Main.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
                 __result = true;
             }
             return false;

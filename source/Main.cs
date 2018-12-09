@@ -15,7 +15,7 @@ namespace BattletechPerformanceFix
         public Dictionary<string,bool> features = new Dictionary<string,bool>();
     }
 
-    public static class Control
+    public static class Main
     {
         public static HarmonyInstance harmony;
 

@@ -9,13 +9,13 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            var asi = Control.CheckPatch(AccessTools.Method(typeof(SG_Shop_Screen), nameof(SG_Shop_Screen.AddShopInventory))
+            var asi = Main.CheckPatch(AccessTools.Method(typeof(SG_Shop_Screen), nameof(SG_Shop_Screen.AddShopInventory))
                                         , "f07ff50a8bd1b049d0ad576720c91c2b473d240e203f046ba4bd6ed4ca03f653");
-            var aiti = Control.CheckPatch(AccessTools.Method(typeof(MechLabInventoryWidget_ListView), nameof(MechLabInventoryWidget_ListView.AddItemToInventory))
+            var aiti = Main.CheckPatch(AccessTools.Method(typeof(MechLabInventoryWidget_ListView), nameof(MechLabInventoryWidget_ListView.AddItemToInventory))
                                          , "204c93ea7a8f7474dd1e185f3b99a3da63c0d0bbd44eeb94a1378a9f1ae9938e");
 
-            Control.harmony.Patch(asi, null, new HarmonyMethod(AccessTools.Method(typeof(ShopTabLagFix), nameof(OnlySortAtEnd))));
-            Control.harmony.Patch(aiti, new HarmonyMethod(AccessTools.Method(typeof(ShopTabLagFix), nameof(AddItemToInventory))));
+            Main.harmony.Patch(asi, null, new HarmonyMethod(AccessTools.Method(typeof(ShopTabLagFix), nameof(OnlySortAtEnd))));
+            Main.harmony.Patch(aiti, new HarmonyMethod(AccessTools.Method(typeof(ShopTabLagFix), nameof(AddItemToInventory))));
 
         }
 

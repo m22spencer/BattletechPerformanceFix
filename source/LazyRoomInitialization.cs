@@ -31,7 +31,7 @@ namespace BattletechPerformanceFix
                             if (patchfun != null)
                             {
                                 Log("LazyRoomInitialization methname {0}, patchfun {1}", meth.Name, patchfun);
-                                Control.harmony.Patch(meth, new HarmonyMethod(typeof(LazyRoomInitialization), patchfun), null);
+                                Main.harmony.Patch(meth, new HarmonyMethod(typeof(LazyRoomInitialization), patchfun), null);
                             }
                         }
                         catch (Exception e)
@@ -40,7 +40,7 @@ namespace BattletechPerformanceFix
                         }
                     }
                 });
-            Control.harmony.Patch(AccessTools.Method(typeof(BattleTech.SimGameState), nameof(CompleteLanceConfigurationPrep))
+            Main.harmony.Patch(AccessTools.Method(typeof(BattleTech.SimGameState), nameof(CompleteLanceConfigurationPrep))
             , new HarmonyMethod(typeof(LazyRoomInitialization), nameof(CompleteLanceConfigurationPrep), null));
 
         }

@@ -5,5 +5,5 @@
 
 	"DependsOn": [],
 	"DLL": "BattletechPerformanceFix.dll",
-	"DLLEntryPoint": "BattletechPerformanceFix.Control.Start"
+	"DLLEntryPoint": "BattletechPerformanceFix.Main.Start"
 }

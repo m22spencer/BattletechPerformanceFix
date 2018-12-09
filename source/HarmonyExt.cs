@@ -9,7 +9,7 @@ namespace BattletechPerformanceFix
         readonly MethodBase orig;
         readonly MethodInfo act;
         public void Dispose() {
-            Control.harmony.Unpatch(orig, act);
+            Main.harmony.Unpatch(orig, act);
         }
 
         Hook(MethodBase target, MethodInfo mi) {
@@ -21,13 +21,13 @@ namespace BattletechPerformanceFix
             var h = new Hook(target, mi);
             var m = new HarmonyMethod(mi);
             m.prioritiy = priority;
-            Control.harmony.Patch(target, m, null);
+            Main.harmony.Patch(target, m, null);
             return h;
         }
 
         public static Hook Postfix(MethodBase target, MethodInfo mi) {
             var h = new Hook(target, mi);
-            Control.harmony.Patch(target, null, new HarmonyMethod(mi));
+            Main.harmony.Patch(target, null, new HarmonyMethod(mi));
             return h;
         }
     }

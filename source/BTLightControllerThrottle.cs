@@ -11,10 +11,10 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            var precull = Control.CheckPatch( AccessTools.Method(typeof(BTCustomRenderer), "OnPreCull")
+            var precull = Main.CheckPatch( AccessTools.Method(typeof(BTCustomRenderer), "OnPreCull")
                                             , "2d4664901a7bde11ee58911347847642c51dd41958b7b57bf08caa9a821f017f");
 
-            Control.harmony.Patch( precull
+            Main.harmony.Patch( precull
                                  , null
                                  , null
                                  , new HarmonyMethod(typeof(BTLightControllerThrottle), "OnPreCullPatch")

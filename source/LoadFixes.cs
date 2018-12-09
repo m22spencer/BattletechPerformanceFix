@@ -19,9 +19,9 @@ namespace BattletechPerformanceFix {
             {
                 TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () =>
                 {
-                    var strip = Control.CheckPatch( AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
+                    var strip = Main.CheckPatch( AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
                                                   , "29006a2218c101f065bd70c30d7147495d0101799a09fe72e4d969f92a1d90fd");
-                    Control.harmony.Patch( strip
+                    Main.harmony.Patch( strip
                                          , new HarmonyMethod(typeof(DontStripComments).GetMethod(nameof(DontStripComments.Prefix)))
                                          , null);
                 });

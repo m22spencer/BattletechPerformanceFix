@@ -16,21 +16,21 @@ namespace BattletechPerformanceFix
     {
         public void Activate()
         {
-            var modtek = Control.ModTekType;
+            var modtek = Main.ModTekType;
             Log("Found modtek? {0}", modtek?.FullName);
 
             if (modtek == null)
                 throw new Exception("Aborting MDDB_InMEmoryCache patch: Could not find ModTek");
 
             var path = System.Environment.GetEnvironmentVariable("PATH");
-            var editor_folder = Path.GetFullPath(Control.ModDir); // "./BattleTech_Data/StreamingAssets/editor");
+            var editor_folder = Path.GetFullPath(Main.ModDir); // "./BattleTech_Data/StreamingAssets/editor");
             System.Environment.SetEnvironmentVariable("PATH", path + $";{editor_folder}");
 
             try { new SQLiteConnection("Data Source=:memory:"); }
             catch(Exception e) { LogWarning("SQlite dependencies not found. Aborting MDDB patch.");
                                  LogException(e);
                                  throw new Exception("MDDB Patch aborted (This is okay, you just won't get the performance improvement)"); }
-            var harmony = Control.harmony;
+            var harmony = Main.harmony;
 
             Trap(() =>
             harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Open")
