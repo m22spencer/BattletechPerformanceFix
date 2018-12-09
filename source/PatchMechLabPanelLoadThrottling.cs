@@ -7,6 +7,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Diagnostics;
+using static BattletechPerformanceFix.Control;
 
 namespace BattletechPerformanceFix
 {
@@ -20,9 +21,9 @@ namespace BattletechPerformanceFix
                 Control.harmony.Unpatch(WaitForLoads_MoveNext, InterceptMoveNextMI);
                 
             } catch(Exception e) {
-                Control.mod.Logger.Log(string.Format("[MechLabLoadThrottling] Not patched: {0}", e));
+                LogError(string.Format("[MechLabLoadThrottling] Not patched: {0}", e));
             }
-            Control.mod.Logger.Log(string.Format("[MechLabLoadThrottling] Patching WaitForLoads"));
+            LogDebug("[MechLabLoadThrottling] Patching WaitForLoads");
             Control.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
         }
 
@@ -50,7 +51,7 @@ namespace BattletechPerformanceFix
             }
             if (!hasItems) {
                 __result = false;
-                Control.mod.Logger.Log(string.Format("[MechLabLoadThrottling] WaitForLoads complete and unpatched"));
+                LogDebug(string.Format("[MechLabLoadThrottling] WaitForLoads complete and unpatched"));
             } else {
                 Control.harmony.Patch(WaitForLoads_MoveNext, InterceptMoveNextHM, null);
                 __result = true;
