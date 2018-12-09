@@ -35,15 +35,15 @@
     <LangVersion>default</LangVersion>
   </PropertyGroup>
   <PropertyGroup>
-    <RunPostBuildEvent>Always</RunPostBuildEvent>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
     <IsWindows Condition="'$(OS)' == 'Windows_NT'">true</IsWindows>
     <IsOSX Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">true</IsOSX>
     <IsLinux Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinux>
-    <BTechData Condition="$(IsOSX) == true">../../../data/Managed/</BTechData>
-    <BTechData Condition="$(IsWindows) == true">../../../BattleTech_Data/Managed/</BTechData>
-    <BTechData Condition="$(IsLinux) == true">../../../BattleTech_Data/Managed/</BTechData>
+    <BTechData Condition="$(IsOSX) == true">../../data/Managed/</BTechData>
+    <BTechData Condition="$(IsWindows) == true">../../BattleTech_Data/Managed/</BTechData>
+    <BTechData Condition="$(IsLinux) == true">../../BattleTech_Data/Managed/</BTechData>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
@@ -74,10 +74,10 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Data.SQLite, Version=1.0.109.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
-      <HintPath>packages\System.Data.SQLite.Core.1.0.109.2\lib\net20\System.Data.SQLite.dll</HintPath>
+      <HintPath>../System.Data.SQLite.dll</HintPath>
     </Reference>
     <Reference Include="System.Data.SQLite.Linq, Version=1.0.109.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
-      <HintPath>packages\System.Data.SQLite.Linq.1.0.109.0\lib\net20\System.Data.SQLite.Linq.dll</HintPath>
+      <HintPath>../System.Data.SQLite.Linq.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
       <HintPath>$(BTechData)UnityEngine.dll</HintPath>
@@ -115,9 +115,9 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent Condition="$(IsWindows) == true">REM copy /Y "$(TargetDir)$(TargetName).dll" "$(SolutionDir)..\$(TargetName).dll"</PostBuildEvent>
-    <PostBuildEvent Condition="$(IsLinux) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../$(TargetName).dll"</PostBuildEvent>
-    <PostBuildEvent Condition="$(IsOSX) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../$(TargetName).dll"</PostBuildEvent>
+    <PostBuildEvent Condition="$(IsWindows) == true">xcopy "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix\"</PostBuildEvent>
+    <PostBuildEvent Condition="$(IsLinux) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix/$(TargetName).dll"</PostBuildEvent>
+    <PostBuildEvent Condition="$(IsOSX) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix/$(TargetName).dll"</PostBuildEvent>
   </PropertyGroup>
   <Import Project="packages\System.Data.SQLite.Core.1.0.109.2\build\net20\System.Data.SQLite.Core.targets" Condition="Exists('packages\System.Data.SQLite.Core.1.0.109.2\build\net20\System.Data.SQLite.Core.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
