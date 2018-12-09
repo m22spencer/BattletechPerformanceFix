@@ -115,7 +115,7 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent Condition="$(IsWindows) == true">xcopy "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix\"</PostBuildEvent>
+    <PostBuildEvent Condition="$(IsWindows) == true">xcopy /Y "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix\"</PostBuildEvent>
     <PostBuildEvent Condition="$(IsLinux) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix/$(TargetName).dll"</PostBuildEvent>
     <PostBuildEvent Condition="$(IsOSX) == true">yes | cp "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix/$(TargetName).dll"</PostBuildEvent>
   </PropertyGroup>
