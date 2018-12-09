@@ -1,14 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Harmony;
-using BattleTech;
-using BattleTech.Data;
 using HBS.Data;
-using System.Diagnostics;
 using System.IO;
-using System.Reflection.Emit;
 
 namespace BattletechPerformanceFix
 {

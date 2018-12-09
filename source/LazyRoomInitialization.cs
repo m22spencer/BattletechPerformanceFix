@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
 using BattleTech.UI;
-using static BattletechPerformanceFix.Control;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -30,7 +30,7 @@ namespace BattletechPerformanceFix
                             var patchfun = sn.Any() ? sn[0] : "Other";
                             if (patchfun != null)
                             {
-                                Control.Log("LazyRoomInitialization methname {0}, patchfun {1}", meth.Name, patchfun);
+                                Log("LazyRoomInitialization methname {0}, patchfun {1}", meth.Name, patchfun);
                                 Control.harmony.Patch(meth, new HarmonyMethod(typeof(LazyRoomInitialization), patchfun), null);
                             }
                         }
@@ -47,7 +47,7 @@ namespace BattletechPerformanceFix
 
         public static void CompleteLanceConfigurationPrep(BattleTech.SimGameState __instance)
         {
-            Control.Log("New game ensure CmdCenterRoom is initialized");
+            Log("New game ensure CmdCenterRoom is initialized");
             InitializeRoom(__instance.RoomManager.CmdCenterRoom);
         }
 
@@ -62,9 +62,9 @@ namespace BattletechPerformanceFix
         public static bool allowInit = false;
         public static bool InitWidgets(SGRoomControllerBase __instance)
         {
-            return Control.Trap(() =>
+            return Trap(() =>
             {
-                Control.Log("SGRoomControllerBase.InitWidgets (want initialize? {0})", allowInit);
+                Log("SGRoomControllerBase.InitWidgets (want initialize? {0})", allowInit);
                 if (!allowInit)
                 {
                     DB[__instance] = false;
@@ -77,9 +77,9 @@ namespace BattletechPerformanceFix
 
         public static bool LeaveRoom(bool ___roomActive)
         {
-            return Control.Trap(() =>
+            return Trap(() =>
             {
-                Control.Log("SGRoomControllerBase_LeaveRoom");
+                Log("SGRoomControllerBase_LeaveRoom");
                 if (___roomActive)
                     return true;
                 return false;
@@ -87,13 +87,13 @@ namespace BattletechPerformanceFix
         }
         public static void Other(SGRoomControllerBase __instance, MethodBase __originalMethod)
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
-                Control.Log("SGRoomControllerBase_Other {0}", __originalMethod.Name);
+                Log("SGRoomControllerBase_Other {0}", __originalMethod.Name);
 
                 if (DB[__instance] == false)
                 {
-                    Control.Log("Initialize Widgets");
+                    Log("Initialize Widgets");
                     InitializeRoom(__instance);
                 }
             });

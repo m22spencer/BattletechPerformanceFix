@@ -1,11 +1,8 @@
 ﻿using Harmony;
 using System;
-using System.Linq;
-using System.Reflection;
-using System.Collections.Generic;
 using BattleTech;
 using BattleTech.UI;
-using static BattletechPerformanceFix.Control;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -35,12 +32,12 @@ namespace BattletechPerformanceFix
                 {
                     num = 7;
                 }
-                Control.LogDebug("HasAllPriority :negotiated {0} :available {1} :selected {2} :clamped {3}", negotiated, totalSalvageMadeAvailable, count, num);
+                LogDebug("HasAllPriority :negotiated {0} :available {1} :selected {2} :clamped {3}", negotiated, totalSalvageMadeAvailable, count, num);
                 __result = count >= num;
                 return false;
             } catch (Exception e)
             {
-                Control.LogException(e);
+                LogException(e);
                 return true;
             }
         }

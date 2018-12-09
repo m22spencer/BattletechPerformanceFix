@@ -9,9 +9,8 @@ using Harmony;
 using System.Reflection;
 using System.Diagnostics;
 using HBS.Util;
-
-using static BattletechPerformanceFix.Control;
 using static System.Reflection.Emit.OpCodes;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -29,18 +28,18 @@ namespace BattletechPerformanceFix
                     var tpatch = new HarmonyMethod(typeof(ContractLagFix), nameof(Transpile));
                     tpatch.prioritiy = Priority.First;
 
-                    harmony.Patch(meth
-                                 , new HarmonyMethod(typeof(ContractLagFix), nameof(Pre))
-                                 , new HarmonyMethod(typeof(ContractLagFix), nameof(Post))
-                                 , tpatch);
+                    Control.harmony.Patch(meth
+                                         , new HarmonyMethod(typeof(ContractLagFix), nameof(Pre))
+                                         , new HarmonyMethod(typeof(ContractLagFix), nameof(Post))
+                                         , tpatch);
                 });
 
             LogDebug("EncounterLayerData ctors {0}: ", typeof(EncounterLayerData).GetConstructors().Count());
             typeof(EncounterLayerData).GetConstructors()
                 .ToList()
                 .ForEach(con =>
-                    harmony.Patch(con
-                             , null, new HarmonyMethod(typeof(ContractLagFix), nameof(EncounterLayerData_Constructor))));
+                    Control.harmony.Patch(con
+                                         , null, new HarmonyMethod(typeof(ContractLagFix), nameof(EncounterLayerData_Constructor))));
 
         }
 

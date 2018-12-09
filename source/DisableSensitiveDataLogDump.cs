@@ -5,6 +5,7 @@ using System.Text;
 using Harmony;
 using BattleTech;
 using System.Reflection.Emit;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -31,7 +32,7 @@ namespace BattletechPerformanceFix
         {
             var insl = ins.ToList();
             var num = insl.Count;
-            return insl.Take(insl.Count - 8).Concat(Control.Sequence(new CodeInstruction(OpCodes.Ret)));
+            return insl.Take(insl.Count - 8).Concat(Sequence(new CodeInstruction(OpCodes.Ret)));
         }
     }
 }

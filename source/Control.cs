@@ -6,6 +6,7 @@ using System.Text;
 using System.Reflection;
 using System.IO;
 using Newtonsoft.Json;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -28,9 +29,9 @@ namespace BattletechPerformanceFix
 
         private static StreamWriter LogStream;
 
-        private static string LogLevel = "Log";
+        public static string LogLevel = "Log";
 
-        public static void Log(string msg, params object[] values)
+        public static void __Log(string msg, params object[] values)
         {
             try { 
                 var omsg = string.Format(msg, values);
@@ -76,53 +77,6 @@ namespace BattletechPerformanceFix
             return meth;
         }
 
-        public static void LogDebug(string msg, params object[] values)
-        {
-            if (LogLevel == "Debug")
-                Log("[Debug] " + msg, values);
-        }
-
-        public static void LogError(string msg, params object[] values)
-        {
-            Log("[Error] " + msg, values);
-        }
-
-        public static void LogWarning(string msg, params object[] values)
-        {
-            Log("[Warning] " + msg, values);
-        }
-
-        public static void LogException(params object[] values)
-        {
-            Log("[Exception] {0}", values);
-        }
-
-        public static void Trap(Action f)
-        {
-            try { f(); } catch (Exception e) { Log("Exception {0}", e); }
-        }
-
-        public static T Trap<T>(Func<T> f)
-        {
-            try { return f(); } catch (Exception e) { Log("Exception {0}", e); return default(T);  }
-        }
-
-        public static T TrapAndTerminate<T>(string msg, Func<T> f)
-        {
-            try {
-                return f();
-            } catch (Exception e) {
-                Log("PANIC {0} {1}", msg, e);
-                TerminateImmediately();
-                return default(T);
-            }
-        }
-
-        public static T[] Array<T>(params T[] p) => p;
-        public static List<T> List<T>(params T[] p) => p.ToList();
-        public static IEnumerable<T> Sequence<T>(params T[] p) => p;
-
-        public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         public static void Start(string modDirectory, string json)
         {
@@ -139,7 +93,6 @@ namespace BattletechPerformanceFix
             
             Trap(() =>
             {
-
                 var WantHarmonyVersion = "1.2";
                 var harmonyVersion = Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version;
                 if (!harmonyVersion.ToString().StartsWith(WantHarmonyVersion))
@@ -212,11 +165,7 @@ namespace BattletechPerformanceFix
             });
         }
 
-        public static void TerminateImmediately()
-        {
-            System.Diagnostics.Process.GetCurrentProcess().Kill();
-        }
-    }
+            }
 
     public interface Feature
     {

@@ -1,16 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 using Harmony;
-using BattleTech;
-using BattleTech.Data;
-using HBS.Data;
 using System.Diagnostics;
-using System.IO;
-using System.Reflection.Emit;
 using BattleTech.Rendering;
 using UnityEngine;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -34,7 +27,7 @@ namespace BattletechPerformanceFix
         public static float renderEveryXS = .2f;
         public static BTLight.LightStruct[] GetLightArray(Camera camera, bool simGame, ComputeBuffer cullBuffer, ComputeBuffer lightMatricies, out Vector4 numLights, bool isPortrait)
         {
-            Control.Trap(() => { 
+            Trap(() => { 
                 if (last == null || Time.unscaledTime > lastRender + renderEveryXS)
                 {
                     lastRender = Time.unscaledTime;
@@ -43,7 +36,7 @@ namespace BattletechPerformanceFix
                     last = BTLightController.GetLightArray(camera, simGame, cullBuffer, lightMatricies, out lastNumLights, isPortrait);
                     sw.Stop();
 
-                    Control.LogDebug("GetLightArray :frame {0} :ms {1}", Time.unscaledTime, sw.Elapsed.TotalMilliseconds);
+                    LogDebug("GetLightArray :frame {0} :ms {1}", Time.unscaledTime, sw.Elapsed.TotalMilliseconds);
                 }
             });
             numLights = lastNumLights;

@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Harmony;
 using BattleTech;
 using BattleTech.Data;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -40,7 +40,7 @@ namespace BattletechPerformanceFix
                         // Hopefully there is one, or you're screwed.
                         var dummy = dummies.First();
                         var dummyId = dummy.Id;
-                        Control.LogDebug("Missing asset {0}, replacing with dummy {1}", identifier, dummyId);
+                        LogDebug("Missing asset {0}, replacing with dummy {1}", identifier, dummyId);
 
                         var d = Traverse.Create(dummy);
 
@@ -60,7 +60,7 @@ namespace BattletechPerformanceFix
             }
             catch (Exception e)
             {
-                Control.LogException(e);
+                LogException(e);
             }
         }
     }

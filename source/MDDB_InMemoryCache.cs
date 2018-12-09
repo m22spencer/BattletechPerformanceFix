@@ -1,20 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Harmony;
-using BattleTech;
 using BattleTech.Data;
 using HBS.Data;
-using System.Diagnostics;
 using System.IO;
-using System.Reflection;
-using System.Reflection.Emit;
-using BattleTech.Rendering;
-using UnityEngine;
 using System.Data;
 using System.Data.SQLite;
-using Dapper;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
@@ -26,7 +17,7 @@ namespace BattletechPerformanceFix
         public void Activate()
         {
             var modtek = Control.ModTekType;
-            Control.Log("Found modtek? {0}", modtek?.FullName);
+            Log("Found modtek? {0}", modtek?.FullName);
 
             if (modtek == null)
                 throw new Exception("Aborting MDDB_InMEmoryCache patch: Could not find ModTek");
@@ -36,47 +27,48 @@ namespace BattletechPerformanceFix
             System.Environment.SetEnvironmentVariable("PATH", path + $";{editor_folder}");
 
             try { new SQLiteConnection("Data Source=:memory:"); }
-            catch(Exception e) { Control.LogWarning("SQlite dependencies not found. Aborting MDDB patch.");
-                                 Control.LogException(e);
+            catch(Exception e) { LogWarning("SQlite dependencies not found. Aborting MDDB patch.");
+                                 LogException(e);
                                  throw new Exception("MDDB Patch aborted (This is okay, you just won't get the performance improvement)"); }
+            var harmony = Control.harmony;
 
-            Control.Trap(() =>
-            Control.harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Open")
+            Trap(() =>
+            harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Open")
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), "Open")));
-            Control.Trap(() =>
-            Control.harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Close")
+            Trap(() =>
+            harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Close")
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), "Close")));
 
-            Control.Trap(() =>
-            Control.harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Close")
+            Trap(() =>
+            harmony.Patch(AccessTools.Method(typeof(FileBackedSQLiteDB), "Close")
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), "Close")));
 
-            Control.harmony.Patch(AccessTools.Method(typeof(MapsAndEncounters_MDDExtensions), "GetMapByPath")
+            harmony.Patch(AccessTools.Method(typeof(MapsAndEncounters_MDDExtensions), "GetMapByPath")
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), "GetMapByPath"));
 
             
 
-            Control.harmony.Patch(AccessTools.Method(modtek, "WriteJsonFile")
+            harmony.Patch(AccessTools.Method(modtek, "WriteJsonFile")
                                  , null
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), nameof(MDDB_InMemoryCache.SaveToDisk)));
-            Control.harmony.Patch(AccessTools.Method(typeof(BattleTech.OnGameShutdown), "ShutdownFileIO")
+            harmony.Patch(AccessTools.Method(typeof(BattleTech.OnGameShutdown), "ShutdownFileIO")
                                  , null
                                  , new HarmonyMethod(typeof(MDDB_InMemoryCache), nameof(MDDB_InMemoryCache.SaveToDisk)));
         }
 
         public static bool Open(FileBackedSQLiteDB __instance, ref IDbConnection ___connection)
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
                 if (ConnectionURI != null && ConnectionURI != __instance.ConnectionURI)
                 {
-                    Control.LogException("MDDB_InMemoryCache: Expected {0} but got {1}", ConnectionURI, __instance.ConnectionURI);
+                    LogException("MDDB_InMemoryCache: Expected {0} but got {1}", ConnectionURI, __instance.ConnectionURI);
                 }
                 if (memoryStore == null)
                 {
 
                     ConnectionURI = __instance.ConnectionURI;
-                    Control.Log("MDDB_InMemoryCache Open {0} -> :memory:", ConnectionURI);
+                    Log("MDDB_InMemoryCache Open {0} -> :memory:", ConnectionURI);
                     mstore = new SQLiteConnection("Data Source=:memory:");
                     mstore.Open();
                     var disk = new SQLiteConnection(__instance.ConnectionURI);
@@ -95,15 +87,15 @@ namespace BattletechPerformanceFix
 
         public static void SaveToDisk()
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
                 if (ConnectionURI == null)
                 {
-                    Control.LogWarning("Tried to save MDDB but no connection info");
+                    LogWarning("Tried to save MDDB but no connection info");
                     return;
                 }
                 
-                Control.Log("MDDB_InMemoryCache Write :memory: {0}", ConnectionURI);
+                Log("MDDB_InMemoryCache Write :memory: {0}", ConnectionURI);
                 var disk = new SQLiteConnection(ConnectionURI);
                 disk.Open();
                 
@@ -132,14 +124,14 @@ namespace BattletechPerformanceFix
         public IDbTransaction BeginTransaction() => conn.BeginTransaction();
         public IDbTransaction BeginTransaction(IsolationLevel il) => conn.BeginTransaction(il);
         public void ChangeDatabase(string databaseName) => conn.ChangeDatabase(databaseName);
-        public void Close() { Control.Log("EFXR CLOSE"); conn.Close(); }
+        public void Close() { Log("EFXR CLOSE"); conn.Close(); }
         public IDbCommand CreateCommand() => conn.CreateCommand();
-        public void Open() { Control.Log("EFXR OPEN"); conn.Open(); }
+        public void Open() { Log("EFXR OPEN"); conn.Open(); }
         public string ConnectionString { get => conn.ConnectionString; set => conn.ConnectionString = value; }
         public int ConnectionTimeout { get => conn.ConnectionTimeout; }
         public string Database { get => conn.Database; }
         public ConnectionState State { get => conn.State; }
-        public void Dispose() { Control.Log("EFXR DISPOSE"); conn.Dispose(); }
+        public void Dispose() { Log("EFXR DISPOSE"); conn.Dispose(); }
 }
 }
 

@@ -1,36 +1,33 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using BattleTech.Rendering;
-using Harmony;
+﻿using Harmony;
 using BattleTech.Framework;
 using BattleTech;
-using BattleTech.Data;
 using HBS.Collections;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
+    // Fix provided by Eck, until an official hotfix is released.
     public class DynamicTagsFix : Feature
     {
         public void Activate()
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
-                Control.harmony.Patch(AccessTools.Method(typeof(LanceOverride), "RunMadLibs")
+                var harmony = Control.harmony;
+                harmony.Patch(AccessTools.Method(typeof(LanceOverride), "RunMadLibs")
                                      , new HarmonyMethod(typeof(DynamicTagsFix), nameof(LanceOverride_RunMadLibs)));
 
-                Control.harmony.Patch(AccessTools.Method(typeof(LanceOverride), "RunMadLibsOnLanceDef")
+                harmony.Patch(AccessTools.Method(typeof(LanceOverride), "RunMadLibsOnLanceDef")
                                      , new HarmonyMethod(typeof(DynamicTagsFix), nameof(LanceOverride_RunMadLibsOnLanceDef)));
 
-                Control.harmony.Patch(AccessTools.Method(typeof(UnitSpawnPointOverride), "RunMadLib")
+                harmony.Patch(AccessTools.Method(typeof(UnitSpawnPointOverride), "RunMadLib")
                                      , new HarmonyMethod(typeof(DynamicTagsFix), nameof(UnitSpawnPointOverride_RunMadLib)));
             });
         }
 
         public static void Contract_RunMadLib(Contract __instance, TagSet tagSet)
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
                 if (tagSet == null)
                     return;
@@ -55,7 +52,7 @@ namespace BattletechPerformanceFix
 
         public static bool LanceOverride_RunMadLibs(LanceOverride __instance, Contract contract)
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
                 Contract_RunMadLib(contract, __instance.lanceTagSet);
                 Contract_RunMadLib(contract, __instance.lanceExcludedTagSet);
@@ -72,7 +69,7 @@ namespace BattletechPerformanceFix
 
         public static bool LanceOverride_RunMadLibsOnLanceDef(LanceOverride __instance, Contract contract, LanceDef lanceDef)
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
                 if (contract != null)
                 {
@@ -99,7 +96,7 @@ namespace BattletechPerformanceFix
 
         public static bool UnitSpawnPointOverride_RunMadLib(UnitSpawnPointOverride __instance, Contract contract)
         {
-            Control.Trap(() =>
+            Trap(() =>
             {
                 Contract_RunMadLib(contract, __instance.unitTagSet);
                 Contract_RunMadLib(contract, __instance.unitExcludedTagSet);

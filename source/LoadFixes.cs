@@ -1,18 +1,9 @@
-using HBS.Logging;
 using Harmony;
-using System.Reflection;
-using BattleTech;
-using BattleTech.UI;
-using BattleTech.Data;
-using System.Diagnostics;
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Linq.Expressions;
-using System.Text;
-using System.Reflection.Emit;
-using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix {
     public class LoadFixes : Feature
@@ -22,11 +13,11 @@ namespace BattletechPerformanceFix {
             if (AppDomain.CurrentDomain.GetAssemblies()
                          .Any(asm => asm.GetName().Name == "Turbine"))
             {
-                Control.Log("LoadFixes disabled (Turbine is installed, and faster than LoadFixes)");
+                Log("LoadFixes disabled (Turbine is installed, and faster than LoadFixes)");
             }
             else
             {
-                Control.TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () =>
+                TrapAndTerminate("Patch HBS.Util.JSONSerializationUtility.StripHBSCommentsFromJSON", () =>
                 {
                     var strip = Control.CheckPatch( AccessTools.Method(typeof(HBS.Util.JSONSerializationUtility), "StripHBSCommentsFromJSON")
                                                   , "29006a2218c101f065bd70c30d7147495d0101799a09fe72e4d969f92a1d90fd");
@@ -42,7 +33,7 @@ namespace BattletechPerformanceFix {
         // Copied from HBS.Utils.JSONSerializationUtility temporarily
         public static string HBSStripCommentsMirror(string json)
         {
-            return Control.TrapAndTerminate("HBSStripCommentsMirror", () =>
+            return TrapAndTerminate("HBSStripCommentsMirror", () =>
             {
                 var self = new Traverse(typeof(HBS.Util.JSONSerializationUtility));
                 var csp = self.Field("commentSurroundPairs").GetValue<Dictionary<string,string>>();
@@ -79,14 +70,14 @@ namespace BattletechPerformanceFix {
                 fastJSON.JSON.Parse(json);
                 return json;
             }
-            catch (Exception e)
+            catch
             {
                 return HBSStripCommentsMirror(json);
             }
         }
 
         public static bool Prefix(string json, ref string __result) {
-            var res =  Control.TrapAndTerminate("DontStripComments.Prefix", () =>
+            var res =  TrapAndTerminate("DontStripComments.Prefix", () =>
             {
                 var sc = StripComments(json);
                 if (sc == null)

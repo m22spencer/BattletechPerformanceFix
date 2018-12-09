@@ -1,13 +1,9 @@
-using HBS.Logging;
 using Harmony;
-using BattleTech;
 using BattleTech.UI;
-using System.Collections.Generic;
 using System;
-using System.Linq;
 using System.Reflection;
 using System.Diagnostics;
-using static BattletechPerformanceFix.Control;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
