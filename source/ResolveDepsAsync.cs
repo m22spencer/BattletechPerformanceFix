@@ -201,6 +201,11 @@ namespace BattletechPerformanceFix
             harmony.Patch(AccessTools.Method(typeof(DataManager), "Exists"), new HarmonyMethod(AccessTools.Method(t, nameof(DataManager_Exists))));
 
 
+            typeof(AssetBundleManager)
+                .GetMethods(AccessTools.all)
+                .Where(meth => meth.Name == "IsBundleLoaded")
+                .ForEach(meth => 
+                          harmony.Patch(meth, new HarmonyMethod(AccessTools.Method(t, nameof(AssetBundleManager_IsBundleLoaded)))));
 
 
             var tdm = typeof(DataManager);
@@ -226,6 +231,10 @@ namespace BattletechPerformanceFix
                     harmony.Patch(AccessTools.Method(ildtype, "RequestDependencies"), Drop);
                 });
         } 
+
+        public static bool AssetBundleManager_IsBundleLoaded(string name, bool __result) {
+            return __result == Stuff.Bundles.ContainsKey(name);
+        }
 
         public static string Caller(int c = 2) {
             var frm = new StackFrame(c).GetMethod();
@@ -283,6 +292,7 @@ namespace BattletechPerformanceFix
             Trap("TextureManager_Contains", () => InterceptAssetChecks.DoCore(resourceId, RT.Texture2D, ___loadedTextures.ContainsKey, ___loadedTextures.GetValueSafe, ___loadedTextures.Add));
         }
 
+        static int depslevel = 0;
         static List<string> depsdb = null;
         static bool Fatal = false;
 
@@ -362,6 +372,7 @@ namespace BattletechPerformanceFix
                 else if (type == RT.SimGameSpeakers) return stuff.LoadMapper<isogame.ConversationSpeakerList, GameObject>( entry, type, id
                                                                                                                          , bytes => new SerializationStream(bytes).Let(SimGameConversationManager.LoadSpeakerListFromStream)
                                                                                                                          , null).PromiseObject();
+                else if (type == RT.AssetBundle) return Promise<object>.Resolved((object)Stuff.LoadBundle(id));
                 else return Promise<object>.Rejected(new Exception("Unhandled RT type " + type.AsString()));
             }
 
@@ -393,7 +404,7 @@ namespace BattletechPerformanceFix
 
             public static void DoCore(string id, RT type, Func<string,bool> Check, Func<string, object> Get, Action<string, object> Set)
             {
-                LogDebug($"{Caller(3)} DoCore {0}:{1}", id, type.AsString());
+                LogDebug("DoCore {0}:{1}", id, type.AsString());
                 if (Fatal)
                     return;
                 if (Check(id))
@@ -406,7 +417,7 @@ namespace BattletechPerformanceFix
                     if (depsdb != null)
                     {
                         LogDebug("DepsCheck :depth {0}", new StackTrace().FrameCount);
-                        Trap(() => depsdb.Add(id + ":" + type.AsString()));
+                        Trap(() => depsdb.Add(depslevel +" ! " + id + ":" + type.AsString()));
                     }
 
                     void CheckDependencies(DataManager.ILoadDependencies item)
@@ -422,8 +433,14 @@ namespace BattletechPerformanceFix
                         {
                             LogDebug("Check deps of {0}", id);
                             var ddbbackup = depsdb;
-                            depsdb = new List<string>();
+                            var root = depsdb == null;
+                            if (root) { depsdb = new List<string>();
+                                        depslevel = 0; }
+
+                            depslevel++;
                             Trap("DepsCheck2", () => item.DependenciesLoaded(100000));
+                            depslevel--;
+
                             var depsbak = depsdb;
                             depsdb = ddbbackup;
 
@@ -542,6 +559,8 @@ namespace BattletechPerformanceFix
                 : gtt == typeof(isogame.ConversationSpeakerList) ? (RT?)RT.SimGameSpeakers
                 : gtt == typeof(isogame.Conversation) ? (RT?)RT.SimGameConversations
                 : gtt == typeof(SimGameSubstitutionListDef) ? (RT?)RT.SimGameSubstitutionListDef
+                : gtt == typeof(PilotDef) ? (RT?)RT.PilotDef
+                : gtt == typeof(LanceDef) ? (RT?)RT.LanceDef
                 : null;
                 
             if(rtt != null) {
@@ -897,7 +916,7 @@ namespace BattletechPerformanceFix
 
         public static readonly string BundlesPath = Path.Combine(Application.streamingAssetsPath, "data/assetbundles");
         public static string AssetBundleNameToFilePath(string assetBundleName)
-            => Path.Combine(BundlesPath, assetBundleName);
+            => new Traverse(typeof(AssetBundleManager)).Method("AssetBundleNameToFilepath", assetBundleName).GetValue<string>();
 
         public static IEnumerable<string> GetBundleDependencies(string bundleName)
             => new Traverse(ResolveDepsAsync.stuff.bundleManager).Field("manifest").GetValue<AssetBundleManifest>().GetAllDependencies(bundleName);
@@ -906,7 +925,8 @@ namespace BattletechPerformanceFix
         public static AssetBundle LoadBundle(string bundleName) {
             if (Bundles.TryGetValue(bundleName, out var bundle)) return bundle;
             else { GetBundleDependencies(bundleName).ForEach(depName => LoadBundle(depName));
-                   var newBundle =  AssetBundle.LoadFromFile(AssetBundleNameToFilePath(bundleName)).NullCheckError($"Missing bundle {bundleName}");
+                   var path = AssetBundleNameToFilePath(bundleName);
+                   var newBundle =  AssetBundle.LoadFromFile(path).NullCheckError($"Missing bundle {bundleName} from {path}");
                    Bundles[bundleName] = newBundle;
                    return newBundle; }
         }
