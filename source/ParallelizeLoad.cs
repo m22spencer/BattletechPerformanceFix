@@ -47,7 +47,7 @@ namespace BattletechPerformanceFix
 
         public static void LevelLoader_Start() {
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log("LL start triggered :currentScenes {currentScenes}");
+            Log($"LL start triggered :currentScenes {currentScenes}");
         }
 
         public static void SimGameUXCreatorLoaded() {
@@ -55,14 +55,11 @@ namespace BattletechPerformanceFix
         }
 
         public static bool OnSimGameInitializeComplete(SimGameUXCreator __instance) {
-            Log("Sim game initialize complete");
-
-            var initUX = __instance.InitializeUXRoutine(); //. .Concat(new Traverse(__instance).Method("Start").GetValue<IEnumerator>());
-
-            CoroutineInvoker.InvokeCoroutine( __instance.InitializeUXRoutine()
-                                            , () => { Log("Initialize coroutine completed");
-                                                      Trap(() => new Traverse(__instance).Field("sim").GetValue<SimGameState>().SimGameUXCreatorLoaded());
-                                                      Log("UXCreatorLoaded ?"); });
+            Log($"Sim game initialize complete :frame {Time.frameCount} :time {Time.unscaledTime}");
+            __instance.InitializeUXRoutine().AsPromise()
+                      .Done(() => { Log($"Initialize coroutine completed :frame {Time.frameCount} :time {Time.unscaledTime}");
+                                    Trap(() => new Traverse(__instance).Field("sim").GetValue<SimGameState>().SimGameUXCreatorLoaded());
+                                    Log($"Load complete at :frame {Time.frameCount} :time {Time.unscaledTime}"); });
 
             return false;
         }
@@ -75,7 +72,7 @@ namespace BattletechPerformanceFix
                 uxc = __instance;
                 return false;
             } else {
-                Log("Accepting SimGameUXCreator.Awake");
+                Log($"Accepting SimGameUXCreator.Awake :frame {Time.frameCount} :time {Time.unscaledTime}");
                 return true;
             }
         }
@@ -95,70 +92,33 @@ namespace BattletechPerformanceFix
             }
         }
 
-        public static AsyncOperation Scene;
+        public static IPromise Scene;
         public static bool _OnBeginAttachUX(SimGameState __instance) {
             if (Scene == null) return true;  //Not our scene
             Log("Attach UX and do *not* load scene");
             __instance.DataManager.Clear(false, false, true, true, false);
             ActiveOrDefaultSettings.CloudSettings.customUnitsAndLances.UnMountMemoryStore(__instance.DataManager);
 
-            CoroutineInvoker.InvokeCoroutine(WaitScene(Scene), () => {
-                    if (!Scene.isDone) LogError("Scene is *not ready*");
-                    else { Log("Scene is loaded and done uxc? {0}", uxc != null, uxcs != null, Scene != null);
-                           SceneManager.SetActiveScene(SceneManager.GetSceneByName("SimGame"));
-                           SceneManager.GetAllScenes().ToList().ForEach(scn => Log($"Scene: {scn.name}"));
-                           new Traverse(uxc).Method("Awake").GetValue();
-                           Scene = null; }
-                });
+            Log($"_OnBeginAttachUX at :frame {Time.frameCount} :time {Time.unscaledTime}");
+            Scene.Done(() => { Log("Scene is loaded and done uxc? {0}", uxc != null, uxcs != null, Scene != null);
+                               SceneManager.SetActiveScene(SceneManager.GetSceneByName("SimGame"));
+                               SceneManager.GetAllScenes().ToList().ForEach(scn => Log($"Scene: {scn.name}"));
+                               new Traverse(uxc).Method("Awake").GetValue();
+                               Scene = null; });
             return false;
         }
 
         public static void _OnBeginDefsLoad() {
             uxcs = uxc = null;
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"Load defs in parallel to scene load :currentScenes {currentScenes}");
+            Log($"Load defs in parallel for :scene `SimGame` :frame {Time.frameCount} :time {Time.unscaledTime} :currentScenes {currentScenes}");
             // It would be optimal to remove shaders and effects and lower quality options here to ensure we spend no/little time rendering
             if (SceneManager.GetAllScenes().ToList().Exists(s => s.name == "SimGame")) { Log("Sim game exists already - unloading");
                                                                                          Trap(() => SceneManager.UnloadScene("SimGame"));
                                                                                          Log("Sim game unloaded"); }
-            Scene = Trap(() => SceneManager.LoadSceneAsync("SimGame", LoadSceneMode.Single));
-        }
-
-        public static IEnumerator WaitScene(AsyncOperation op) {
-            Log("[WaitScene] load scene");
-            while(!op.isDone) {
-                Log("[WaitScene] Scene not loaded. Waiting");
-                yield return null;
-            }
-            yield return null; // wait for single frame.
-            Log("[WaitScene] Done");
-        }
-    }
-
-    class CoroutineInvoker : MonoBehaviour {
-        public IEnumerator Enumerator;
-        public Action complete;
-        public void Start() {
-            Log("Invocation started");
-            StartCoroutine(InvokeWithComplete());
-            GameObject.DontDestroyOnLoad(this.gameObject);
-        }
-
-        public IEnumerator InvokeWithComplete() {
-            yield return StartCoroutine(Enumerator);
-            complete();
-        }
-
-
-        public static void InvokeCoroutine(IEnumerator enumerator, Action done) {
-            var go = new GameObject();
-            var invoker = go.AddComponent<CoroutineInvoker>();
-            invoker.Enumerator = enumerator;
-            invoker.complete = done;
-        }
-
-        public static void LoadSceneAsync(string scene, Action done) {
-
+            var sw = Stopwatch.StartNew();
+            Scene = Trap(() => SceneManager.LoadSceneAsync("SimGame", LoadSceneMode.Single).AsPromise());
+            Scene.Done(() => Log($"Scene `SimGame` loaded :frame {Time.frameCount} :time {Time.unscaledTime}"));
         }
     }
 }

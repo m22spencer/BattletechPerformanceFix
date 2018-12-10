@@ -89,7 +89,9 @@ namespace BattletechPerformanceFix {
         public static BPF_CoroutineInvoker Instance { get => instance ?? Init(); }
 
         static BPF_CoroutineInvoker Init() {
+            Extensions.Log("[BattletechPerformanceFix: Initializing a new coroutine proxy");
             var go = new UnityEngine.GameObject();
+            go.name = "BattletechPerformanceFix:CoroutineProxy";
             instance = go.AddComponent<BPF_CoroutineInvoker>();
             UnityEngine.GameObject.DontDestroyOnLoad(go);
 
