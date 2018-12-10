@@ -117,6 +117,7 @@ namespace BattletechPerformanceFix
                                                                                          Trap(() => SceneManager.UnloadScene("SimGame"));
                                                                                          Log("Sim game unloaded"); }
             var sw = Stopwatch.StartNew();
+            // FIXME: Can we use asyncOp.allowSceneActivation
             Scene = Trap(() => SceneManager.LoadSceneAsync("SimGame", LoadSceneMode.Single).AsPromise());
             Scene.Done(() => Log($"Scene `SimGame` loaded :frame {Time.frameCount} :time {Time.unscaledTime}"));
         }
