@@ -31,12 +31,12 @@ namespace BattletechPerformanceFix
 
         private static StreamWriter LogStream;
 
-        public static string LogLevel = "Log";
+        public static string LogLevel = "Debug";
 
         public static void __Log(string msg, params object[] values)
         {
             try { 
-                var omsg = string.Format(msg, values);
+                var omsg = Trap(() => string.Format(msg, values));
                 LogStream.WriteLine(omsg);
                 LogStream.Flush();
 
@@ -114,7 +114,8 @@ namespace BattletechPerformanceFix
 
                 var settings = JsonConvert.DeserializeObject<Settings>(File.ReadAllText(SettingsPath));
 
-                Log(settings.logLevel);
+                Log($"LogLevel {settings.logLevel}");
+                LogLevel = settings.logLevel;
 
                 harmony = HarmonyInstance.Create(ModFullName);
 
