@@ -34,6 +34,9 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch(AccessTools.Method(typeof(BattleTech.LevelLoader), nameof(LoadScene)), new HarmonyMethod(AccessTools.Method(self, nameof(LoadScene))));
             Main.harmony.Patch(AccessTools.Method(typeof(BattleTech.LevelLoader), "Start"), new HarmonyMethod(AccessTools.Method(self, nameof(LevelLoader_Start))));
 
+
+            Main.harmony.Patch(AccessTools.Method(typeof(MissionResults), "Init"), new HarmonyMethod(AccessTools.Method(self, nameof(_OnBeginDefsLoad))));
+
         }
 
         public static void LoadScene(string scene) {
@@ -100,7 +103,7 @@ namespace BattletechPerformanceFix
 
             CoroutineInvoker.InvokeCoroutine(WaitScene(Scene), () => {
                     if (!Scene.isDone) LogError("Scene is *not ready*");
-                    else { Log("Scene is loaded and done uxc? {0}", uxc != null);
+                    else { Log("Scene is loaded and done uxc? {0}", uxc != null, uxcs != null, Scene != null);
                            SceneManager.SetActiveScene(SceneManager.GetSceneByName("SimGame"));
                            SceneManager.GetAllScenes().ToList().ForEach(scn => Log($"Scene: {scn.name}"));
                            new Traverse(uxc).Method("Awake").GetValue();
