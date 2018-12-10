@@ -73,6 +73,10 @@
       <HintPath>$(BTechData)System.Data.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="RSG.Promise">
+      <HintPath>../libs/RSG.Promise.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="System.Data.SQLite, Version=1.0.109.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
       <HintPath>../System.Data.SQLite.dll</HintPath>
     </Reference>

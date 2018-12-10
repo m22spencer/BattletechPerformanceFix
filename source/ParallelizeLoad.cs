@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 
 using Harmony;
+using RSG;
 
 using UnityEngine;
 using UnityEngine.SceneManagement;

@@ -1,5 +1,8 @@
 using System;
+using RSG;
+using UnityEngine;
 using System.Linq;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace BattletechPerformanceFix {
@@ -61,6 +64,46 @@ namespace BattletechPerformanceFix {
             => System.Diagnostics.Process.GetCurrentProcess().Kill();
 
 
+        public static IPromise AsPromise(this IEnumerator coroutine) {
+            var prom = new Promise();
+            BPF_CoroutineInvoker.Invoke(coroutine, prom.Resolve);
+            return prom;
+        }
+
+        public static IPromise AsPromise(this AsyncOperation operation) {
+            IEnumerator TillDone() { while (!operation.isDone) { yield return null; }
+                                     yield return null; } // Post Awake
+            return TillDone().AsPromise();
+        }
+
+        public static IPromise WaitAFrame(this Promise p) {
+            IEnumerator OneFrame() { yield return null; }
+            var next = new Promise();
+            p.Done(() => BPF_CoroutineInvoker.Invoke(OneFrame(), next.Resolve));
+            return next;
+        }
+    }
+
+    class BPF_CoroutineInvoker : UnityEngine.MonoBehaviour {
+        static BPF_CoroutineInvoker instance = null;
+        public static BPF_CoroutineInvoker Instance { get => instance ?? Init(); }
+
+        static BPF_CoroutineInvoker Init() {
+            var go = new UnityEngine.GameObject();
+            instance = go.AddComponent<BPF_CoroutineInvoker>();
+            UnityEngine.GameObject.DontDestroyOnLoad(go);
+
+            return instance;
+        }
+
+        public static void Invoke(IEnumerator coroutine, Action done) {
+            Instance.StartCoroutine(Proxy(coroutine, done));
+        }
+
+        static IEnumerator Proxy(IEnumerator coroutine, Action done) {
+            yield return Instance.StartCoroutine(coroutine);
+            done();
+        }
     }
 }
     
