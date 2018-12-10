@@ -101,7 +101,7 @@ namespace BattletechPerformanceFix
         public static void Post()
         {
             sw.Stop();
-            LogDebug("UpdateEncounterObjectRef {0}: {1} ms total", ct++, sw.Elapsed.TotalMilliseconds);
+            //LogDebug("UpdateEncounterObjectRef {0}: {1} ms total", ct++, sw.Elapsed.TotalMilliseconds);
         }
     }
 }
