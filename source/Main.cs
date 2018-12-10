@@ -3,7 +3,9 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Reflection;
+using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
 using static BattletechPerformanceFix.Extensions;
@@ -77,7 +79,6 @@ namespace BattletechPerformanceFix
             return meth;
         }
 
-
         public static void Start(string modDirectory, string json)
         {
             var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
@@ -89,7 +90,7 @@ namespace BattletechPerformanceFix
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-[soon to be redacted]-MDDB-Windows-No-Copy-Required-Edition");
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-parallelize");
             
             Trap(() =>
             {
@@ -127,7 +128,8 @@ namespace BattletechPerformanceFix
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
                     { typeof(MDDB_InMemoryCache), true },
-                    { typeof(ContractLagFix), true }
+                    { typeof(ContractLagFix), true },
+                    { typeof(ParallelizeLoad), true }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
@@ -164,8 +166,7 @@ namespace BattletechPerformanceFix
                 Trap(() => PatchMechlabLimitItems.Initialize());
             });
         }
-
-            }
+    }
 
     public interface Feature
     {

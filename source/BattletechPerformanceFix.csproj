@@ -35,7 +35,7 @@
     <LangVersion>default</LangVersion>
   </PropertyGroup>
   <PropertyGroup>
-    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
+    <RunPostBuildEvent>Always</RunPostBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
     <IsWindows Condition="'$(OS)' == 'Windows_NT'">true</IsWindows>
@@ -102,6 +102,7 @@
     <Compile Include="NoSalvageSoftlock.cs" />
     <Compile Include="LazyRoomInitialization.cs" />
     <Compile Include="LoadFixes.cs" />
+    <Compile Include="ParallelizeLoad.cs" />
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
     <Compile Include="PatchMechLabPanelLoadThrottling.cs" />
