@@ -2,6 +2,7 @@ using System;
 using RSG;
 using UnityEngine;
 using System.Linq;
+using System.Diagnostics;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -71,8 +72,15 @@ namespace BattletechPerformanceFix {
         }
 
         public static IPromise AsPromise(this AsyncOperation operation) {
-            IEnumerator TillDone() { while (!operation.isDone) { yield return null; }
-                                     yield return null; } // Post Awake
+            IEnumerator TillDone() { var timer = Stopwatch.StartNew();
+                                     while (!operation.isDone && operation.progress < .9f) { yield return null; }
+                                     var loadTime = timer.Elapsed.TotalSeconds;
+                                     while (!operation.allowSceneActivation) { yield return null; }
+                                     timer.Reset(); timer.Start();
+                                     while (!operation.isDone) { yield return null; }
+                                     yield return null;  // Let scene run Awake/Start
+                                     var initTime = timer.Elapsed.TotalSeconds;
+                                     LogDebug($"Scene fetched in {loadTime + initTime} seconds. :load ({loadTime} seconds) :init ({initTime} seconds)"); }
             return TillDone().AsPromise();
         }
 
