@@ -24,7 +24,6 @@ namespace BattletechPerformanceFix
         public void Activate() {
             var sgs = typeof(SimGameState);
             var self = typeof(ParallelizeLoad);
-            Main.harmony.Patch(AccessTools.Method(sgs, nameof(_OnBeginAttachUX)), new HarmonyMethod(AccessTools.Method(self, nameof(_OnBeginAttachUX))));
 
             // For some reason, triggering a scene load before _OnBeginDefsLoad is invoked causes the UI to never initiate. Postfix to avoid this.
             Main.harmony.Patch(AccessTools.Method(sgs, nameof(_OnBeginDefsLoad)), null, new HarmonyMethod(AccessTools.Method(self, nameof(_OnBeginDefsLoad))));
@@ -37,9 +36,20 @@ namespace BattletechPerformanceFix
 
         }
 
+        public static void HandleScene() {
+            Log($"Handling intercepted scene {SceneName}");
+            SceneOp.allowSceneActivation = true;
+            Scene.Done(() => { Log($"Activating scene {SceneName}");
+                               SceneManager.SetActiveScene(SceneManager.GetSceneByName(SceneName));
+                               Scene = null; // This may need to apply next frame to prevent LL.Start from handling our custom load
+                             });
+
+        }
+
         public static bool LoadScene(string scene) {
             if (Scene != null) {
                 Log($"LL.LoadScene intercepted for :scene {scene}");
+                HandleScene();
                 return false;
             }
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
@@ -50,32 +60,18 @@ namespace BattletechPerformanceFix
         public static bool LevelLoader_Start() {
             if (Scene != null) {
                 Log($"LL.Start intercepted");
+                Scene = null;
                 return false;
             }
 
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"LL start triggered :currentScenes {currentScenes}");
+            Log($"LL.Start triggered :currentScenes {currentScenes}");
             return true;
         }
 
+        public static string SceneName;
         public static IPromise Scene;
         public static AsyncOperation SceneOp;
-        public static bool _OnBeginAttachUX(SimGameState __instance) {
-            if (Scene == null) return true; //Not our scene
-            Log($"Attach UX and do *not* load scene from {new StackTrace().ToString()}");
-            __instance.DataManager.Clear(false, false, true, true, false);
-            ActiveOrDefaultSettings.CloudSettings.customUnitsAndLances.UnMountMemoryStore(__instance.DataManager);
-
-            SceneOp.allowSceneActivation = true;
-
-            Log($"_OnBeginAttachUX at :frame {Time.frameCount} :time {Time.unscaledTime}");
-            Scene.Done(() => { Log("Scene is loaded and done? {0}", Scene != null);
-                               SceneManager.SetActiveScene(SceneManager.GetSceneByName("SimGame"));
-                               SceneManager.GetAllScenes().ToList().ForEach(scn => Log($"Scene: {scn.name}"));
-                               Scene = null; });
-            return false;
-        }
-
         public static void _OnBeginDefsLoad() {
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
             Log($"Load defs in parallel for :scene `SimGame` :frame {Time.frameCount} :time {Time.unscaledTime} :currentScenes {currentScenes} :from \r\n{new StackTrace().ToString()}");
@@ -91,6 +87,7 @@ namespace BattletechPerformanceFix
                     var op = SceneManager.LoadSceneAsync("SimGame", LoadSceneMode.Single);
                     SceneOp = op;
                     op.allowSceneActivation = false;
+                    SceneName = "SimGame";
                     Scene = op.AsPromise();
                     Scene.Done(() => Log($"Scene `SimGame` loaded :frame {Time.frameCount} :time {Time.unscaledTime}"));
                 });
