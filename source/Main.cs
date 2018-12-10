@@ -24,8 +24,8 @@ namespace BattletechPerformanceFix
         public static readonly string ModName = "BattletechPerformanceFix";
         public static readonly string ModPack = "com.github.m22spencer";
         public static readonly string ModFullName = string.Format("{0}.{1}", ModPack, ModName);
-        public static readonly string ModDir = "./Mods/BattletechPerformanceFix";
-        public static readonly string SettingsPath = Path.Combine(ModDir, "Settings.json");
+        public static string ModDir;
+        public static string SettingsPath { get => Path.Combine(ModDir, "Settings.json"); }
 
         public static Type ModTekType = AppDomain.CurrentDomain.GetAssemblies().SelectMany(ty => ty.GetTypes()).FirstOrDefault(ty => ty.FullName == "ModTek.ModTek");
 
@@ -81,6 +81,7 @@ namespace BattletechPerformanceFix
 
         public static void Start(string modDirectory, string json)
         {
+            ModDir = modDirectory;
             var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
@@ -91,6 +92,7 @@ namespace BattletechPerformanceFix
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
             Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-parallelize");
+            Log("Mod-Dir? {0}", ModDir);
             
             Trap(() =>
             {
