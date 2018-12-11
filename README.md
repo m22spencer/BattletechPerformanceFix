@@ -26,13 +26,15 @@ For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop
 - ShopTabLagFix
    - Prevents BattleTech from sorting the item list every single time an item is added.
    - Exponential speedup (Hoarders/Late game players will see the most benefit)
-   
 - MDDB_InMemoryCache
    - Prevent the hang on HBS logo + general game speedup by transferring the disk MDDB to an in memory one.
 - ContractLagFix
    - Speeds up Contract generation in the command center, and removes some stutter from battle when completing objectives.
 - ParallelizeLoad (Disabled by default: Experimental, Dangerous)
    - An in progress patch, it is recommended you do not enable this patch at this time.
+- MechLabFix (Currently cannot be disabled)
+   - Replace the MechLab UI with a virtual one, which allocates only enough prefabs for what you're currently seeing on the screen.
+   - This fix sees more gain for late game players with lots of items inventory.
 
 # How do I disable/enable X
    Set it to `true` or `false` in `BATTLETECH/Mods/BattletechPerformanceFix/Settings.json`
