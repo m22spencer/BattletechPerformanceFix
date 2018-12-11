@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Reflection;
+using System.Reflection.Emit;
+using O = System.Reflection.Emit.OpCodes;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,6 +12,8 @@ using Harmony;
 using BattleTech;
 using BattleTech.Assetbundles;
 using BattleTech.Data;
+using BattleTech.Rendering.MechCustomization;
+using SVGImporter;
 using static BattletechPerformanceFix.Extensions;
 using RT = BattleTech.BattleTechResourceType;
 
@@ -36,8 +41,8 @@ namespace BattletechPerformanceFix
 
         public static void DataManager_ProcessRequests(DataManager __instance) {
             var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
-            var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}").ToArray());
-            Log($"ProcessRequests {NeedsManualAnnounce} [{byid}]");
+            var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}").Take(10).ToArray());
+            Log($"ProcessRequests {NeedsManualAnnounce} :10waiting [{byid}] from {new StackTrace().ToString()}");
             if (NeedsManualAnnounce && new Traverse(__instance).Method("CheckRequestsComplete").GetValue<bool>()) {
                 // This might cause double load messages, but we need to inform of a load complete in case we blocked all the requests
                 LogDebug("DM queue requires manual announce");
@@ -105,6 +110,35 @@ namespace BattletechPerformanceFix
             return true;
         }
 
+        public static void RequestAssetProxy<T>(BattleTechResourceType type, string id, Action<object> loadedCallback) where T : UnityEngine.Object {
+            LogError($"ABM_RequestAsset: {id}:{type.ToString()} from {new StackTrace().ToString()}");
+
+            var entry = Trap(() => lookupId(id));
+            if (entry == null)
+                LogError($"Missing entry for {id}:{type.ToString()}");
+
+            if (!entry.IsAssetBundled)
+                LogError($"ABM asset not bundled: {id}:{type.ToString()}");
+
+            var asset = Trap(() => LoadAssetFromBundle(id, entry.AssetBundleName));
+            LogDebug($"Recieved asset of type {asset.GetType()}");
+
+            Trap(() => loadedCallback(asset));
+        }
+
+        public static IEnumerable<CodeInstruction> AssetBundleManager_RequestAsset(ILGenerator gen, MethodBase method, IEnumerable<CodeInstruction> _) {
+            LogDebug($"Transpiling {method.ToString()}");
+            var wcmeth = AccessTools.Method(typeof(OverridePrefabCache), "RequestAssetProxy", null, Array(method.GetGenericArguments()[0]));
+            LogDebug($"Redirection to {wcmeth.ToString()}");
+            //return Sequence( new CodeInstruction(O.Ret));
+            return Sequence( new CodeInstruction(O.Ldarg_1) // type
+                           , new CodeInstruction(O.Ldarg_2) // id
+                           , new CodeInstruction(O.Ldarg_3) // loadedCallback
+                           , new CodeInstruction(O.Call, wcmeth)
+                           , new CodeInstruction(O.Ret));
+        }
+
+
         public static string AssetBundleNameToFilePath(string assetBundleName)
             => new Traverse(typeof(AssetBundleManager)).Method("AssetBundleNameToFilepath", assetBundleName).GetValue<string>();
 
@@ -143,6 +177,7 @@ namespace BattletechPerformanceFix
             messageCenter = new Traverse(dataManager).Property("MessageCenter").GetValue<MessageCenter>().NullCheckError("Unable to find MessageCenter");
         }
 
+        
         public static MessageCenter messageCenter;
         public static DataManager dataManager;
         public static AssetBundleManager bundleManager;
@@ -165,13 +200,23 @@ namespace BattletechPerformanceFix
                               , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_Exists))));
 
 
-
-            Main.harmony.Patch( AccessTools.Method(typeof(PrefabCache), "IsPrefabInPool")
+            var pc = typeof(PrefabCache);
+            Main.harmony.Patch( AccessTools.Method(pc, "IsPrefabInPool")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_IsPrefabInPool))));
-            Main.harmony.Patch( AccessTools.Method(typeof(PrefabCache), "PooledInstantiate")
+            Main.harmony.Patch( AccessTools.Method(pc, "PooledInstantiate")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_PooledInstantiate))));
-            Main.harmony.Patch( AccessTools.Method(typeof(PrefabCache), "GetPooledPrefab")
+            Main.harmony.Patch( AccessTools.Method(pc, "GetPooledPrefab")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_GetPooledPrefab))));
+
+            var abm = typeof(AssetBundleManager);
+            var meth = AccessTools.Method(abm, "RequestAsset");
+            meth.NullCheckError("RequestAsset not found");
+            Log($"RequestAsset is hookable? {!meth.IsGenericMethodDefinition}");
+            Sequence( typeof(ColorSwatch), typeof(TextAsset), typeof(Sprite)
+                    , typeof(SVGAsset), typeof(Texture2D))
+                .ForEach(inner => Main.harmony.Patch( meth.MakeGenericMethod(inner)
+                                                    , null, null
+                                                    , new HarmonyMethod(AccessTools.Method(self, nameof(AssetBundleManager_RequestAsset)))));
 
 
 

@@ -123,6 +123,19 @@ namespace BattletechPerformanceFix {
             LogDebug("Dropping call to {new StackFrame(1).ToString()}");
             return false;
         }
+
+        public static HarmonyMethod Yes = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__Yes)));
+        public static bool  __Yes(ref bool __result) {
+            LogDebug("Saying yes to to {new StackFrame(1).ToString()}");
+            __result = true;
+            return false;
+        }
+        public static HarmonyMethod No = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__No)));
+        public static bool  __No(ref bool __result) {
+            LogDebug("Saying yes to to {new StackFrame(1).ToString()}");
+            __result = false;
+            return false;
+        }
     }
 
     class BPF_CoroutineInvoker : UnityEngine.MonoBehaviour {
