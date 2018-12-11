@@ -23,6 +23,19 @@ namespace BattletechPerformanceFix
             return false;
         }
 
+        public static bool DataManager_RequestResource_Internal(BattleTechResourceType resourceType, string identifier) {
+            if (resourceType == RT.Prefab || resourceType == RT.UIModulePrefabs) {
+                LogDebug($"Blocking DM request of prefab {identifier}");
+                return false;
+            }
+            return true;
+        }
+
+        public static bool DataManager_PrecachePrefab(string id) {
+            LogDebug($"PrecachePrefab? No, no thank you.");
+            return false;
+        }
+
         public static bool PrefabCache_PooledInstantiate(ref GameObject __result, string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
             LogDebug($"PC PooledInstantiate: {id}");
 
@@ -56,7 +69,7 @@ namespace BattletechPerformanceFix
         }
 
         public static bool PrefabCache_IsPrefabInPool(string id, ref bool __result) {
-            LogDebug($"PC IsPrefabInPool: {id}? Sure, why not.");
+            LogDebug($"PC IsPrefabInPool: {id}? Sure, why not. from {new StackTrace().ToString()}");
             __result = true;
 
             return false;
@@ -107,9 +120,15 @@ namespace BattletechPerformanceFix
             var self = typeof(OverridePrefabCache);
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "SetUnityDataManagers")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_SetUnityDataManagers))));
-
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "PooledInstantiate")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_PooledInstantiate))));
+            Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "RequestResource_Internal")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_RequestResource_Internal))));
+            Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "PrecachePrefab")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_PrecachePrefab))));
+
+
+
             Main.harmony.Patch( AccessTools.Method(typeof(PrefabCache), "IsPrefabInPool")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_IsPrefabInPool))));
             Main.harmony.Patch( AccessTools.Method(typeof(PrefabCache), "PooledInstantiate")
