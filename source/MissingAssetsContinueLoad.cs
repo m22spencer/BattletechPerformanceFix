@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using Harmony;
+using System.IO;
 using BattleTech;
+using BattleTech.UI;
 using BattleTech.Data;
 using static BattletechPerformanceFix.Extensions;
 
@@ -22,12 +24,43 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch( rri
                                  , m
                                  , null);
+
+            Main.harmony.Patch( AccessTools.Method(typeof(DataManager), "Update")
+                              , null
+                              , new HarmonyMethod(typeof(MissingAssetsContinueLoad), nameof(MissingAssetsContinueLoad.TryAlertUser)));
+        }
+
+        public static void TryAlertUser() {
+            if (Substitutions.Count > 0 && !InDialog) {
+                InDialog = true;
+
+                var msg = "The following substitutions occurred:\n";
+                var subs = Substitutions.Take(10); //10 at a time to not flow off the screen
+                Substitutions = Substitutions.Skip(10).ToList();
+
+                foreach(var sub in subs)
+                    msg += $"{sub}\n";
+
+                GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create("Error: Missing asset", $"<align=\"left\">{msg}</align>");
+                genericPopupBuilder.Render();
+                genericPopupBuilder.OnClose = () => InDialog = false;
+            }
         }
         
-        public static void RequestResource_Internal(DataManager __instance, BattleTechResourceType resourceType, ref string identifier)
+        public static bool InDialog = false;
+        public static List<string> Substitutions = new List<string>();
+        public static void RequestResource_Internal(DataManager __instance, BattleTechResourceType resourceType, string identifier)
         {
             try
             {
+                void WithDummyItem(Action<VersionManifestEntry> f) {
+                    var manifest = (VersionManifest)new Traverse(__instance.ResourceLocator).Property("manifest").GetValue();
+                    var dummies = manifest.Entries.Where(e => resourceType == (BattleTechResourceType)Enum.Parse(typeof(BattleTechResourceType), e.Type));
+                    if (dummies.Any()) {
+                        f(dummies.First());
+                    }
+                }
+
                 var versionManifestEntry = __instance.ResourceLocator.EntryByID(identifier, resourceType);
                 if (versionManifestEntry == null)
                 {
@@ -35,27 +68,26 @@ namespace BattletechPerformanceFix
                     // So we find the first asset of the same type
                     var manifest = (VersionManifest)new Traverse(__instance.ResourceLocator).Property("manifest").GetValue();
                     var dummies = manifest.Entries.Where(e => resourceType == (BattleTechResourceType)Enum.Parse(typeof(BattleTechResourceType), e.Type));
-                    if (dummies.Any())
-                    {
-                        // Hopefully there is one, or you're screwed.
-                        var dummy = dummies.First();
-                        var dummyId = dummy.Id;
-                        LogDebug("Missing asset {0}, replacing with dummy {1}", identifier, dummyId);
+                    WithDummyItem(dummy => {
+                            var dummyId = dummy.Id;
+                            LogDebug("Missing asset {0}, replacing with dummy {1}", identifier, dummyId);
 
-                        var d = Traverse.Create(dummy);
+                            Substitutions.Add($"[id]{identifier} -> {dummyId}");
 
-                        // Copy the dummy asset, change its identifier and add it to the manifest
-                        var ve = new VersionManifestEntry(identifier
-                            , d.Field("path").GetValue<string>()
-                            , d.Field("type").GetValue<string>()
-                            , VersionManifestUtilities.StringToDateTime(d.Field("addedOn").GetValue<string>())
-                            , d.Field("version").GetValue<string>()
-                            , d.Field("assetBundleName").GetValue<string>());
-                        var mfdb = Traverse.Create(__instance.ResourceLocator)
-                            .Field("baseManifest")
-                            .GetValue<Dictionary<BattleTechResourceType, Dictionary<string, VersionManifestEntry>>>();
-                        mfdb[resourceType].Add(identifier, ve);
-                    }
+                            var d = Traverse.Create(dummy);
+
+                            // Copy the dummy asset, change its identifier and add it to the manifest
+                            var ve = new VersionManifestEntry(identifier
+                                                             , d.Field("path").GetValue<string>()
+                                                             , d.Field("type").GetValue<string>()
+                                                             , VersionManifestUtilities.StringToDateTime(d.Field("addedOn").GetValue<string>())
+                                                             , d.Field("version").GetValue<string>()
+                                                             , d.Field("assetBundleName").GetValue<string>());
+                            var mfdb = Traverse.Create(__instance.ResourceLocator)
+                                               .Field("baseManifest")
+                                               .GetValue<Dictionary<BattleTechResourceType, Dictionary<string, VersionManifestEntry>>>();
+                            mfdb[resourceType].Add(identifier, ve);
+                        });
                 }
             }
             catch (Exception e)
