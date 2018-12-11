@@ -31,6 +31,10 @@ namespace BattletechPerformanceFix
 
         public static bool NeedsManualAnnounce = false;
         public static bool DataManager_RequestResource_Internal(BattleTechResourceType resourceType, string identifier) {
+            if (resourceType == RT.AssetBundle) {
+                LogError($"DM RRI Asset bundle passed through, but we didn't handle it {identifier}");
+            }
+
             if (resourceType == RT.Prefab || resourceType == RT.UIModulePrefabs) {
                 // It's possible we'll have to resort to a dummy load item which simply immediately completes, but I'd rather not have the message overhead.
                 LogDebug($"Blocking DM request of prefab {identifier}");
@@ -69,7 +73,10 @@ namespace BattletechPerformanceFix
 
             GameObject Load() {
                 var entry = lookupId(id);
-                if (entry.IsResourcesAsset) {
+                if (entry == null) {
+                    LogError($"Failed to find asset: {id} in the manifest from {new StackTrace().ToString()}");
+                    return null;
+                } else if (entry.IsResourcesAsset) {
                     LogDebug($"Loading {id} from disk");
                     return Resources.Load(entry.ResourcesLoadPath).SafeCast<GameObject>();
                 } else if (entry.IsAssetBundled) {
@@ -82,7 +89,9 @@ namespace BattletechPerformanceFix
             }
             
             var prefab = Prefabs.GetWithDefault(id, () => Load());
-            if (prefab == null) LogError($"A prefab({id}) was nulled, but I was never told");
+            if (prefab == null) { LogError($"A prefab({id}) was nulled, but I was never told");
+                                  __result = null;
+                                  return false; }
             else LogDebug($"Found prefab for {id}");
             var ptransform = prefab.transform;
             var obj = GameObject.Instantiate( prefab
@@ -108,10 +117,16 @@ namespace BattletechPerformanceFix
                 __result = true;
                 return false;
             }
+            if (resourceType == RT.AssetBundle) {
+                LogDebug("DM E Exists check on asset bundle {id]");
+                return Bundles.ContainsKey(id);
+            }
+
             return true;
         }
 
-        public static void RequestAssetProxy<T>(BattleTechResourceType type, string id, Action<object> loadedCallback) where T : UnityEngine.Object {
+        public static void RequestAssetProxy<T>(BattleTechResourceType type, string id, Action<object> lc) where T : UnityEngine.Object {
+            Action<object> loadedCallback = (a) => WaitAFrame().Done(() => lc(a));
             var entry = Trap(() => lookupId(id, type));
             LogError($"ABM_RequestAsset: {id}:{type.ToString()} (manifest says {entry?.Type})");
 
@@ -204,6 +219,7 @@ namespace BattletechPerformanceFix
             dataManager = __instance;
             bundleManager = assetBundleManager;
             messageCenter = new Traverse(dataManager).Property("MessageCenter").GetValue<MessageCenter>().NullCheckError("Unable to find MessageCenter");
+            messageCenter.AddSubscriber(MessageCenterMessageType.OnInitializeContractComplete, msg => LogDebug("OnInitalizeContractComplete message"));
         }
 
         
@@ -247,6 +263,9 @@ namespace BattletechPerformanceFix
                                                     , null, null
                                                     , new HarmonyMethod(AccessTools.Method(self, nameof(AssetBundleManager_RequestAsset)))));
 
+            Main.harmony.Patch( AccessTools.Method(abm, "IsBundleLoaded", Array(typeof(string))), Yes);
+            
+
             // Temporary hooks used for debugging
             var b = typeof(Briefing);
             AccessTools.Method(b, "Init").Track();
@@ -255,10 +274,39 @@ namespace BattletechPerformanceFix
             AccessTools.Method(b, "LevelLoaded").Track();
             AccessTools.Method(b, "HandleNetworkFailure").Track();
 
+            var e = typeof(EncounterLayerParent);
+            AccessTools.Method(e, "InitializeContract").Track();
+            AccessTools.Method(e, "UpdateEncounterLayerList").Track();
+            AccessTools.Method(e, "FirstTimeInitialization").Track();
+            AccessTools.Property(typeof(CombatGameState), "IsLoadingFromSave").GetGetMethod().Track();
+            AccessTools.Method(typeof(EncounterLayerData), "BuildItemRegistry").Track();
+            AccessTools.Method(typeof(EncounterLayerData), "ContractInitialize").Track();
+            AccessTools.Method(typeof(EncounterObjectGameLogic), "EncounterStart").Track();
+            Main.harmony.Patch( AccessTools.Method(typeof(MessageCenter), "PublishMessage")
+                              , new HarmonyMethod(AccessTools.Method(typeof(OverridePrefabCache), nameof(PublishMessage))));
+
             Main.harmony.Patch( AccessTools.Method(typeof(GameRepresentation), "SetHighlightAlpha")
                               , Drop);
+
+            // This call is crashing, and I believe the logs are still disabled?
+            Main.harmony.Patch( AccessTools.Method(e, "FirstTimeInitialization")
+                              , new HarmonyMethod(AccessTools.Method(typeof(OverridePrefabCache), nameof(Yada))));
         }
 
         public static Dictionary<string,GameObject> Prefabs = new Dictionary<string,GameObject>();
+
+
+        public static void Yada() {
+            var s = $"YADA {HBS.Logging.Logger.IsLogging} -> true and {UnityEngine.Debug.logger.logEnabled} -> true";
+            HBS.Logging.Logger.IsLogging = true;
+            UnityEngine.Debug.logger.logEnabled = true;
+            Log(s);
+        }
+
+        public static void PublishMessage(MessageCenterMessage message) {
+            LogDebug($"Tracked message center message: {message.GetType()}");
+        }
+
     }
+
 }

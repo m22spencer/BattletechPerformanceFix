@@ -107,7 +107,11 @@ namespace BattletechPerformanceFix {
             return TillDone().AsPromise();
         }
 
-        public static IPromise WaitAFrame(this Promise p) {
+
+        public static IPromise WaitAFrame()
+            => Promise.Resolved().WaitAFrame();
+
+        public static IPromise WaitAFrame(this IPromise p) {
             IEnumerator OneFrame() { yield return null; }
             var next = new Promise();
             p.Done(() => BPF_CoroutineInvoker.Invoke(OneFrame(), next.Resolve));
