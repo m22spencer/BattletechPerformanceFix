@@ -10,8 +10,10 @@ using RSG;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using BattleTech;
+using BattleTech.Data;
 using BattleTech.UI;
 using BattleTech.Save;
+using System.Reflection;
 using System.Diagnostics;
 using static BattletechPerformanceFix.Extensions;
 
@@ -31,9 +33,40 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch(AccessTools.Method(typeof(BattleTech.LevelLoader), nameof(LoadScene)), new HarmonyMethod(AccessTools.Method(self, nameof(LoadScene))));
             Main.harmony.Patch(AccessTools.Method(typeof(BattleTech.LevelLoader), "Start"), new HarmonyMethod(AccessTools.Method(self, nameof(LevelLoader_Start))));
 
-
             Main.harmony.Patch(AccessTools.Method(typeof(MissionResults), "Init"), new HarmonyMethod(AccessTools.Method(self, nameof(_OnBeginDefsLoad))));
 
+
+            var watchMeths = List("Awake", "PooledInstantiate"); //, "Start");
+
+            var allmeths = List(typeof(SimGameUXCreator))
+                .Select(Assembly.GetAssembly)
+                .SelectMany(asm => asm.GetTypes())
+                .Where(type => !type.IsGenericType && !type.IsGenericTypeDefinition && !type.FullName.Contains("HBS.Stopwatch"))
+                .SelectMany(types => types.GetMethods(AccessTools.all))
+                .Where(meth => watchMeths.Contains(meth.Name) && !meth.IsGenericMethodDefinition && !meth.IsGenericMethod)
+                .ToList();
+            allmeths.ForEach(meth => meth.Instrument());
+
+            var resl = typeof(Resources).GetMethods(AccessTools.all)
+                             .Where(meth => meth.Name == "Load" && !meth.IsGenericMethod && !meth.IsGenericMethodDefinition && meth.GetMethodBody() != null)
+                             .SingleOrDefault();
+
+            if (resl == null)
+                LogError("RESU null");
+            resl.Instrument();
+            
+            var resu = typeof(BattleTech.Assetbundles.AssetBundleManager).GetMethods(AccessTools.all)
+                                                                         .Where(meth => meth.Name == "GetAssetFromBundle")
+                                                                         .SingleOrDefault();
+
+            if (resu == null)
+                LogError("RESU null");
+            resu.MakeGenericMethod(typeof(GameObject)).Instrument();
+
+            //Main.harmony.Patch(AccessTools.Method(typeof(PrefabCache), "Clear"), new HarmonyMethod(AccessTools.Method(self, "Clear")));
+
+            Main.harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SimGameOptionsMenu), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(self, "Summary")));
+            Main.harmony.Patch(AccessTools.Method(typeof(SGLoadSavedGameScreen), "LoadSelectedSlot"), new HarmonyMethod(AccessTools.Method(self, "Summary")));
         }
 
         public static void HandleScene() {
