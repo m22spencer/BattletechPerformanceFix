@@ -1,6 +1,7 @@
 using System;
 using RSG;
 using UnityEngine;
+using Harmony;
 using System.Linq;
 using System.Reflection;
 using System.Diagnostics;
@@ -115,6 +116,13 @@ namespace BattletechPerformanceFix {
 
         public static void Instrument(this MethodBase meth)
             => SimpleMetrics.Instrument(meth);
+
+
+        public static HarmonyMethod Drop = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__Drop)));
+        public static bool  __Drop() {
+            LogDebug("Dropping call to {new StackFrame(1).ToString()}");
+            return false;
+        }
     }
 
     class BPF_CoroutineInvoker : UnityEngine.MonoBehaviour {

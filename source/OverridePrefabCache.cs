@@ -23,16 +23,38 @@ namespace BattletechPerformanceFix
             return false;
         }
 
+        public static bool NeedsManualAnnounce = false;
         public static bool DataManager_RequestResource_Internal(BattleTechResourceType resourceType, string identifier) {
             if (resourceType == RT.Prefab || resourceType == RT.UIModulePrefabs) {
+                // It's possible we'll have to resort to a dummy load item which simply immediately completes, but I'd rather not have the message overhead.
                 LogDebug($"Blocking DM request of prefab {identifier}");
+                NeedsManualAnnounce = true;
                 return false;
             }
             return true;
         }
 
+        public static void DataManager_ProcessRequests(DataManager __instance) {
+            var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
+            var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}").ToArray());
+            Log($"ProcessRequests {NeedsManualAnnounce} [{byid}]");
+            if (NeedsManualAnnounce && new Traverse(__instance).Method("CheckRequestsComplete").GetValue<bool>()) {
+                // This might cause double load messages, but we need to inform of a load complete in case we blocked all the requests
+                LogDebug("DM queue requires manual announce");
+                messageCenter.NullCheckError("MessageCenter is not set yet").PublishMessage(new DataManagerLoadCompleteMessage());
+                NeedsManualAnnounce = false;
+            }
+        }
+
         public static bool DataManager_PrecachePrefab(string id) {
             LogDebug($"PrecachePrefab? No, no thank you.");
+            return false;
+        }
+
+        public static bool PrefabCache_GetPooledPrefab(DataManager __instance, ref GameObject __result, string id) {
+            LogDebug($"DM GetPooledPrefab: {id}");
+            var gop = new Traverse(__instance).Property("GameObjectPool").GetValue<PrefabCache>();
+            __result = gop.PooledInstantiate(id);  //FIXME: does this need to be moved to scene?
             return false;
         }
 
@@ -53,7 +75,7 @@ namespace BattletechPerformanceFix
                 }
             }
             
-            var prefab = Prefabs.GetWithDefault(id, Load);
+            var prefab = Prefabs.GetWithDefault(id, () => Load());
             if (prefab == null) LogError($"A prefab({id}) was nulled, but I was never told");
             else LogDebug($"Found prefab for {id}");
             var ptransform = prefab.transform;
@@ -73,6 +95,14 @@ namespace BattletechPerformanceFix
             __result = true;
 
             return false;
+        }
+
+        public static bool DataManager_Exists(RT resourceType, string id, ref bool __result) {
+            if (resourceType == RT.Prefab || resourceType == RT.UIModulePrefabs) {
+                __result = true;
+                return false;
+            }
+            return true;
         }
 
         public static string AssetBundleNameToFilePath(string assetBundleName)
@@ -110,8 +140,10 @@ namespace BattletechPerformanceFix
             LogDebug("DM SetUnityDataManagers");
             dataManager = __instance;
             bundleManager = assetBundleManager;
+            messageCenter = new Traverse(dataManager).Property("MessageCenter").GetValue<MessageCenter>().NullCheckError("Unable to find MessageCenter");
         }
 
+        public static MessageCenter messageCenter;
         public static DataManager dataManager;
         public static AssetBundleManager bundleManager;
         public static AssetBundleManifest manifest;
@@ -124,8 +156,13 @@ namespace BattletechPerformanceFix
                               , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_PooledInstantiate))));
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "RequestResource_Internal")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_RequestResource_Internal))));
+            Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "ProcessRequests")
+                              , null
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_ProcessRequests))));
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "PrecachePrefab")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_PrecachePrefab))));
+            Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.Data.DataManager), "Exists")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(DataManager_Exists))));
 
 
 
@@ -133,7 +170,14 @@ namespace BattletechPerformanceFix
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_IsPrefabInPool))));
             Main.harmony.Patch( AccessTools.Method(typeof(PrefabCache), "PooledInstantiate")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_PooledInstantiate))));
+            Main.harmony.Patch( AccessTools.Method(typeof(PrefabCache), "GetPooledPrefab")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_GetPooledPrefab))));
 
+
+
+            // Temporary hooks used for debugging
+            Main.harmony.Patch( AccessTools.Method(typeof(GameRepresentation), "SetHighlightAlpha")
+                              , Drop);
         }
 
         public static Dictionary<string,GameObject> Prefabs = new Dictionary<string,GameObject>();
