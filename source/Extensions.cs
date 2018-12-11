@@ -13,25 +13,31 @@ namespace BattletechPerformanceFix {
         {
             if (Main.LogLevel == "Debug")
                 Main.__Log("[Debug] " + msg, values);
+            // Far too much data passes through here to hit the HBS log
+            //     it's simply too slow to handle it
         }
 
         public static void Log(string msg, params object[] values) {
             Main.__Log("[Info]" + msg, values);
+            Trap(() => Main.HBSLogger.Log(string.Format(msg, values)));
         }
 
         public static void LogError(string msg, params object[] values)
         {
             Main.__Log("[Error] " + msg, values);
+            Trap(() => Main.HBSLogger.LogError(string.Format(msg, values)));
         }
 
         public static void LogWarning(string msg, params object[] values)
         {
             Main.__Log("[Warning] " + msg, values);
+            Trap(() => Main.HBSLogger.LogWarning(string.Format(msg, values)));
         }
 
-        public static void LogException(params object[] values)
+        public static void LogException(Exception e)
         {
-            Main.__Log("[Exception] {0}", values);
+            Main.__Log("[Exception] {0}", e);
+            Trap(() => Main.HBSLogger.LogException(e));
         }
 
 

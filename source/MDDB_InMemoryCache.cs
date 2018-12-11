@@ -62,7 +62,7 @@ namespace BattletechPerformanceFix
             {
                 if (ConnectionURI != null && ConnectionURI != __instance.ConnectionURI)
                 {
-                    LogException("MDDB_InMemoryCache: Expected {0} but got {1}", ConnectionURI, __instance.ConnectionURI);
+                    LogError("MDDB_InMemoryCache: Expected {0} but got {1}", ConnectionURI, __instance.ConnectionURI);
                 }
                 if (memoryStore == null)
                 {

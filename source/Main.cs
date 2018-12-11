@@ -8,12 +8,13 @@ using System.Reflection;
 using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
+using HBS.Logging;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
     public class Settings {
-        public string logLevel = "Log";
+        public string logLevel = "Debug";
         public Dictionary<string,bool> features = new Dictionary<string,bool>();
     }
 
@@ -31,7 +32,104 @@ namespace BattletechPerformanceFix
 
         private static StreamWriter LogStream;
 
+        public static ILog HBSLogger;
         public static string LogLevel = "Debug";
+
+        public static void Start(string modDirectory, string json)
+        {
+            ModDir = modDirectory;
+            var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
+            File.Delete(logFile);
+            LogStream = File.AppendText(logFile);
+            LogStream.AutoFlush = true;
+
+            HBSLogger = Trap(() => Logger.GetLogger(ModName));
+
+            Log("Harmony? {0}", Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version);
+            Log("Unity? {0}", UnityEngine.Application.unityVersion);
+            Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
+            Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-parallelize");
+            Log("Mod-Dir? {0}", ModDir);
+            
+            Trap(() =>
+            {
+                var WantHarmonyVersion = "1.2";
+                var harmonyVersion = Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version;
+                if (!harmonyVersion.ToString().StartsWith(WantHarmonyVersion))
+                {
+                    LogError("BattletechPerformanceFix requires harmony version {0}.*, but found {1}", WantHarmonyVersion, harmonyVersion);
+                    return;
+                }
+
+                var WantVersions = new string[] { "1.2.", "1.3." };
+                if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
+                {
+                    Log("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion);
+                } else
+                {
+                    LogError("BattletechPerformanceFix expected BattleTech ({0}), but found {1}", string.Join(",", WantVersions), VersionInfo.ProductVersion);
+                    return;
+                }
+
+                var settings = new Settings();
+                try { settings = JsonConvert.DeserializeObject<Settings>(File.ReadAllText(SettingsPath)); }
+                catch { LogWarning("Settings file is invalid or missing, regenerating with defaults"); }
+
+                Log($"LogLevel {settings.logLevel}");
+                LogLevel = settings.logLevel;
+
+                harmony = HarmonyInstance.Create(ModFullName);
+
+                var allFeatures = new Dictionary<Type, bool> {
+                    //{ typeof(LazyRoomInitialization), false },
+                    { typeof(LoadFixes), true },
+                    { typeof(NoSalvageSoftlock), true },
+                    { typeof(MissingAssetsContinueLoad), true },
+                    { typeof(DataLoaderGetEntryCheck), true },
+                    { typeof(DynamicTagsFix), true },
+                    { typeof(BTLightControllerThrottle), false },
+                    { typeof(ShopTabLagFix), true },
+                    { typeof(MDDB_InMemoryCache), true },
+                    { typeof(ContractLagFix), true },
+                    { typeof(ParallelizeLoad), false },
+                    { typeof(SimpleMetrics), false }
+                };
+                               
+                Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
+                settings.features = want.ToDictionary(kv => kv.Key.Name, kv => kv.Value);
+                File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(settings, Formatting.Indented));
+
+                Log("Features ----------");
+                foreach (var feature in want)
+                {
+                    Log("Feature {0} is {1}", feature.Key.Name, feature.Value ? "ON" : "OFF");
+                }
+                Log("Patches ----------");
+                foreach (var feature in want)
+                {
+                    if (feature.Value) {
+                        try
+                        {
+                            var f = (Feature)AccessTools.CreateInstance(feature.Key);
+                            f.Activate();
+                        } catch (Exception e)
+                        {
+                            LogError("Failed to activate feature {0} with:\n {1}\n", feature.Key, e);
+                        }
+                    }
+                }
+                Log("Runtime ----------");
+
+                harmony.PatchAll(Assembly.GetExecutingAssembly());
+
+                Log("Patch out sensitive data log dumps");
+                new DisableSensitiveDataLogDump().Activate();
+
+
+                Trap(() => PatchMechlabLimitItems.Initialize());
+            });
+        }
 
         public static void __Log(string msg, params object[] values)
         {
@@ -77,98 +175,6 @@ namespace BattletechPerformanceFix
             */
 
             return meth;
-        }
-
-        public static void Start(string modDirectory, string json)
-        {
-            ModDir = modDirectory;
-            var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
-            File.Delete(logFile);
-            LogStream = File.AppendText(logFile);
-            LogStream.AutoFlush = true;
-
-            Log("Harmony? {0}", Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version);
-            Log("Unity? {0}", UnityEngine.Application.unityVersion);
-            Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
-            Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-parallelize");
-            Log("Mod-Dir? {0}", ModDir);
-            
-            Trap(() =>
-            {
-                var WantHarmonyVersion = "1.2";
-                var harmonyVersion = Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version;
-                if (!harmonyVersion.ToString().StartsWith(WantHarmonyVersion))
-                {
-                    LogError("BattletechPerformanceFix requires harmony version {0}.*, but found {1}", WantHarmonyVersion, harmonyVersion);
-                    return;
-                }
-
-                var WantVersions = new string[] { "1.2.", "1.3." };
-                if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
-                {
-                    Log("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion);
-                } else
-                {
-                    LogError("BattletechPerformanceFix expected BattleTech ({0}), but found {1}", string.Join(",", WantVersions), VersionInfo.ProductVersion);
-                    return;
-                }
-
-                var settings = JsonConvert.DeserializeObject<Settings>(File.ReadAllText(SettingsPath));
-
-                Log($"LogLevel {settings.logLevel}");
-                LogLevel = settings.logLevel;
-
-                harmony = HarmonyInstance.Create(ModFullName);
-
-                var allFeatures = new Dictionary<Type, bool> {
-                    //{ typeof(LazyRoomInitialization), false },
-                    { typeof(LoadFixes), true },
-                    { typeof(NoSalvageSoftlock), true },
-                    { typeof(MissingAssetsContinueLoad), true },
-                    { typeof(DataLoaderGetEntryCheck), true },
-                    { typeof(DynamicTagsFix), true },
-                    { typeof(BTLightControllerThrottle), false },
-                    { typeof(ShopTabLagFix), true },
-                    { typeof(MDDB_InMemoryCache), true },
-                    { typeof(ContractLagFix), true },
-                    { typeof(ParallelizeLoad), true },
-                    { typeof(SimpleMetrics), true }
-                };
-                               
-                Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
-                settings.features = want.ToDictionary(kv => kv.Key.Name, kv => kv.Value);
-                File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(settings, Formatting.Indented));
-
-                Log("Features ----------");
-                foreach (var feature in want)
-                {
-                    Log("Feature {0} is {1}", feature.Key.Name, feature.Value ? "ON" : "OFF");
-                }
-                Log("Patches ----------");
-                foreach (var feature in want)
-                {
-                    if (feature.Value) {
-                        try
-                        {
-                            var f = (Feature)AccessTools.CreateInstance(feature.Key);
-                            f.Activate();
-                        } catch (Exception e)
-                        {
-                            LogError("Failed to activate feature {0} with:\n {1}\n", feature.Key, e);
-                        }
-                    }
-                }
-                Log("Runtime ----------");
-
-                harmony.PatchAll(Assembly.GetExecutingAssembly());
-
-                Log("Patch out sensitive data log dumps");
-                new DisableSensitiveDataLogDump().Activate();
-
-
-                Trap(() => PatchMechlabLimitItems.Initialize());
-            });
         }
     }
 
