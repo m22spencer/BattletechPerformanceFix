@@ -2,6 +2,7 @@ using System;
 using RSG;
 using UnityEngine;
 using System.Linq;
+using System.Reflection;
 using System.Diagnostics;
 using System.Collections;
 using System.Collections.Generic;
@@ -57,6 +58,9 @@ namespace BattletechPerformanceFix {
         public static List<T> List<T>(params T[] p) => p.ToList();
         public static IEnumerable<T> Sequence<T>(params T[] p) => p;
 
+        public static T GetWithDefault<K,T>(this Dictionary<K,T> d, K key, Func<T> lazyDefault)
+            => d.TryGetValue(key, out var val) ? val : d[key] = lazyDefault();
+
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         // Do not let BattleTech recover anything. Forcibly close.
@@ -76,6 +80,7 @@ namespace BattletechPerformanceFix {
                                      while (!operation.isDone && operation.progress < .9f) { yield return null; }
                                      var loadTime = timer.Elapsed.TotalSeconds;
                                      while (!operation.allowSceneActivation) { yield return null; }
+                                     LogDebug("Scene activation -------");
                                      timer.Reset(); timer.Start();
                                      while (!operation.isDone) { yield return null; }
                                      yield return null;  // Let scene run Awake/Start
@@ -90,6 +95,9 @@ namespace BattletechPerformanceFix {
             p.Done(() => BPF_CoroutineInvoker.Invoke(OneFrame(), next.Resolve));
             return next;
         }
+
+        public static void Instrument(this MethodBase meth)
+            => SimpleMetrics.Instrument(meth);
     }
 
     class BPF_CoroutineInvoker : UnityEngine.MonoBehaviour {

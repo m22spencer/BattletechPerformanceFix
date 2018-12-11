@@ -111,6 +111,7 @@
     <Compile Include="PatchMechLabLimitItems.cs" />
     <Compile Include="PatchMechLabPanelLoadThrottling.cs" />
     <Compile Include="DynamicTagsFix.cs" />
+    <Compile Include="SimpleMetrics.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />
