@@ -48,6 +48,30 @@ namespace BattletechPerformanceFix
             }
         }
 
+        public static void Track(MethodBase meth) {
+            if (!Active) return;
+            if (meth == null)
+                LogError($"Cannot instrument null meth from {new StackTrace().ToString()}");
+
+            LogDebug($"Tracking {meth.DeclaringType.FullName}::{meth.ToString()}");
+
+            if(TrackHook == null) {
+                Log("Initializing tracking hooks");
+
+                var self = typeof(SimpleMetrics);
+                TrackHook = new HarmonyMethod(AccessTools.Method(self, nameof(__Track)));
+                TrackHook.prioritiy = Priority.First;
+            }
+
+            if (meth.IsGenericMethod || meth.IsGenericMethodDefinition) {
+                LogError($"Cannot instrument a generic method {meth.DeclaringType.FullName}::{meth.ToString()}");
+            } else if (meth.GetMethodBody() == null) {
+                LogError($"Cannot instrument a method with no body {meth.DeclaringType.FullName}::{meth.ToString()}");
+            } else {
+                Trap(() => Main.harmony.Patch(meth, TrackHook));
+            }
+        }
+
         static HarmonyMethod PreHook;
         static HarmonyMethod PostHook;
         static Dictionary<string,Metric> Metrics = new Dictionary<string,Metric>();
@@ -66,6 +90,12 @@ namespace BattletechPerformanceFix
             try { 
             __state.timer.Stop();
             } catch(Exception e) { LogException(e); }
+        }
+
+        static HarmonyMethod TrackHook;
+        public static void __Track() {
+            var meth = new StackFrame(1).GetMethod();
+            LogDebug($"Tracked {meth.DeclaringType.FullName}::{meth.ToString()}");
         }
 
         public static void Summary() {

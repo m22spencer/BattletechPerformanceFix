@@ -117,22 +117,25 @@ namespace BattletechPerformanceFix {
         public static void Instrument(this MethodBase meth)
             => SimpleMetrics.Instrument(meth);
 
+        public static void Track(this MethodBase meth)
+            => SimpleMetrics.Track(meth);
+
 
         public static HarmonyMethod Drop = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__Drop)));
         public static bool  __Drop() {
-            LogDebug("Dropping call to {new StackFrame(1).ToString()}");
+            LogDebug($"Dropping call to {new StackFrame(1).ToString()}");
             return false;
         }
 
         public static HarmonyMethod Yes = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__Yes)));
         public static bool  __Yes(ref bool __result) {
-            LogDebug("Saying yes to to {new StackFrame(1).ToString()}");
+            LogDebug($"Saying yes to to {new StackFrame(1).ToString()}");
             __result = true;
             return false;
         }
         public static HarmonyMethod No = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__No)));
         public static bool  __No(ref bool __result) {
-            LogDebug("Saying yes to to {new StackFrame(1).ToString()}");
+            LogDebug($"Saying yes to to {new StackFrame(1).ToString()}");
             __result = false;
             return false;
         }
