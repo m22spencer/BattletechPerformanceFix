@@ -49,7 +49,7 @@ namespace BattletechPerformanceFix
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-parallelize");
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
             Log("Mod-Dir? {0}", ModDir);
             
             Trap(() =>
