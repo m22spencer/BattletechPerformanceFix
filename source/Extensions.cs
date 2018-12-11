@@ -60,9 +60,20 @@ namespace BattletechPerformanceFix {
             }
         }
 
+        public static K SafeCast<K>(this object t) where K : class
+            => (t as K).NullCheckError($"Safe cast failed of {t.GetType().FullName} to {typeof(K).FullName}");
+
+        public static T NullCheckError<T>(this T t, string msg) {
+            if (t == null) LogError("{0} from {1}", msg, new StackTrace(1).ToString());
+            return t;
+        }
+
         public static T[] Array<T>(params T[] p) => p;
         public static List<T> List<T>(params T[] p) => p.ToList();
         public static IEnumerable<T> Sequence<T>(params T[] p) => p;
+        public static void ForEach<T>(this IEnumerable<T> xs, Action<T> f) {
+           foreach (var x in xs) f(x);
+        }
 
         public static T GetWithDefault<K,T>(this Dictionary<K,T> d, K key, Func<T> lazyDefault)
             => d.TryGetValue(key, out var val) ? val : d[key] = lazyDefault();

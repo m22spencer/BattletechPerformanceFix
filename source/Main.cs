@@ -37,13 +37,19 @@ namespace BattletechPerformanceFix
 
         public static void Start(string modDirectory, string json)
         {
+            try {
+                HBSLogger = Trap(() => Logger.GetLogger(ModName));
+                HBSLogger.Log($"BattletechPerformanceFix init :modDirectory {modDirectory}");
+            } catch {
+                // If we can't setup the HBS logger, and we can't setup the LogStream logger, we're just screwed. No way to tell the user what is happening
+            }
+
             ModDir = modDirectory;
             var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
 
-            HBSLogger = Trap(() => Logger.GetLogger(ModName));
 
             Log("Harmony? {0}", Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version);
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
