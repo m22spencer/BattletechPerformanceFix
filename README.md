@@ -21,7 +21,7 @@ For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop
 - DynamicTagsFix
    - Restores some broken code in 1.3 that was not allowing mods to see user faction tags.
    - (This fix is provided by HBS_Eck. Thanks!)
-- BTLightControllerThrottle (disbled by default)
+- BTLightControllerThrottle (disabled by default)
    - Very large cpu usage reduction. Causes lights to look like crap, useful for very low spec machines.
 - ShopTabLagFix
    - Prevents BattleTech from sorting the item list every single time an item is added.
