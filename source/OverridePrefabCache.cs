@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Harmony;
 using BattleTech;
+using BattleTech.UI;
 using BattleTech.Assetbundles;
 using BattleTech.Data;
 using BattleTech.Rendering.MechCustomization;
@@ -75,7 +76,7 @@ namespace BattletechPerformanceFix
                     LogDebug($"Loading {id} from bundle {entry.AssetBundleName}");
                     return LoadAssetFromBundle(id, entry.AssetBundleName).SafeCast<GameObject>();
                 } else {
-                    LogError("Don't know how to load {entry.id}");
+                    LogError($"Don't know how to load {entry.Id}");
                     return null;
                 }
             }
@@ -111,19 +112,34 @@ namespace BattletechPerformanceFix
         }
 
         public static void RequestAssetProxy<T>(BattleTechResourceType type, string id, Action<object> loadedCallback) where T : UnityEngine.Object {
-            LogError($"ABM_RequestAsset: {id}:{type.ToString()} from {new StackTrace().ToString()}");
+            var entry = Trap(() => lookupId(id, type));
+            LogError($"ABM_RequestAsset: {id}:{type.ToString()} (manifest says {entry?.Type})");
 
-            var entry = Trap(() => lookupId(id));
-            if (entry == null)
+            if (entry == null) {
                 LogError($"Missing entry for {id}:{type.ToString()}");
-
-            if (!entry.IsAssetBundled)
+                loadedCallback(null);
+            } else if (entry.Type != type.ToString()) {
+                LogError($"Invalid type fetch, entry is {entry.Type}, but asked for {type.ToString()}");
+                loadedCallback(null);
+            } else if (!entry.IsAssetBundled) {
                 LogError($"ABM asset not bundled: {id}:{type.ToString()}");
+                loadedCallback(null);
+            } else {
+                try {
+                var asset = LoadAssetFromBundle(id, entry.AssetBundleName).NullCheckError($"No asset {id}:{type.ToString()}");
+                LogDebug($"Recieved asset of type {asset.GetType()}");
+                if (asset.GetType() == typeof(Texture2D) && type == RT.Sprite) {
+                    // TODO: Not sure why this is happening. Compare against vanilla game. Sick of it, so taking the easy way out temporarily
+                    LogError($"Mismatch, load asked for sprite but got texture. We're creating it");
+                    var texture = (Texture2D)asset;
+                    loadedCallback(Sprite.Create(texture, new UnityEngine.Rect(0f, 0f, (float)texture.width, (float)texture.height), new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect, Vector4.zero));
+                } else {
+                    loadedCallback(asset);
+                }
 
-            var asset = Trap(() => LoadAssetFromBundle(id, entry.AssetBundleName));
-            LogDebug($"Recieved asset of type {asset.GetType()}");
-
-            Trap(() => loadedCallback(asset));
+                //Trap(() => loadedCallback(asset));
+                } catch { loadedCallback(null); }
+            }
         }
 
         public static IEnumerable<CodeInstruction> AssetBundleManager_RequestAsset(ILGenerator gen, MethodBase method, IEnumerable<CodeInstruction> _) {
@@ -159,15 +175,28 @@ namespace BattletechPerformanceFix
                    return newBundle; }
         }
 
+        public static T LoadAssetFromBundle<T>(string assetName, string bundleName) where T : UnityEngine.Object
+            => LoadBundle(bundleName)?.LoadAsset<T>(assetName).NullCheckError($"Unable to load {assetName} from bundle {bundleName}");
+            
+
         public static UnityEngine.Object LoadAssetFromBundle(string assetName, string bundleName)
             => LoadBundle(bundleName)?.LoadAsset(assetName).NullCheckError($"Unable to load {assetName} from bundle {bundleName}");
 
-        public static VersionManifestEntry lookupId(string id) {
+        public static VersionManifestEntry lookupId(string id, RT? type = null) {
             if (locator == null)
                 locator = new Traverse(typeof(BattleTechResourceLoader)).Field("resourceLocator").GetValue<BattleTechResourceLocator>();
             locator.NullCheckError("Unable to find resource locator");
-            // FIXME: Terribly slow
-            return locator.AllEntries().Single(e => e.Id == id);
+
+            if (type == null) {
+                var baseManifest = new Traverse(locator).Field("baseManifest").GetValue<Dictionary<RT, Dictionary<string, VersionManifestEntry>>>();
+                baseManifest.NullCheckError("Unable to access baseManifest");  //FIXME: Also needs the contents packs manifest if user owns them
+                new Traverse(locator).Method("UpdateTypedEntriesIfNeeded");
+                // FIXME: Terribly slow
+                return baseManifest.SelectMany(idents => idents.Value)
+                                   .FirstOrDefault(e => e.Value.Id == id).Value;
+            } else {
+                return locator.EntryByID(id, type.Value, true);
+            }
         }
 
         public static void DataManager_SetUnityDataManagers(DataManager __instance, AssetBundleManager assetBundleManager) {
@@ -218,9 +247,14 @@ namespace BattletechPerformanceFix
                                                     , null, null
                                                     , new HarmonyMethod(AccessTools.Method(self, nameof(AssetBundleManager_RequestAsset)))));
 
-
-
             // Temporary hooks used for debugging
+            var b = typeof(Briefing);
+            AccessTools.Method(b, "Init").Track();
+            AccessTools.Method(b, "InitializeContract").Track();
+            AccessTools.Method(b, "InitializeContractComplete").Track();
+            AccessTools.Method(b, "LevelLoaded").Track();
+            AccessTools.Method(b, "HandleNetworkFailure").Track();
+
             Main.harmony.Patch( AccessTools.Method(typeof(GameRepresentation), "SetHighlightAlpha")
                               , Drop);
         }
