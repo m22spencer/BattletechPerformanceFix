@@ -355,6 +355,10 @@ namespace BattletechPerformanceFix
                                     .IsDestroyedError($"Both Pool and Prefab have been destroyed!")
                                     .NullCheckError($"No prefab or pooled item for {id}");
 
+                //Game tends to request items that don't exist, or can't be fetched. Expects null
+                if (obj == null)
+                    return obj;
+
                 obj.transform.SetParent(null);
                 var pscene = parent?.gameObject?.scene;
                 var lscene = obj.scene;
