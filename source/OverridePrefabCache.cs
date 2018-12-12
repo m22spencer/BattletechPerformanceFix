@@ -252,7 +252,34 @@ namespace BattletechPerformanceFix
 
 
             AccessTools.Method(typeof(SGRoomManager), "OnSimGameInitialize").Track();
-            AccessTools.Method(typeof(SGCmdCenterLanceConfigBG), "Init").Track();
+
+            Log("DI fix");
+            Main.harmony.Patch( AccessTools.Property(typeof(MechBayMechStorageWidget), "DragItem").GetGetMethod()
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(DragItem_get))));
+
+            Log("SLCS fix");
+            Main.harmony.Patch( AccessTools.Method(typeof(SGCmdCenterLanceConfigBG), "ShowLanceConfiguratorScreen")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(ShowLanceConfiguratorScreen_Try))));
+
+        }
+
+        // Anything re-used from the pool with contain the state it was pooled with
+        //   room-manger gets set in the wrong order, causing the UI to try something it's not supposed to
+        public static void ShowLanceConfiguratorScreen_Try(ref SGRoomManager ___roomManager) {
+            if (___roomManager != null && new Traverse(___roomManager).Field("CurrencyWidget").GetValue<SGCurrencyDisplay>() == null) {
+                LogWarning("RoomManager is in a bad state, or old ref");
+                ___roomManager = null;
+            }
+        }
+
+        // Prevent an NPE on re-using this widget
+        public static bool DragItem_get(IMechLabDropTarget ___parentDropTarget, ref IMechLabDraggableItem __result) {
+            __result = ___parentDropTarget?.DragItem;
+            return false;
+        }
+
+        public static void SGRM(SGRoomManager theManager) {
+            LogDebug($"SGRM [{theManager?.GetHashCode()}] from {new StackTrace().ToString()}");
         }
 
         public static Dictionary<string,GameObject> Prefabs = new Dictionary<string,GameObject>();
