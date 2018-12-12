@@ -22,6 +22,13 @@ namespace BattletechPerformanceFix
 {
     class OverridePrefabCache : Feature
     {
+        // Harmony Glue ----------------------
+        // We need three functions:
+        // create: id, _ -> GameObject  ;; This ensures the id is loaded, and either creates or returns an existing item in the pool
+        // hint  : tag                  ;; Mark a phase, using this we can try to be more intelligent about what & how many things are pooled
+        // return: GameObject -> ()     ;; Return an item to the pool. Sometimes the game will steal: In this case, some hooks around scene loading or asset unloading can steal it back.
+
+        // Everything from here to the next section is just glue to hook this into the existing system.
         public static bool DataManager_PooledInstantiate(DataManager __instance, ref GameObject __result, string id, RT resourceType, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
             LogDebug($"DM PooledInstantiate: {id}");
             var gop = new Traverse(__instance).Property("GameObjectPool").GetValue<PrefabCache>();
@@ -57,7 +64,7 @@ namespace BattletechPerformanceFix
         }
 
         public static bool DataManager_PrecachePrefab(string id) {
-            LogDebug($"PrecachePrefab? No, no thank you.");
+            LogDebug($"PrecachePrefab? No, no thank you. {id}");
             return false;
         }
 
@@ -66,6 +73,11 @@ namespace BattletechPerformanceFix
             var gop = new Traverse(__instance).Property("GameObjectPool").GetValue<PrefabCache>();
             __result = gop.PooledInstantiate(id);  //FIXME: does this need to be moved to scene?
             return false;
+        }
+
+        public static void PrefabCache_PoolGameObject(string id, GameObject gameObj) {
+            LogDebug($"PC returned: {id}");
+            GameObject.Destroy(gameObj);
         }
 
         public static bool PrefabCache_PooledInstantiate(ref GameObject __result, string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
@@ -105,9 +117,11 @@ namespace BattletechPerformanceFix
             return false;
         }
 
+        // For exists checks, we only care the the item is in the manifest.
+        //    as long as the item *can* be loaded, say it's loadable.
         public static bool PrefabCache_IsPrefabInPool(string id, ref bool __result) {
             LogDebug($"PC IsPrefabInPool: {id}? Sure, why not. from {new StackTrace().ToString()}");
-            __result = true;
+            __result = true;  // FIXME: Do a manifest check here, once we speed up the manifest implementation
 
             return false;
         }
@@ -119,7 +133,7 @@ namespace BattletechPerformanceFix
             }
             if (resourceType == RT.AssetBundle) {
                 LogDebug("DM E Exists check on asset bundle {id]");
-                return Bundles.ContainsKey(id);
+                return Bundles.ContainsKey(id); // FIXME: We should probably report whether the bundle can be loaded here, not whether it is loaded now.
             }
 
             return true;
@@ -157,11 +171,13 @@ namespace BattletechPerformanceFix
             }
         }
 
+        // Ran into some oddity with a prefix patch using object, restorted to a transpiler. FIXME: Consider revisiting the prefix patch.
         public static IEnumerable<CodeInstruction> AssetBundleManager_RequestAsset(ILGenerator gen, MethodBase method, IEnumerable<CodeInstruction> _) {
             LogDebug($"Transpiling {method.ToString()}");
             var wcmeth = AccessTools.Method(typeof(OverridePrefabCache), "RequestAssetProxy", null, Array(method.GetGenericArguments()[0]));
             LogDebug($"Redirection to {wcmeth.ToString()}");
-            //return Sequence( new CodeInstruction(O.Ret));
+
+            // return RequestAssetProxy<"T">(type, id, loadedCallback);
             return Sequence( new CodeInstruction(O.Ldarg_1) // type
                            , new CodeInstruction(O.Ldarg_2) // id
                            , new CodeInstruction(O.Ldarg_3) // loadedCallback
@@ -222,7 +238,6 @@ namespace BattletechPerformanceFix
             messageCenter.AddSubscriber(MessageCenterMessageType.OnInitializeContractComplete, msg => LogDebug("OnInitalizeContractComplete message"));
         }
 
-        
         public static MessageCenter messageCenter;
         public static DataManager dataManager;
         public static AssetBundleManager bundleManager;
@@ -252,6 +267,9 @@ namespace BattletechPerformanceFix
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_PooledInstantiate))));
             Main.harmony.Patch( AccessTools.Method(pc, "GetPooledPrefab")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_GetPooledPrefab))));
+            Main.harmony.Patch( AccessTools.Method(pc, "PoolGameObject")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_PoolGameObject))));
+
 
             var abm = typeof(AssetBundleManager);
             var meth = AccessTools.Method(abm, "RequestAsset");
