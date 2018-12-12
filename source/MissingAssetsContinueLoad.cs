@@ -54,10 +54,10 @@ namespace BattletechPerformanceFix
             try
             {
                 void WithDummyItem(Action<VersionManifestEntry> f) {
-                    var manifest = (VersionManifest)new Traverse(__instance.ResourceLocator).Property("manifest").GetValue();
-                    var dummies = manifest.Entries.Where(e => resourceType == (BattleTechResourceType)Enum.Parse(typeof(BattleTechResourceType), e.Type));
+                    var locator = new Traverse(__instance.ResourceLocator).GetValue<BattleTechResourceLocator>();
+                    var dummies = locator.AllEntriesOfResource(resourceType, true);
                     if (dummies.Any()) {
-                        f(dummies.First());
+                        f(dummies.First(x => !x.Id.Contains("backer")));
                     }
                 }
 
@@ -66,8 +66,6 @@ namespace BattletechPerformanceFix
                 {
                     // Game wants asset, game doesn't know how to load asset
                     // So we find the first asset of the same type
-                    var manifest = (VersionManifest)new Traverse(__instance.ResourceLocator).Property("manifest").GetValue();
-                    var dummies = manifest.Entries.Where(e => resourceType == (BattleTechResourceType)Enum.Parse(typeof(BattleTechResourceType), e.Type));
                     WithDummyItem(dummy => {
                             var dummyId = dummy.Id;
                             LogDebug("Missing asset {0}, replacing with dummy {1}", identifier, dummyId);
