@@ -100,6 +100,7 @@
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
+    <Compile Include="EnableLoggingDuringLoads.cs" />
     <Compile Include="MDDB_InMemoryCache.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Extensions.cs" />
