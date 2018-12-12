@@ -264,49 +264,8 @@ namespace BattletechPerformanceFix
                                                     , new HarmonyMethod(AccessTools.Method(self, nameof(AssetBundleManager_RequestAsset)))));
 
             Main.harmony.Patch( AccessTools.Method(abm, "IsBundleLoaded", Array(typeof(string))), Yes);
-            
-
-            // Temporary hooks used for debugging
-            var b = typeof(Briefing);
-            AccessTools.Method(b, "Init").Track();
-            AccessTools.Method(b, "InitializeContract").Track();
-            AccessTools.Method(b, "InitializeContractComplete").Track();
-            AccessTools.Method(b, "LevelLoaded").Track();
-            AccessTools.Method(b, "HandleNetworkFailure").Track();
-
-            var e = typeof(EncounterLayerParent);
-            AccessTools.Method(e, "InitializeContract").Track();
-            AccessTools.Method(e, "UpdateEncounterLayerList").Track();
-            AccessTools.Method(e, "FirstTimeInitialization").Track();
-            AccessTools.Property(typeof(CombatGameState), "IsLoadingFromSave").GetGetMethod().Track();
-            AccessTools.Method(typeof(EncounterLayerData), "BuildItemRegistry").Track();
-            AccessTools.Method(typeof(EncounterLayerData), "ContractInitialize").Track();
-            AccessTools.Method(typeof(EncounterObjectGameLogic), "EncounterStart").Track();
-            Main.harmony.Patch( AccessTools.Method(typeof(MessageCenter), "PublishMessage")
-                              , new HarmonyMethod(AccessTools.Method(typeof(OverridePrefabCache), nameof(PublishMessage))));
-
-            Main.harmony.Patch( AccessTools.Method(typeof(GameRepresentation), "SetHighlightAlpha")
-                              , Drop);
-
-            // This call is crashing, and I believe the logs are still disabled?
-            Main.harmony.Patch( AccessTools.Method(e, "FirstTimeInitialization")
-                              , new HarmonyMethod(AccessTools.Method(typeof(OverridePrefabCache), nameof(Yada))));
         }
 
         public static Dictionary<string,GameObject> Prefabs = new Dictionary<string,GameObject>();
-
-
-        public static void Yada() {
-            var s = $"YADA {HBS.Logging.Logger.IsLogging} -> true and {UnityEngine.Debug.logger.logEnabled} -> true";
-            HBS.Logging.Logger.IsLogging = true;
-            UnityEngine.Debug.logger.logEnabled = true;
-            Log(s);
-        }
-
-        public static void PublishMessage(MessageCenterMessage message) {
-            LogDebug($"Tracked message center message: {message.GetType()}");
-        }
-
     }
-
 }
