@@ -24,9 +24,6 @@ namespace BattletechPerformanceFix
     {
         // Harmony Glue ----------------------
         // We need three functions:
-        // create: id, _ -> GameObject  ;; This ensures the id is loaded, and either creates or returns an existing item in the pool
-        // hint  : tag                  ;; Mark a phase, using this we can try to be more intelligent about what & how many things are pooled
-        // return: GameObject -> ()     ;; Return an item to the pool. Sometimes the game will steal: In this case, some hooks around scene loading or asset unloading can steal it back.
 
         // Everything from here to the next section is just glue to hook this into the existing system.
         public static bool DataManager_PooledInstantiate(DataManager __instance, ref GameObject __result, string id, RT resourceType, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
@@ -54,7 +51,7 @@ namespace BattletechPerformanceFix
         public static void DataManager_ProcessRequests(DataManager __instance) {
             var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
             var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}").Take(10).ToArray());
-            Log($"ProcessRequests {NeedsManualAnnounce} :10waiting [{byid}] from {new StackTrace().ToString()}");
+            LogDebug($"ProcessRequests {NeedsManualAnnounce} :10waiting [{byid}]"); // from {new StackTrace().ToString()}");
             if (NeedsManualAnnounce && new Traverse(__instance).Method("CheckRequestsComplete").GetValue<bool>()) {
                 // This might cause double load messages, but we need to inform of a load complete in case we blocked all the requests
                 LogDebug("DM queue requires manual announce");
@@ -75,45 +72,15 @@ namespace BattletechPerformanceFix
             return false;
         }
 
-        public static void PrefabCache_PoolGameObject(string id, GameObject gameObj) {
+        public static bool PrefabCache_PoolGameObject(string id, GameObject gameObj) {
             LogDebug($"PC returned: {id}");
-            GameObject.Destroy(gameObj);
+            Cache.Return(id, gameObj);
+            return false;
         }
 
         public static bool PrefabCache_PooledInstantiate(ref GameObject __result, string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
             LogDebug($"PC PooledInstantiate: {id}");
-
-            GameObject Load() {
-                var entry = lookupId(id);
-                if (entry == null) {
-                    LogError($"Failed to find asset: {id} in the manifest from {new StackTrace().ToString()}");
-                    return null;
-                } else if (entry.IsResourcesAsset) {
-                    LogDebug($"Loading {id} from disk");
-                    return Resources.Load(entry.ResourcesLoadPath).SafeCast<GameObject>();
-                } else if (entry.IsAssetBundled) {
-                    LogDebug($"Loading {id} from bundle {entry.AssetBundleName}");
-                    return LoadAssetFromBundle(id, entry.AssetBundleName).SafeCast<GameObject>();
-                } else {
-                    LogError($"Don't know how to load {entry.Id}");
-                    return null;
-                }
-            }
-            
-            var prefab = Prefabs.GetWithDefault(id, () => Load());
-            if (prefab == null) { LogError($"A prefab({id}) was nulled, but I was never told");
-                                  __result = null;
-                                  return false; }
-            else LogDebug($"Found prefab for {id}");
-            var ptransform = prefab.transform;
-            var obj = GameObject.Instantiate( prefab
-                                            , position == null ? ptransform.position : position.Value
-                                            , rotation == null ? ptransform.rotation : rotation.Value);
-
-            obj.transform.SetParent(parent);
-            if (parent == null) SceneManager.MoveGameObjectToScene(obj, SceneManager.GetActiveScene());
-            __result = obj;
-
+            __result = Cache.Create(id, position, rotation, parent);
             return false;
         }
 
@@ -274,7 +241,7 @@ namespace BattletechPerformanceFix
             var abm = typeof(AssetBundleManager);
             var meth = AccessTools.Method(abm, "RequestAsset");
             meth.NullCheckError("RequestAsset not found");
-            Log($"RequestAsset is hookable? {!meth.IsGenericMethodDefinition}");
+            LogDebug($"RequestAsset is hookable? {!meth.IsGenericMethodDefinition}");
             Sequence( typeof(ColorSwatch), typeof(TextAsset), typeof(Sprite)
                     , typeof(SVGAsset), typeof(Texture2D))
                 .ForEach(inner => Main.harmony.Patch( meth.MakeGenericMethod(inner)
@@ -282,8 +249,108 @@ namespace BattletechPerformanceFix
                                                     , new HarmonyMethod(AccessTools.Method(self, nameof(AssetBundleManager_RequestAsset)))));
 
             Main.harmony.Patch( AccessTools.Method(abm, "IsBundleLoaded", Array(typeof(string))), Yes);
+
+
+            AccessTools.Method(typeof(SGRoomManager), "OnSimGameInitialize").Track();
+            AccessTools.Method(typeof(SGCmdCenterLanceConfigBG), "Init").Track();
         }
 
         public static Dictionary<string,GameObject> Prefabs = new Dictionary<string,GameObject>();
+
+        class Cache {
+            public static Dictionary<string,PrefabCache.RST> DefaultRootData = new Dictionary<string,PrefabCache.RST>();
+            public static Dictionary<string,List<GameObject>> Pooled = new Dictionary<string,List<GameObject>>();
+            public static GameObject Create(string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
+                GameObject Load() {
+                    var entry = lookupId(id);
+                    if (entry == null) {
+                        LogError($"Failed to find asset: {id} in the manifest from {new StackTrace().ToString()}");
+                        return null;
+                    } else if (entry.IsResourcesAsset) {
+                        LogDebug($"Loading {id} from disk");
+                        return Resources.Load(entry.ResourcesLoadPath).SafeCast<GameObject>();
+                    } else if (entry.IsAssetBundled) {
+                        LogDebug($"Loading {id} from bundle {entry.AssetBundleName}");
+                        return LoadAssetFromBundle(id, entry.AssetBundleName).SafeCast<GameObject>();
+                    } else {
+                        LogError($"Don't know how to load {entry.Id}");
+                        return null;
+                    }
+                }
+
+                GameObject RecordRST(GameObject go) {
+                    if (go != null) DefaultRootData.GetWithDefault(id, () => new PrefabCache.RST(go));
+                    return go;
+                }
+
+                GameObject FromPrefab() {
+                    Log("FromPrefab");
+                    var prefab = Prefabs.GetWithDefault(id, () => RecordRST(Load()));
+                    if (prefab == null) { LogError($"A prefab({id}) was nulled, but I was never told");
+                                          return null; }
+                    else Log($"From Prefab for {id}");
+                    var ptransform = prefab.transform;
+                    return GameObject.Instantiate( prefab
+                                                  , position == null ? ptransform.position : position.Value
+                                                  , rotation == null ? ptransform.rotation : rotation.Value);
+                }
+
+                // FIXME: There is some `RST` handling in the existing pooling implementation
+                //    looks like it's just for repairing some of the root information.
+                GameObject FromPool() {
+                    var held = Pooled.GetValueSafe(id);
+                    if (held != null && held.Any()) {
+                        LogDebug($"Leasing existing pooled gameobject for {id}");
+                        var first = held[0];
+                        if (first == null && first?.GetType() != null) {
+                            LogError($"A gameobject was destroyed while pooled for {id}");
+                            return null;
+                        } else if (first == null) {
+                            LogError($"A gameobject is in the pool but null for {id}.");
+                            return null;
+                        }
+                        held.RemoveAt(0);
+                        var t = first?.transform;
+                        if (position != null) t.position = position.Value;
+                        if (rotation != null) t.rotation = rotation.Value;
+                        first.transform.SetParent(null);
+                        if (DefaultRootData.TryGetValue(id, out var rd)) {
+                            LogDebug($"Apply RST to recover root data of {id}");
+                            rd.Apply(first);
+                        }
+                        first.SetActive(true);
+                        Log($"FromPool {id}");
+                        return first;
+                    } else return null;
+                }
+
+                var obj = FromPool().Or(FromPrefab)
+                                    .IsDestroyedError($"Both Pool and Prefab have been destroyed!")
+                                    .NullCheckError($"No prefab or pooled item for {id}");
+
+                obj.transform.SetParent(null);
+                var pscene = parent?.gameObject?.scene;
+                var lscene = obj.scene;
+                if (pscene?.name != lscene.name && pscene?.name != "DontDestroyOnLoad") {
+                    SceneManager.MoveGameObjectToScene(obj, parent?.gameObject?.scene ?? SceneManager.GetActiveScene());
+                }
+                obj.transform.SetParent(parent);
+                return obj;
+            }
+
+            // Use id temporarily just to test things
+            public static void Return(string id, GameObject obj) {
+                var held = Pooled.GetWithDefault(id, () => new List<GameObject>());
+                obj.SetActive(false);
+                obj.transform.SetParent(null);
+                GameObject.DontDestroyOnLoad(obj);
+                held.Add(obj);
+            }
+
+            // create: id, _ -> GameObject  ;; This ensures the id is loaded, and either creates or returns an existing item in the pool
+            // hint  : tag                  ;; Mark a phase, using this we can try to be more intelligent about what & how many things are pooled
+            // return: GameObject -> ()     ;; Return an item to the pool. Sometimes the game will steal: In this case, some hooks around scene loading or asset unloading can steal it back.
+
+        }
     }
 }

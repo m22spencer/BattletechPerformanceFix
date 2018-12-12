@@ -93,9 +93,10 @@ namespace BattletechPerformanceFix
         }
 
         static HarmonyMethod TrackHook;
-        public static void __Track() {
+        public static void __Track(object __instance) {
             var meth = new StackFrame(1).GetMethod();
-            LogDebug($"Tracked {meth.DeclaringType.FullName}::{meth.ToString()}");
+            var hash = __instance.GetHashCode();
+            LogDebug($"Tracked[{hash}] {meth.DeclaringType.FullName}::{meth.ToString()}");
         }
 
         public static void Summary() {

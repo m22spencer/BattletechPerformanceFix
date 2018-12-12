@@ -64,8 +64,14 @@ namespace BattletechPerformanceFix {
         public static K SafeCast<K>(this object t) where K : class
             => (t as K).NullCheckError($"Safe cast failed of {t.GetType().FullName} to {typeof(K).FullName}");
 
+        // Do not use for unity Objects! 
         public static T NullCheckError<T>(this T t, string msg) {
             if (t == null) LogError("{0} from {1}", msg, new StackTrace(1).ToString());
+            return t;
+        }
+
+        public static GameObject IsDestroyedError(this GameObject t, string msg) {
+            if (t == null && t?.GetType() != null) LogError("{0} from {1}", msg, new StackTrace(1).ToString());
             return t;
         }
 
@@ -75,6 +81,9 @@ namespace BattletechPerformanceFix {
         public static void ForEach<T>(this IEnumerable<T> xs, Action<T> f) {
            foreach (var x in xs) f(x);
         }
+
+        public static T Or<T>(this T a, Func<T> b)
+            => a == null ? b() : a;
 
         public static T GetWithDefault<K,T>(this Dictionary<K,T> d, K key, Func<T> lazyDefault)
             => d.TryGetValue(key, out var val) ? val : d[key] = lazyDefault();
