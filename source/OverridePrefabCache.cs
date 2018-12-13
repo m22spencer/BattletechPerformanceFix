@@ -242,8 +242,8 @@ namespace BattletechPerformanceFix
             var pc = typeof(PrefabCache);
             Main.harmony.Patch( AccessTools.Method(pc, "IsPrefabInPool")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_IsPrefabInPool))));
-            Main.harmony.Patch( AccessTools.Method(pc, "PooledInstantiate")
-                              , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_PooledInstantiate))));
+            "PooledInstantiate".Pre<PrefabCache>(nameof(PrefabCache_PooledInstantiate));
+
             Main.harmony.Patch( AccessTools.Method(pc, "GetPooledPrefab")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_GetPooledPrefab))));
             Main.harmony.Patch( AccessTools.Method(pc, "PoolGameObject")
@@ -270,9 +270,9 @@ namespace BattletechPerformanceFix
                               , new HarmonyMethod(AccessTools.Method(self, nameof(DragItem_get))));
 
             Log("SLCS fix");
+
             Main.harmony.Patch( AccessTools.Method(typeof(SGCmdCenterLanceConfigBG), "ShowLanceConfiguratorScreen")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(ShowLanceConfiguratorScreen_Try))));
-
 
             AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries").Instrument();
             AccessTools.Method(typeof(SGRoomManager), "OnSimGameInitialize").Instrument();
@@ -285,6 +285,8 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
             AccessTools.Method(typeof(LevelLoadRequestListener), "BundlesLoaded").Track();
             AccessTools.Method(typeof(LevelLoadRequestListener), "LevelLoaded").Track();
+
+
 
             "OnAddedToHierarchy".Pre<SimGameOptionsMenu>(_ => {
                     var db = Cache.CostDB;

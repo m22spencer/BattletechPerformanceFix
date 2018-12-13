@@ -190,6 +190,16 @@ namespace BattletechPerformanceFix {
             return false;
         }
 
+        public static void Pre<T>(this string method, string patchmethod = null) {
+            var onType = new StackFrame(1).GetMethod().DeclaringType;
+            patchmethod = patchmethod ?? (method+"_Pre");
+            var pmeth = onType.GetMethod(patchmethod, AccessTools.all).NullCheckError($"Missing patch method {patchmethod} on {onType.FullName}");
+            var meth = typeof(T).GetMethod(method, AccessTools.all).NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
+            Log($"Prepatch: {meth.DeclaringType.FullName}::{meth.ToString()} -> {onType.FullName}::{pmeth.ToString()}");
+            if (meth.IsGenericMethodDefinition) LogError("Can't patch a generic method def for {method} on {meth.DeclaringType.FullName}");
+            else Trap(() => Main.harmony.Patch( meth
+                                              , new HarmonyMethod(pmeth.DeclaringType, pmeth.Name)));
+        }
 
         // C# macros when...
         public static void Pre<T>(this string method, Action<T> f) where T : class 
@@ -213,7 +223,7 @@ namespace BattletechPerformanceFix {
             return __PreDB[key](__instance);
         }
 
-
+        public delegate void P1(BattleTech.UI.SGRoomManager ___roomManager);
     }
 
     class BPF_CoroutineInvoker : UnityEngine.MonoBehaviour {
