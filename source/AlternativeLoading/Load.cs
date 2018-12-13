@@ -6,12 +6,15 @@ using System.Text;
 using RSG;
 using BattleTech;
 using UnityEngine;
+using BattleTech.Data;
 using static BattletechPerformanceFix.Extensions;
+
+// NOTE: Bundles & Resources that are async loaded seem to be force-able
 
 namespace BattletechPerformanceFix.AlternativeLoading
 {
-    delegate void AcceptReject<T>(Action<T> accept, Action<Exception> reject);
-    class Load
+    public delegate void AcceptReject<T>(Action<T> accept, Action<Exception> reject);
+    public static class Load
     {
         public static IPromise<T> MapSync<T,R>( VersionManifestEntry entry
                                               , Func<byte[],T> byFile
@@ -29,6 +32,31 @@ namespace BattletechPerformanceFix.AlternativeLoading
 
         public static IPromise<T> LoadAssetFromBundle<T>(string id, string bundleName) {
             return Promise<T>.Rejected(new Exception("NYI: LoadAssetFromBundle"));
+        }
+
+        public static IPromise<T> LoadJson<T>( VersionManifestEntry entry) where T : HBS.Util.IJsonTemplated {
+            return MapSync( entry
+                          , System.Text.Encoding.UTF8.GetString
+                          , (TextAsset t) => t.text
+                          , (TextAsset t) => t.text)
+                .Then(str => { var inst = Activator.CreateInstance<T>().NullThrowError($"No Activator for {typeof(T).FullName}");
+                               inst.FromJSON(str);
+                               return inst; });
+
+        }
+
+        public static IPromise<T> DMResolveDependencies<T>(this IPromise<T> p) {
+            return p.Then(maybeDeps => {
+                    if (maybeDeps is DataManager.ILoadDependencies) {
+                        var ild = maybeDeps as DataManager.ILoadDependencies;
+                        var prom = new Promise<T>();
+                        // FIXME: This will require the DummyLoader from rda branch
+                        ild.RequestDependencies(DMGlue.DM, () => prom.Resolve(maybeDeps), null);
+                        return prom;
+                    } else {
+                        return Promise<T>.Resolved(maybeDeps);
+                    }
+                });
         }
     }
 }
