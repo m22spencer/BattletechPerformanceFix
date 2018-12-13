@@ -84,6 +84,7 @@ namespace BattletechPerformanceFix
         }
 
         public static void Virtual_Briefing() {
+            Log($"Virtual_Briefing override");
             var game = HBS.LazySingletonBehavior<UnityGameInstance>.Instance.Game;
 
             void InitContractComplete(MessageCenterMessage message) {
@@ -149,7 +150,9 @@ namespace BattletechPerformanceFix
                                                                                           ___interstitialComplete();
                                                                                           //___interstitialComplete = null; // FIXME
                                                    }
-                                                   Virtual_Briefing();
+                                                   if (loadingInterstitialScene == "Interstitial_Briefing") Virtual_Briefing();
+                                                   WaitAFrame().Done(() => { Log($"Hide loading curtain.. hopefully?");
+                                                                             LoadingCurtain.Hide(); });
                                                  });
 
 
