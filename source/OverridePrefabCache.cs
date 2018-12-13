@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Harmony;
 using BattleTech;
+using BattleTech.Save;
 using BattleTech.UI;
 using BattleTech.Assetbundles;
 using BattleTech.Data;
@@ -190,8 +191,10 @@ namespace BattletechPerformanceFix
                 baseManifest.NullCheckError("Unable to access baseManifest");  //FIXME: Also needs the contents packs manifest if user owns them
                 new Traverse(locator).Method("UpdateTypedEntriesIfNeeded");
                 // FIXME: Terribly slow
-                return baseManifest.SelectMany(idents => idents.Value)
-                                   .FirstOrDefault(e => e.Value.Id == id).Value;
+                foreach(var types in baseManifest) {
+                    if (types.Value.TryGetValue(id, out var ent)) return ent;
+                }
+                return null;
             } else {
                 return locator.EntryByID(id, type.Value, true);
             }
@@ -261,6 +264,11 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch( AccessTools.Method(typeof(SGCmdCenterLanceConfigBG), "ShowLanceConfiguratorScreen")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(ShowLanceConfiguratorScreen_Try))));
 
+
+            AccessTools.Method(typeof(BattleTechResourceLocator), "RefreshTypedEntries").Instrument();
+            AccessTools.Method(typeof(SGRoomManager), "OnSimGameInitialize").Instrument();
+            AccessTools.Method(typeof(SkirmishUnitsAndLances), "UnMountMemoryStore").Instrument();
+            AccessTools.Method(self, "lookupId").Instrument();
         }
 
         // Anything re-used from the pool with contain the state it was pooled with
