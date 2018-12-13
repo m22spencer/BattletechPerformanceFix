@@ -91,20 +91,9 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
             AccessTools.Method(typeof(DataManager), "Clear").Track();
 
-            /*
-            Main.harmony.Patch( AccessTools.Method(typeof(DataManager), "Update")
-                              , new HarmonyMethod(self, "DataManager_Update"));
-                              */
 
             SceneManager.sceneLoaded += (_, m) => Log($"SCENELOADED");
         }
-
-        public static void DataManager_Update(DataManager __instance) {
-            var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
-            var byid = dmlr.Take(10).ToArray().Dump();
-            LogDebug("ProcessRequests :10waiting {0}", byid); // from {new StackTrace().ToString()}");
-        }
-
 
         // I'd like to do this at SetData, but we need to be able to cancel the map load request to do that.
         public static void LanceConfiguratorPanel_SetData(Contract __instance) {
@@ -197,29 +186,11 @@ namespace BattletechPerformanceFix
 
 
 
-            return false;
-            if (Scene != null) {
-                Log($"LL.LoadScene intercepted for :scene {scene}");
-                HandleScene();
-                return false;
-            }
-            var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"LL.LoadScene {scene} :currentScenes {currentScenes} from {new StackTrace().ToString()}");
-            return true;
-        }
+            return false;        }
 
         public static bool LevelLoader_Start() {
             Log($"LL.Start discarded");
             return false;
-            if (Scene != null) {
-                Log($"LL.Start intercepted");
-                Scene = null;
-                return false;
-            }
-
-            var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"LL.Start triggered :currentScenes {currentScenes}");
-            return true;
         }
 
         public static Func<IPromise<Scene>> Scene;

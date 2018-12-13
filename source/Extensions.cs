@@ -176,6 +176,31 @@ namespace BattletechPerformanceFix {
             __result = false;
             return false;
         }
+
+
+        // C# macros when...
+        public static void Pre<T>(this string method, Action<T> f) where T : class 
+            => method.Pre<T>(x => { f(x); return true; });
+
+        public static void Pre<T>(this string method, Func<T,bool> f) where T : class
+            => AccessTools.Method(typeof(T), method).Pre(f);
+
+        public static void Pre<T>(this MethodBase meth, Func<T,bool> f) where T : class {
+            var key = meth.DeclaringType.FullName + "::" + meth.Name;
+            __PreDB[key] = v => f(v.SafeCast<T>());
+            Main.harmony.Patch( meth
+                              , new HarmonyMethod(typeof(Extensions), nameof(__Pre)));
+        }
+        public static Dictionary<string,Func<object,bool>> __PreDB = new Dictionary<string,Func<object,bool>>();
+        public static bool __Pre(object __instance) {
+            var sf = new StackFrame(1).GetMethod();
+            var name = sf.Name;
+            var mname = name.Substring(0, name.LastIndexOf('_'));
+            var key = sf.DeclaringType.FullName + "::" + mname;
+            return __PreDB[key](__instance);
+        }
+
+
     }
 
     class BPF_CoroutineInvoker : UnityEngine.MonoBehaviour {
