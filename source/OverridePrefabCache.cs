@@ -286,14 +286,22 @@ namespace BattletechPerformanceFix
                     var epool = db.OrderByDescending(kv => kv.Value.alloctime / kv.Value.created)
                                   .Take(10)
                                   .ToArray();
+                    var lpool = db.OrderByDescending(kv => kv.Value.leased)
+                                  .Take(10)
+                                  .ToArray();
+                    var cpool = db.OrderByDescending(kv => kv.Value.created)
+                                  .Take(10)
+                                  .ToArray();
 
                     string NiceList(KeyValuePair<string,Cost>[] lst) {
                         return string.Join("", lst.Select(l => "  " + l.Key + "-> " + l.Value.ToString()+ "\n").ToArray());
                     }
 
-                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority\n{1}\n"
+                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority\n{1}\nLease Priority\n{2}\nCreate Priority\n{3}\n"
                        , NiceList(eload)
-                       , NiceList(epool));
+                       , NiceList(epool)
+                       , NiceList(lpool)
+                       , NiceList(cpool));
                 });
         }
 
