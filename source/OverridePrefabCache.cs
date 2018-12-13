@@ -169,7 +169,8 @@ namespace BattletechPerformanceFix
             else { LogDebug($"Loading bundle {bundleName}");
                    GetBundleDependencies(bundleName).ForEach(depName => LoadBundle(depName));
                    var path = AssetBundleNameToFilePath(bundleName);
-                   var newBundle =  AssetBundle.LoadFromFile(path).NullCheckError($"Missing bundle {bundleName} from {path}");
+                   var newBundle =  Measure( (b,t) => Log($"LoadBundle {b}b in {t.TotalMilliseconds}ms")
+                                           , () => AssetBundle.LoadFromFile(path)).NullCheckError($"Missing bundle {bundleName} from {path}");
                    Bundles[bundleName] = newBundle;
                    return newBundle; }
         }
