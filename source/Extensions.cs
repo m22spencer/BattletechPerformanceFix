@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
+using Newtonsoft.Json;
 
 namespace BattletechPerformanceFix {
     public static class Extensions {
@@ -111,6 +112,15 @@ namespace BattletechPerformanceFix {
 
             return () => { op.allowSceneActivation = true;
                            return prom; };
+        }
+
+        public static string Dump<T>(this T t, bool indented = true)
+        {
+            return JsonConvert.SerializeObject(t, indented ? Formatting.Indented : Formatting.None, new JsonSerializerSettings
+                {
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                    Error = (serializer, err) => err.ErrorContext.Handled = true
+                });
         }
 
         public static IPromise AsPromise(this AsyncOperation operation, string sceneName = null) {

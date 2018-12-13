@@ -26,30 +26,9 @@ namespace BattletechPerformanceFix
     // move it to SimGameState._OnBeginDefsLoad
     class ParallelizeLoad : Feature
     {
-        public static void Load(VersionManifestEntry ___manifestEntry) {
-            Log($"CS: {___manifestEntry.ResourcesLoadPath}");
-            if (!___manifestEntry.IsAssetBundled) {
-                Log($"Looking for CS {___manifestEntry.Id}");
-                Trap(() => Resources.Load<ColorSwatch>(___manifestEntry.ResourcesLoadPath).NullCheckError("Failed to find ColorSwatch"));
-            }
-        }
-
-        public static void AssetLoaded(VersionManifestEntry ___manifestEntry, ColorSwatch resource) {
-            Log($"CS: {___manifestEntry.ResourcesLoadPath} loaded as {(resource == null ? "null" : "cs")}");
-        }
-
         public void Activate() {
             var sgs = typeof(SimGameState);
             var self = typeof(ParallelizeLoad);
-
-
-            var dm = typeof(DataManager).GetNestedType("ColorSwatchLoadRequest", AccessTools.all);
-
-            Main.harmony.Patch( AccessTools.Method(dm, "Load")
-                              , new HarmonyMethod(self, nameof(Load)));
-
-            Main.harmony.Patch( AccessTools.Method(dm, "AssetLoaded")
-                              , new HarmonyMethod(self, nameof(AssetLoaded)));
 
             // For some reason, triggering a scene load before _OnBeginDefsLoad is invoked causes the UI to never initiate. Postfix to avoid this.
             Main.harmony.Patch(AccessTools.Method(sgs, nameof(_OnBeginDefsLoad)), null, new HarmonyMethod(AccessTools.Method(self, nameof(_OnBeginDefsLoad))));
@@ -95,6 +74,7 @@ namespace BattletechPerformanceFix
             Log("ReceiveButtonPress");
             AccessTools.Method(typeof(SGNegotiationWidget), "ReceiveButtonPress").Track();
 
+            // We want to request the map here, but this makes DataManager just stop loading because "reasons"
             // Main.harmony.Patch( AccessTools.Method(typeof(LanceConfiguratorPanel), "ContinueConfirmClicked")
             //                   , new HarmonyMethod(AccessTools.Method(self, nameof(LanceConfiguratorPanel_SetData))));
             Main.harmony.Patch( AccessTools.Method(typeof(Contract)
@@ -110,7 +90,21 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "Start").Track();
             AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
             AccessTools.Method(typeof(DataManager), "Clear").Track();
+
+            /*
+            Main.harmony.Patch( AccessTools.Method(typeof(DataManager), "Update")
+                              , new HarmonyMethod(self, "DataManager_Update"));
+                              */
+
+            SceneManager.sceneLoaded += (_, m) => Log($"SCENELOADED");
         }
+
+        public static void DataManager_Update(DataManager __instance) {
+            var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
+            var byid = dmlr.Take(10).ToArray().Dump();
+            LogDebug("ProcessRequests :10waiting {0}", byid); // from {new StackTrace().ToString()}");
+        }
+
 
         // I'd like to do this at SetData, but we need to be able to cancel the map load request to do that.
         public static void LanceConfiguratorPanel_SetData(Contract __instance) {
