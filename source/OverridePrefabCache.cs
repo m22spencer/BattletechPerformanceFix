@@ -291,7 +291,7 @@ namespace BattletechPerformanceFix
                         return string.Join("", lst.Select(l => "  " + l.Key + "-> " + l.Value.ToString()+ "\n").ToArray());
                     }
 
-                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority{1}\n"
+                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority\n{1}\n"
                        , NiceList(eload)
                        , NiceList(epool));
                 });
