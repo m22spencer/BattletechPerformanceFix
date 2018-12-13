@@ -71,11 +71,10 @@ namespace BattletechPerformanceFix
 
         public static void HandleScene() {
             Log($"Handling intercepted scene {SceneName}");
-            SceneOp.allowSceneActivation = true;
-            Scene.Done(() => { Log($"Activating scene {SceneName}");
-                               SceneManager.SetActiveScene(SceneManager.GetSceneByName(SceneName));
-                               Scene = null; // This may need to apply next frame to prevent LL.Start from handling our custom load
-                             });
+            Scene().Done(() => { Log($"Activating scene {SceneName}");
+                                 SceneManager.SetActiveScene(SceneManager.GetSceneByName(SceneName));
+                                 Scene = null; // This may need to apply next frame to prevent LL.Start from handling our custom load
+                               });
 
         }
 
@@ -103,8 +102,7 @@ namespace BattletechPerformanceFix
         }
 
         public static string SceneName;
-        public static IPromise Scene;
-        public static AsyncOperation SceneOp;
+        public static Func<IPromise> Scene;
         public static void _OnBeginDefsLoad() {
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
             Log($"Load defs in parallel for :scene `SimGame` :frame {Time.frameCount} :time {Time.unscaledTime} :currentScenes {currentScenes} :from \r\n{new StackTrace().ToString()}");
@@ -117,12 +115,9 @@ namespace BattletechPerformanceFix
 
             Trap(() => {
                     // It would be optimal to remove shaders and effects and lower quality options here to ensure we spend no/little time rendering
-                    var op = SceneManager.LoadSceneAsync("SimGame", LoadSceneMode.Single);
-                    SceneOp = op;
-                    op.allowSceneActivation = false;
+                    Scene = "SimGame".LoadSceneAsync();
                     SceneName = "SimGame";
-                    Scene = op.AsPromise();
-                    Scene.Done(() => Log($"Scene `SimGame` loaded :frame {Time.frameCount} :time {Time.unscaledTime}"));
+                    SceneName = "SimGame";
                 });
         }
     }

@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 namespace BattletechPerformanceFix {
     public static class Extensions {
@@ -100,6 +101,16 @@ namespace BattletechPerformanceFix {
             var prom = new Promise();
             BPF_CoroutineInvoker.Invoke(coroutine, prom.Resolve);
             return prom;
+        }
+
+        public static Func<IPromise> LoadSceneAsync(this string name, LoadSceneMode mode = LoadSceneMode.Single) {
+            var op = SceneManager.LoadSceneAsync(name, mode);
+            op.allowSceneActivation = false;
+
+            var prom = op.AsPromise();
+
+            return () => { op.allowSceneActivation = true;
+                           return prom; };
         }
 
         public static IPromise AsPromise(this AsyncOperation operation) {
