@@ -74,7 +74,6 @@ namespace BattletechPerformanceFix
 
         public static void HandleScene() {
             return;
-            Log($"Handling intercepted scene {SceneName}");
 
             Scene().Done(scn => { Log($"Activating scene {scn.name}");
                                   SceneManager.SetActiveScene(scn);
@@ -142,18 +141,23 @@ namespace BattletechPerformanceFix
             //     loadingInterstitialScene.LoadSceneAsync(LoadSceneMode.Additive)();
 
             Log($"LL.LoadScene: Load new scene async :active {SceneManager.GetActiveScene().name}");
-            scene.LoadSceneAsync()().Done(scn => { SceneManager.SetActiveScene(scn);
-                                                   Log($"Activate scene {scn.name}");
-                                                   UnityGameInstance.BattleTechGame.MessageCenter.PublishMessage(new LevelLoadCompleteMessage(scene, loadingInterstitialScene));
-                                                   ___loaderState = LevelLoader.LoadState.Loaded;
-                                                   if (___interstitialComplete != null) { Log($"Informing of load completion");
-                                                                                          ___interstitialComplete();
-                                                                                          //___interstitialComplete = null; // FIXME
-                                                   }
-                                                   if (loadingInterstitialScene == "Interstitial_Briefing") Virtual_Briefing();
-                                                   WaitAFrame().Done(() => { Log($"Hide loading curtain.. hopefully?");
-                                                                             LoadingCurtain.Hide(); });
-                                                 });
+
+            if (Scene != null) Log($"LL.LoadScene: A scene is currently being background loaded and will now be allowed to initialize");
+            Scene = Scene ?? scene.LoadSceneAsync();  //Either use an existing in progress scene, or start the load now;
+
+            Scene().Done(scn => { Scene = null;
+                                  SceneManager.SetActiveScene(scn);
+                                  Log($"Activate scene {scn.name}");
+                                  UnityGameInstance.BattleTechGame.MessageCenter.PublishMessage(new LevelLoadCompleteMessage(scene, loadingInterstitialScene));
+                                  ___loaderState = LevelLoader.LoadState.Loaded;
+                                  if (___interstitialComplete != null) { Log($"Informing of load completion");
+                                                                         ___interstitialComplete();
+                                                                         //___interstitialComplete = null; // FIXME
+                                  }
+                                  if (loadingInterstitialScene == "Interstitial_Briefing") Virtual_Briefing();
+                                  WaitAFrame().Done(() => { Log($"Hide loading curtain.. hopefully?");
+                                                            LoadingCurtain.Hide(); });
+                                });
 
 
 
@@ -182,24 +186,14 @@ namespace BattletechPerformanceFix
             return true;
         }
 
-        public static string SceneName;
         public static Func<IPromise<Scene>> Scene;
+
+        //FIXME: Look for an earlier trigger
         public static void _OnBeginDefsLoad() {
-            return;
-            var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"Load defs in parallel for :scene `SimGame` :frame {Time.frameCount} :time {Time.unscaledTime} :currentScenes {currentScenes} :from \r\n{new StackTrace().ToString()}");
-
-            if (SceneManager.GetAllScenes().ToList().Exists(s => s.name == "SimGame")) { Log("Sim game exists already - unloading");
-                                                                                         Trap(() => SceneManager.UnloadScene("SimGame"));
-                                                                                         Log("Sim game unloaded"); }
-            var sw = Stopwatch.StartNew();
-            // FIXME: Can we use asyncOp.allowSceneActivation
-
-            Trap(() => {
-                    // It would be optimal to remove shaders and effects and lower quality options here to ensure we spend no/little time rendering
-                    Scene = "SimGame".LoadSceneAsync();
-                    SceneName = "SimGame";
-                });
+            if (Scene != null) LogError("An early scene load was triggered, but a scene is already buffered");
+            Log($"Early scene load trigger for SimGame");
+            if (SceneManager.GetActiveScene().name == "SimGame") SceneManager.UnloadScene("SimGame");   //FIXME: Won't work as there is no existing scene to fallback to. Probably keep Empty around all the time and just switch to it.
+            Scene = "SimGame".LoadSceneAsync();
         }
     }
 }
