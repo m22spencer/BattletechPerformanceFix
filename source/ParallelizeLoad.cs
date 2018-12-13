@@ -119,26 +119,13 @@ namespace BattletechPerformanceFix
             game.MessageCenter.PublishMessage(new InitializeContractMessage(game.Combat));
         }
 
+        // General flow:  Loads load scene, which triggers load from LevelLoader object, which then(optionally) loads an interstitial, which contains an Awake which continues game process.
         public static bool LoadScene(LevelLoader __instance, string scene, string loadingInterstitialScene, ref string ___loadTarget, Action ___interstitialComplete, LevelLoader.LoadState ___loaderState) {
             Log($"LL.LoadScene intercepted for :scene {scene} :interstitialScene {loadingInterstitialScene} :active {SceneManager.GetActiveScene().name} from {new StackTrace().ToString()}");
 
             ___loadTarget = scene;
 
-
-            /*
-            var active = SceneManager.GetActiveScene();
-            Log($"LL.LoadScene: Load Empty over active {active.name} :active {SceneManager.GetActiveScene().name}");
-            SceneManager.LoadScene("Empty");
-            Log($"LL.LoadScene: Set Empty over active {active.name} :active {SceneManager.GetActiveScene().name}");
-            Log($"GSE? {SceneManager.GetSceneByName("Empty")}");
-            Trap(() => SceneManager.SetActiveScene(SceneManager.GetSceneByName("Empty")));
-            Log($"LL.LoadScene: Unloading {active.name} :active {SceneManager.GetActiveScene().name}");
-            SceneManager.UnloadScene(active);
-            */
-
             ___loaderState = LevelLoader.LoadState.InterstitialActive;
-            // if (loadingInterstitialScene != null)
-            //     loadingInterstitialScene.LoadSceneAsync(LoadSceneMode.Additive)();
 
             Log($"LL.LoadScene: Load new scene async :active {SceneManager.GetActiveScene().name}");
 
