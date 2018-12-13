@@ -75,6 +75,12 @@ namespace BattletechPerformanceFix {
             return t;
         }
 
+        public static T NullThrowError<T>(this T t, string msg) {
+            if (t == null) throw new System.Exception($"{msg} from {new StackTrace(1).ToString()}");
+            return t;
+        }
+            
+
         public static GameObject IsDestroyedError(this GameObject t, string msg) {
             if (t == null && t?.GetType() != null) LogError("{0} from {1}", msg, new StackTrace(1).ToString());
             return t;
@@ -192,9 +198,12 @@ namespace BattletechPerformanceFix {
 
         public static void Pre<T>(this string method, string patchmethod = null) {
             var onType = new StackFrame(1).GetMethod().DeclaringType;
-            patchmethod = patchmethod ?? (method+"_Pre");
+            patchmethod = patchmethod ?? (method == ".ctor" ? "CTOR_Pre" : (method+"_Pre"));
             var pmeth = onType.GetMethod(patchmethod, AccessTools.all).NullCheckError($"Missing patch method {patchmethod} on {onType.FullName}");
-            var meth = typeof(T).GetMethod(method, AccessTools.all).NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
+            var meth = (method == ".ctor"
+                         ? (MethodBase)typeof(T).GetConstructors(AccessTools.all)[0]
+                         : (MethodBase)typeof(T).GetMethod(method, AccessTools.all))
+                .NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
             Log($"Prepatch: {meth.DeclaringType.FullName}::{meth.ToString()} -> {onType.FullName}::{pmeth.ToString()}");
             if (meth.IsGenericMethodDefinition) LogError("Can't patch a generic method def for {method} on {meth.DeclaringType.FullName}");
             else Trap(() => Main.harmony.Patch( meth
