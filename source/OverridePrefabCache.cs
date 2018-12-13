@@ -164,15 +164,23 @@ namespace BattletechPerformanceFix
         }
 
         public static Dictionary<string, AssetBundle> Bundles = new Dictionary<string, AssetBundle>();
+        public static List<AssetBundle> LRUBundles = new List<AssetBundle>();
         public static AssetBundle LoadBundle(string bundleName) {
-            if (Bundles.TryGetValue(bundleName, out var bundle)) return bundle;
-            else { LogDebug($"Loading bundle {bundleName}");
-                   GetBundleDependencies(bundleName).ForEach(depName => LoadBundle(depName));
-                   var path = AssetBundleNameToFilePath(bundleName);
-                   var newBundle =  Measure( (b,t) => Log($"LoadBundle {b}b in {t.TotalMilliseconds}ms")
-                                           , () => AssetBundle.LoadFromFile(path)).NullCheckError($"Missing bundle {bundleName} from {path}");
-                   Bundles[bundleName] = newBundle;
-                   return newBundle; }
+            AssetBundle Load() {
+                LogDebug($"Loading bundle {bundleName}");
+                GetBundleDependencies(bundleName).ForEach(depName => LoadBundle(depName));
+                var path = AssetBundleNameToFilePath(bundleName);
+                var newBundle =  Measure( (b,t) => Log($"LoadBundle {b}b in {t.TotalMilliseconds}ms")
+                                        , () => AssetBundle.LoadFromFile(path)).NullCheckError($"Missing bundle {bundleName} from {path}");
+                Bundles[bundleName] = newBundle;
+                return newBundle;
+            }
+
+
+            var bundle = Bundles.GetWithDefault(bundleName, Load);
+            LRUBundles.Remove(bundle);
+            LRUBundles.Add(bundle);
+            return bundle;
         }
 
         public static T LoadAssetFromBundle<T>(string assetName, string bundleName) where T : UnityEngine.Object
@@ -293,15 +301,18 @@ namespace BattletechPerformanceFix
                                   .Take(10)
                                   .ToArray();
 
+                    var lrubundles = LRUBundles.Take(5).Select(b => b.name);
+
                     string NiceList(KeyValuePair<string,Cost>[] lst) {
                         return string.Join("", lst.Select(l => "  " + l.Key + "-> " + l.Value.ToString()+ "\n").ToArray());
                     }
 
-                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority\n{1}\nLease Priority\n{2}\nCreate Priority\n{3}\n"
+                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority\n{1}\nLease Priority\n{2}\nCreate Priority\n{3}\nLRU Bundles\n  {4}\n"
                        , NiceList(eload)
                        , NiceList(epool)
                        , NiceList(lpool)
-                       , NiceList(cpool));
+                       , NiceList(cpool)
+                       , lrubundles.Dump(false));
                 });
         }
 
@@ -339,7 +350,7 @@ namespace BattletechPerformanceFix
                             LogError($"Failed to find asset: {id} in the manifest from {new StackTrace().ToString()}");
                             return null;
                         } else if (entry.IsResourcesAsset) {
-                            LogDebug($"Loading {id} from disk");
+                            LogDebug($"Loading {id} from resources {entry.ResourcesLoadPath}");
                             return Resources.Load(entry.ResourcesLoadPath).SafeCast<GameObject>();
                         } else if (entry.IsAssetBundled) {
                             LogDebug($"Loading {id} from bundle {entry.AssetBundleName}");
