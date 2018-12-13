@@ -269,6 +269,13 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(SGRoomManager), "OnSimGameInitialize").Instrument();
             AccessTools.Method(typeof(SkirmishUnitsAndLances), "UnMountMemoryStore").Instrument();
             AccessTools.Method(self, "lookupId").Instrument();
+
+            
+            AccessTools.Method(typeof(Briefing), "LevelLoaded").Track();
+            AccessTools.Method(typeof(LevelLoadRequestListener), "Start").Track();
+            AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
+            AccessTools.Method(typeof(LevelLoadRequestListener), "BundlesLoaded").Track();
+            AccessTools.Method(typeof(LevelLoadRequestListener), "LevelLoaded").Track();
         }
 
         // Anything re-used from the pool with contain the state it was pooled with
