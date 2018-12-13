@@ -304,20 +304,28 @@ namespace BattletechPerformanceFix
             public static Dictionary<string,List<GameObject>> Pooled = new Dictionary<string,List<GameObject>>();
             public static GameObject Create(string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
                 GameObject Load() {
-                    var entry = lookupId(id);
-                    if (entry == null) {
-                        LogError($"Failed to find asset: {id} in the manifest from {new StackTrace().ToString()}");
-                        return null;
-                    } else if (entry.IsResourcesAsset) {
-                        LogDebug($"Loading {id} from disk");
-                        return Resources.Load(entry.ResourcesLoadPath).SafeCast<GameObject>();
-                    } else if (entry.IsAssetBundled) {
-                        LogDebug($"Loading {id} from bundle {entry.AssetBundleName}");
-                        return LoadAssetFromBundle(id, entry.AssetBundleName).SafeCast<GameObject>();
-                    } else {
-                        LogError($"Don't know how to load {entry.Id}");
-                        return null;
+                    GameObject Go() {
+                        var entry = lookupId(id);
+                        if (entry == null) {
+                            LogError($"Failed to find asset: {id} in the manifest from {new StackTrace().ToString()}");
+                            return null;
+                        } else if (entry.IsResourcesAsset) {
+                            LogDebug($"Loading {id} from disk");
+                            return Resources.Load(entry.ResourcesLoadPath).SafeCast<GameObject>();
+                        } else if (entry.IsAssetBundled) {
+                            LogDebug($"Loading {id} from bundle {entry.AssetBundleName}");
+                            return LoadAssetFromBundle(id, entry.AssetBundleName).SafeCast<GameObject>();
+                        } else {
+                            LogError($"Don't know how to load {entry.Id}");
+                            return null;
+                        }
                     }
+                    var tmem = System.GC.GetTotalMemory(false);
+                    var sw = Stopwatch.StartNew();
+                    var item = Go();
+                    var delta = System.GC.GetTotalMemory(false) - tmem;
+                    Log($"Load {delta}b in {sw.Elapsed.TotalMilliseconds}ms");
+                    return item;
                 }
 
                 GameObject RecordRST(GameObject go) {
@@ -328,13 +336,16 @@ namespace BattletechPerformanceFix
                 GameObject FromPrefab() {
                     Log("FromPrefab");
                     var prefab = Prefabs.GetWithDefault(id, () => RecordRST(Load()));
-                    if (prefab == null) { LogError($"A prefab({id}) was nulled, but I was never told");
-                                          return null; }
-                    else Log($"From Prefab for {id}");
-                    var ptransform = prefab.transform;
-                    return GameObject.Instantiate( prefab
-                                                  , position == null ? ptransform.position : position.Value
-                                                  , rotation == null ? ptransform.rotation : rotation.Value);
+                    return Measure((b,t) => Log($"FromPrefab {b}b in {t.TotalMilliseconds}ms")
+                                  , () => {
+                            if (prefab == null) { LogError($"A prefab({id}) was nulled, but I was never told");
+                                                  return null; }
+                            else Log($"From Prefab for {id}");
+                            var ptransform = prefab.transform;
+                            return GameObject.Instantiate( prefab
+                                                         , position == null ? ptransform.position : position.Value
+                                                         , rotation == null ? ptransform.rotation : rotation.Value);
+                        });
                 }
 
                 // FIXME: There is some `RST` handling in the existing pooling implementation
@@ -342,27 +353,30 @@ namespace BattletechPerformanceFix
                 GameObject FromPool() {
                     var held = Pooled.GetValueSafe(id);
                     if (held != null && held.Any()) {
-                        LogDebug($"Leasing existing pooled gameobject for {id}");
-                        var first = held[0];
-                        if (first == null && first?.GetType() != null) {
-                            LogError($"A gameobject was destroyed while pooled for {id}");
-                            return null;
-                        } else if (first == null) {
-                            LogError($"A gameobject is in the pool but null for {id}.");
-                            return null;
-                        }
-                        held.RemoveAt(0);
-                        var t = first?.transform;
-                        if (position != null) t.position = position.Value;
-                        if (rotation != null) t.rotation = rotation.Value;
-                        first.transform.SetParent(null);
-                        if (DefaultRootData.TryGetValue(id, out var rd)) {
-                            LogDebug($"Apply RST to recover root data of {id}");
-                            rd.Apply(first);
-                        }
-                        first.SetActive(true);
-                        Log($"FromPool {id}");
-                        return first;
+                        return Measure((b,t) => Log($"FromPool {b}b in {t.TotalMilliseconds}ms")
+                                      , () => {
+                                LogDebug($"Leasing existing pooled gameobject for {id}");
+                                var first = held[0];
+                                if (first == null && first?.GetType() != null) {
+                                    LogError($"A gameobject was destroyed while pooled for {id}");
+                                    return null;
+                                } else if (first == null) {
+                                    LogError($"A gameobject is in the pool but null for {id}.");
+                                    return null;
+                                }
+                                held.RemoveAt(0);
+                                var t = first?.transform;
+                                if (position != null) t.position = position.Value;
+                                if (rotation != null) t.rotation = rotation.Value;
+                                first.transform.SetParent(null);
+                                if (DefaultRootData.TryGetValue(id, out var rd)) {
+                                    LogDebug($"Apply RST to recover root data of {id}");
+                                    rd.Apply(first);
+                                }
+                                first.SetActive(true);
+                                Log($"FromPool {id}");
+                                return first;
+                            });
                     } else return null;
                 }
 

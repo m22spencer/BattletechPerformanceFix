@@ -93,6 +93,16 @@ namespace BattletechPerformanceFix {
         public static T GetWithDefault<K,T>(this Dictionary<K,T> d, K key, Func<T> lazyDefault)
             => d.TryGetValue(key, out var val) ? val : d[key] = lazyDefault();
 
+        public static T Measure<T>(Action<long,TimeSpan> stats, Func<T> f) {
+            var tmem = System.GC.GetTotalMemory(false);
+            var sw = Stopwatch.StartNew();
+            var item = f();
+            sw.Stop();
+            var delta = System.GC.GetTotalMemory(false) - tmem;
+            stats(delta, sw.Elapsed);
+            return item;
+        }
+
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         // Do not let BattleTech recover anything. Forcibly close.
