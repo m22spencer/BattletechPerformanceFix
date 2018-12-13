@@ -71,10 +71,10 @@ namespace BattletechPerformanceFix
 
         public static void HandleScene() {
             Log($"Handling intercepted scene {SceneName}");
-            Scene().Done(() => { Log($"Activating scene {SceneName}");
-                                 SceneManager.SetActiveScene(SceneManager.GetSceneByName(SceneName));
-                                 Scene = null; // This may need to apply next frame to prevent LL.Start from handling our custom load
-                               });
+            Scene().Done(scn => { Log($"Activating scene {scn.name}");
+                                  SceneManager.SetActiveScene(scn);
+                                  Scene = null; // This may need to apply next frame to prevent LL.Start from handling our custom load
+                                });
 
         }
 
@@ -102,7 +102,7 @@ namespace BattletechPerformanceFix
         }
 
         public static string SceneName;
-        public static Func<IPromise> Scene;
+        public static Func<IPromise<Scene>> Scene;
         public static void _OnBeginDefsLoad() {
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
             Log($"Load defs in parallel for :scene `SimGame` :frame {Time.frameCount} :time {Time.unscaledTime} :currentScenes {currentScenes} :from \r\n{new StackTrace().ToString()}");
@@ -116,7 +116,6 @@ namespace BattletechPerformanceFix
             Trap(() => {
                     // It would be optimal to remove shaders and effects and lower quality options here to ensure we spend no/little time rendering
                     Scene = "SimGame".LoadSceneAsync();
-                    SceneName = "SimGame";
                     SceneName = "SimGame";
                 });
         }

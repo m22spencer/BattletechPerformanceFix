@@ -103,27 +103,28 @@ namespace BattletechPerformanceFix {
             return prom;
         }
 
-        public static Func<IPromise> LoadSceneAsync(this string name, LoadSceneMode mode = LoadSceneMode.Single) {
+        public static Func<IPromise<Scene>> LoadSceneAsync(this string name, LoadSceneMode mode = LoadSceneMode.Single) {
             var op = SceneManager.LoadSceneAsync(name, mode);
             op.allowSceneActivation = false;
 
-            var prom = op.AsPromise();
+            var prom = op.AsPromise(name).Then(() => Promise<Scene>.Resolved(SceneManager.GetSceneByName(name)));
 
             return () => { op.allowSceneActivation = true;
                            return prom; };
         }
 
-        public static IPromise AsPromise(this AsyncOperation operation) {
-            IEnumerator TillDone() { var timer = Stopwatch.StartNew();
+        public static IPromise AsPromise(this AsyncOperation operation, string sceneName = null) {
+            IEnumerator TillDone() { var sn = sceneName ?? "?";
+                                     var timer = Stopwatch.StartNew();
                                      while (!operation.isDone && operation.progress < .9f) { yield return null; }
                                      var loadTime = timer.Elapsed.TotalSeconds;
                                      while (!operation.allowSceneActivation) { yield return null; }
-                                     LogDebug("Scene activation -------");
+                                     LogDebug($"Scene[{sn}] activation -------");
                                      timer.Reset(); timer.Start();
                                      while (!operation.isDone) { yield return null; }
                                      yield return null;  // Let scene run Awake/Start
                                      var initTime = timer.Elapsed.TotalSeconds;
-                                     LogDebug($"Scene fetched in {loadTime + initTime} seconds. :load ({loadTime} seconds) :init ({initTime} seconds)"); }
+                                     LogDebug($"Scene[{sn}] fetched in {loadTime + initTime} seconds. :load ({loadTime} seconds) :init ({initTime} seconds)"); }
             return TillDone().AsPromise();
         }
 
