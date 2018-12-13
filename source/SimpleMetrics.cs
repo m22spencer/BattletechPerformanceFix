@@ -23,7 +23,6 @@ namespace BattletechPerformanceFix
 
 
         public static void Instrument(MethodBase meth) {
-            if (!Active) return;
             if (meth == null)
                 LogError($"Cannot instrument null meth from {new StackTrace().ToString()}");
 
@@ -49,7 +48,6 @@ namespace BattletechPerformanceFix
         }
 
         public static void Track(MethodBase meth) {
-            if (!Active) return;
             if (meth == null)
                 LogError($"Cannot instrument null meth from {new StackTrace().ToString()}");
 

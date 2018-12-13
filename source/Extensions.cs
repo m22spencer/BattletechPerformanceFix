@@ -115,9 +115,11 @@ namespace BattletechPerformanceFix {
 
         public static IPromise AsPromise(this AsyncOperation operation, string sceneName = null) {
             IEnumerator TillDone() { var sn = sceneName ?? "?";
+                                     LogDebug($"Scene[{sn}] load started ----------");
                                      var timer = Stopwatch.StartNew();
-                                     while (!operation.isDone && operation.progress < .9f) { yield return null; }
+                                     while (!operation.isDone && operation.progress < .9f) { LogDebug($"WFF {Time.frameCount} {operation.progress}"); yield return null; }
                                      var loadTime = timer.Elapsed.TotalSeconds;
+                                     LogDebug($"Scene[{sn}] ready for activation after {loadTime} seconds");
                                      while (!operation.allowSceneActivation) { yield return null; }
                                      LogDebug($"Scene[{sn}] activation -------");
                                      timer.Reset(); timer.Start();

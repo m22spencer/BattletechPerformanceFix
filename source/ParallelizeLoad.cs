@@ -18,15 +18,38 @@ using System.Reflection;
 using System.Diagnostics;
 using static BattletechPerformanceFix.Extensions;
 
+using BattleTech.Rendering.MechCustomization;
+
 namespace BattletechPerformanceFix
 {
     // Unity scene load occurs during SimGameState._OnBeginAttachUX
     // move it to SimGameState._OnBeginDefsLoad
     class ParallelizeLoad : Feature
     {
+        public static void Load(VersionManifestEntry ___manifestEntry) {
+            Log($"CS: {___manifestEntry.ResourcesLoadPath}");
+            if (!___manifestEntry.IsAssetBundled) {
+                Log($"Looking for CS {___manifestEntry.Id}");
+                Trap(() => Resources.Load<ColorSwatch>(___manifestEntry.ResourcesLoadPath).NullCheckError("Failed to find ColorSwatch"));
+            }
+        }
+
+        public static void AssetLoaded(VersionManifestEntry ___manifestEntry, ColorSwatch resource) {
+            Log($"CS: {___manifestEntry.ResourcesLoadPath} loaded as {(resource == null ? "null" : "cs")}");
+        }
+
         public void Activate() {
             var sgs = typeof(SimGameState);
             var self = typeof(ParallelizeLoad);
+
+
+            var dm = typeof(DataManager).GetNestedType("ColorSwatchLoadRequest", AccessTools.all);
+
+            Main.harmony.Patch( AccessTools.Method(dm, "Load")
+                              , new HarmonyMethod(self, nameof(Load)));
+
+            Main.harmony.Patch( AccessTools.Method(dm, "AssetLoaded")
+                              , new HarmonyMethod(self, nameof(AssetLoaded)));
 
             // For some reason, triggering a scene load before _OnBeginDefsLoad is invoked causes the UI to never initiate. Postfix to avoid this.
             Main.harmony.Patch(AccessTools.Method(sgs, nameof(_OnBeginDefsLoad)), null, new HarmonyMethod(AccessTools.Method(self, nameof(_OnBeginDefsLoad))));
@@ -69,7 +92,39 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch(AccessTools.Method(typeof(BattleTech.UI.SimGameOptionsMenu), "OnAddedToHierarchy"), new HarmonyMethod(AccessTools.Method(self, "Summary")));
             Main.harmony.Patch(AccessTools.Method(typeof(SGLoadSavedGameScreen), "LoadSelectedSlot"), new HarmonyMethod(AccessTools.Method(self, "Summary")));
 
+            Log("ReceiveButtonPress");
+            AccessTools.Method(typeof(SGNegotiationWidget), "ReceiveButtonPress").Track();
 
+            // Main.harmony.Patch( AccessTools.Method(typeof(LanceConfiguratorPanel), "ContinueConfirmClicked")
+            //                   , new HarmonyMethod(AccessTools.Method(self, nameof(LanceConfiguratorPanel_SetData))));
+            Main.harmony.Patch( AccessTools.Method(typeof(Contract)
+                                                  //, "BeginRequestResources")
+                                                  , "RequestResourcesComplete")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(LanceConfiguratorPanel_SetData))));
+
+
+            AccessTools.Method(typeof(SimGameState), "StartContract").Track();
+            AccessTools.Method(typeof(Contract), "Begin").Track();
+            AccessTools.Method(typeof(Contract), "BeginRequestResources").Track();
+            AccessTools.Method(typeof(Contract), "RequestResourcesComplete").Track();
+            AccessTools.Method(typeof(LevelLoadRequestListener), "Start").Track();
+            AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
+            AccessTools.Method(typeof(DataManager), "Clear").Track();
+        }
+
+        // I'd like to do this at SetData, but we need to be able to cancel the map load request to do that.
+        public static void LanceConfiguratorPanel_SetData(Contract __instance) {
+            Log($"LanceConfiguratorPanel: checking if we can early load map");
+            var contract = __instance;
+            if (contract != null) {
+                if (Scene != null) LogError("A scene load was in progress, not good");
+                //FIXME: This needs handling for bundle based maps
+                Log($"Background loading {contract.mapName}");
+                var entry = OverridePrefabCache.lookupId(contract.mapName);
+                var green = OverridePrefabCache.lookupId("Green_01");
+                Log($"Map needs bundle? {(entry == null ? "no" : "yes")} :fp {green.FilePath} :iab {green.IsAssetBundled} :abn {green.AssetBundleName} :rp {green.ResourcesLoadPath}");
+                Scene = Trap(() => contract.mapName.LoadSceneAsync());
+            }
         }
 
         public static void HandleScene() {
