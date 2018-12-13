@@ -44,19 +44,5 @@ namespace BattletechPerformanceFix.AlternativeLoading
                                return inst; });
 
         }
-
-        public static IPromise<T> DMResolveDependencies<T>(this IPromise<T> p) {
-            return p.Then(maybeDeps => {
-                    if (maybeDeps is DataManager.ILoadDependencies) {
-                        var ild = maybeDeps as DataManager.ILoadDependencies;
-                        var prom = new Promise<T>();
-                        // FIXME: This will require the DummyLoader from rda branch
-                        ild.RequestDependencies(DMGlue.DM, () => prom.Resolve(maybeDeps), null);
-                        return prom;
-                    } else {
-                        return Promise<T>.Resolved(maybeDeps);
-                    }
-                });
-        }
     }
 }
