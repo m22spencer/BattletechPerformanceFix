@@ -277,6 +277,24 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
             AccessTools.Method(typeof(LevelLoadRequestListener), "BundlesLoaded").Track();
             AccessTools.Method(typeof(LevelLoadRequestListener), "LevelLoaded").Track();
+
+            "OnAddedToHierarchy".Pre<SimGameOptionsMenu>(_ => {
+                    var db = Cache.CostDB;
+                    var eload = db.OrderByDescending(kv => kv.Value.loadtime / kv.Value.loaded)
+                                   .Take(10)
+                                   .ToArray();
+                    var epool = db.OrderByDescending(kv => kv.Value.alloctime / kv.Value.created)
+                                  .Take(10)
+                                  .ToArray();
+
+                    string NiceList(KeyValuePair<string,Cost>[] lst) {
+                        return string.Join("", lst.Select(l => "  " + l.Key + "-> " + l.Value.ToString()+ "\n").ToArray());
+                    }
+
+                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority{1}\n"
+                       , NiceList(eload)
+                       , NiceList(epool));
+                });
         }
 
         // Anything re-used from the pool with contain the state it was pooled with
@@ -301,9 +319,11 @@ namespace BattletechPerformanceFix
         public static Dictionary<string,GameObject> Prefabs = new Dictionary<string,GameObject>();
 
         class Cache {
+            public static Dictionary<string,Cost> CostDB = new Dictionary<string,Cost>();
             public static Dictionary<string,PrefabCache.RST> DefaultRootData = new Dictionary<string,PrefabCache.RST>();
             public static Dictionary<string,List<GameObject>> Pooled = new Dictionary<string,List<GameObject>>();
             public static GameObject Create(string id, Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
+                var cost = CostDB.GetWithDefault(id, () => new Cost());
                 GameObject Load() {
                     GameObject Go() {
                         var entry = lookupId(id);
@@ -321,11 +341,15 @@ namespace BattletechPerformanceFix
                             return null;
                         }
                     }
+                    Measure( (b,t) => { Log($"Load {b}b in {t.TotalMilliseconds}ms");
+                                        cost.loadtime += t.TotalSeconds;
+                                        cost.loadbytes += b;
+                                        cost.loaded++; }
+                           , Go);
                     var tmem = System.GC.GetTotalMemory(false);
                     var sw = Stopwatch.StartNew();
                     var item = Go();
                     var delta = System.GC.GetTotalMemory(false) - tmem;
-                    Log($"Load {delta}b in {sw.Elapsed.TotalMilliseconds}ms");
                     return item;
                 }
 
@@ -337,7 +361,10 @@ namespace BattletechPerformanceFix
                 GameObject FromPrefab() {
                     Log("FromPrefab");
                     var prefab = Prefabs.GetWithDefault(id, () => RecordRST(Load()));
-                    return Measure((b,t) => Log($"FromPrefab {b}b in {t.TotalMilliseconds}ms")
+                    return Measure((b,t) => { Log($"FromPrefab {b}b in {t.TotalMilliseconds}ms");
+                                              cost.alloctime += t.TotalSeconds;
+                                              cost.allocbytes += b;
+                                              cost.created++; }
                                   , () => {
                             if (prefab == null) { LogError($"A prefab({id}) was nulled, but I was never told");
                                                   return null; }
@@ -354,7 +381,8 @@ namespace BattletechPerformanceFix
                 GameObject FromPool() {
                     var held = Pooled.GetValueSafe(id);
                     if (held != null && held.Any()) {
-                        return Measure((b,t) => Log($"FromPool {b}b in {t.TotalMilliseconds}ms")
+                        return Measure((b,t) => { Log($"FromPool {b}b in {t.TotalMilliseconds}ms");
+                                                }
                                       , () => {
                                 LogDebug($"Leasing existing pooled gameobject for {id}");
                                 var first = held[0];
@@ -389,6 +417,8 @@ namespace BattletechPerformanceFix
                 if (obj == null)
                     return obj;
 
+                cost.leased++;
+
                 obj.transform.SetParent(null);
                 var pscene = parent?.gameObject?.scene;
                 var lscene = obj.scene;
@@ -401,6 +431,9 @@ namespace BattletechPerformanceFix
 
             // Use id temporarily just to test things
             public static void Return(string id, GameObject obj) {
+                var cost = CostDB.GetWithDefault(id, () => new Cost());
+                cost.returned++;
+
                 var held = Pooled.GetWithDefault(id, () => new List<GameObject>());
                 obj.SetActive(false);
                 obj.transform.SetParent(null);
@@ -412,6 +445,21 @@ namespace BattletechPerformanceFix
             // hint  : tag                  ;; Mark a phase, using this we can try to be more intelligent about what & how many things are pooled
             // return: GameObject -> ()     ;; Return an item to the pool. Sometimes the game will steal: In this case, some hooks around scene loading or asset unloading can steal it back.
 
+        }
+
+        class Cost {
+            public double loaded     = 0;
+            public double created    = 0;
+            public double leased     = 0;
+            public double returned   = 0;
+            public double loadbytes  = 0;
+            public double loadtime   = 0;
+            public double allocbytes = 0;
+            public double alloctime  = 0;
+            public Cost() {}
+
+            public string ToString() 
+                => $":loaded {loaded} :created {created} :leased {leased} :returned {returned} :loadbytes {loadbytes} :loadtime {loadtime} :allocbytes {allocbytes} :alloctime {alloctime}";
         }
     }
 }
