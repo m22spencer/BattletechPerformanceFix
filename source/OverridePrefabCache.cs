@@ -286,6 +286,11 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "BundlesLoaded").Track();
             AccessTools.Method(typeof(LevelLoadRequestListener), "LevelLoaded").Track();
 
+            // General fixups:
+            // A lot of things access Resource.Load directly, we'll have to patch Resource.Load
+
+            //UI-fixups:
+            // SGBarracksRosterList.OnPooled: Don't destroy coroutine runner or set it to null;
 
 
             "OnAddedToHierarchy".Pre<SimGameOptionsMenu>(_ => {
@@ -309,15 +314,23 @@ namespace BattletechPerformanceFix
                         return string.Join("", lst.Select(l => "  " + l.Key + "-> " + l.Value.ToString()+ "\n").ToArray());
                     }
 
-                    Log("COST-DB ---------------\nLoad Priority\n{0}\nPool Priority\n{1}\nLease Priority\n{2}\nCreate Priority\n{3}\nLRU Bundles\n  {4}\n"
+                    var fmt = "";
+                    fmt += "COST-DB ---------------\n";
+                    fmt += "Load Priority\n{0}\n";
+                    fmt += "Pool Priority\n{1}\n";
+                    fmt += "Lease Priority\n{2}\n";
+                    fmt += "Create Priority\n{3}\n";
+                    fmt += "LRU Bundles\n  {4}\n";
+                    fmt += "Pooled {5}\n";
+
+                    Log( fmt
                        , NiceList(eload)
                        , NiceList(epool)
                        , NiceList(lpool)
                        , NiceList(cpool)
-                       , lrubundles.Dump(false));
+                       , lrubundles.Dump(false)
+                       , Cache.Pooled.Select(kv => kv.Value.Count()).Sum());
                 });
-
-            BattletechPerformanceFix.AlternativeLoading.DMGlue.Initialize();
         }
 
         // Anything re-used from the pool with contain the state it was pooled with
@@ -426,6 +439,7 @@ namespace BattletechPerformanceFix
                                     rd.Apply(first);
                                 }
                                 first.SetActive(true);
+                                    
                                 Log($"FromPool {id}");
                                 return first;
                             });
