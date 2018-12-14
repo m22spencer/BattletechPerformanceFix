@@ -202,7 +202,8 @@ namespace BattletechPerformanceFix {
             var pmeth = onType.GetMethod(patchmethod, AccessTools.all).NullCheckError($"Missing patch method {patchmethod} on {onType.FullName}");
             var meth = (method == ".ctor"
                          ? (MethodBase)typeof(T).GetConstructors(AccessTools.all)[0]
-                         : (MethodBase)typeof(T).GetMethod(method, AccessTools.all))
+                         : (MethodBase)typeof(T).GetMethods(AccessTools.all)
+                                                .FirstOrDefault(mm => mm.Name == method && mm.GetMethodBody() != null))
                 .NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
             Log($"Prepatch: {meth.DeclaringType.FullName}::{meth.ToString()} -> {onType.FullName}::{pmeth.ToString()}");
             if (meth.IsGenericMethodDefinition) LogError("Can't patch a generic method def for {method} on {meth.DeclaringType.FullName}");
