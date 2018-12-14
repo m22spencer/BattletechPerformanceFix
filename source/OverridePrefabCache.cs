@@ -249,7 +249,6 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch( AccessTools.Method(pc, "PoolGameObject")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(PrefabCache_PoolGameObject))));
 
-
             var abm = typeof(AssetBundleManager);
             var meth = AccessTools.Method(abm, "RequestAsset");
             meth.NullCheckError("RequestAsset not found");
@@ -291,6 +290,7 @@ namespace BattletechPerformanceFix
 
             //UI-fixups:
             // SGBarracksRosterList.OnPooled: Don't destroy coroutine runner or set it to null;
+            // CombatMovementReticle.OnDestroy: Drop this. We don't want to destroy StatusPreview.
 
 
             "OnAddedToHierarchy".Pre<SimGameOptionsMenu>(_ => {
@@ -436,9 +436,10 @@ namespace BattletechPerformanceFix
                                 first.transform.SetParent(null);
                                 if (DefaultRootData.TryGetValue(id, out var rd)) {
                                     LogDebug($"Apply RST to recover root data of {id}");
+
+                                    //FIXME: RST is very very slow, avoid the GetComponent<> unless it needs to restore that data.
                                     rd.Apply(first);
                                 }
-                                first.SetActive(true);
                                     
                                 Log($"FromPool {id}");
                                 return first;
@@ -463,6 +464,7 @@ namespace BattletechPerformanceFix
                     SceneManager.MoveGameObjectToScene(obj, parent?.gameObject?.scene ?? SceneManager.GetActiveScene());
                 }
                 obj.transform.SetParent(parent);
+                obj.SetActive(true);
                 return obj;
             }
 
