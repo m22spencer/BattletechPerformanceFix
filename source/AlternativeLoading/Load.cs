@@ -34,7 +34,7 @@ namespace BattletechPerformanceFix.AlternativeLoading
             return Promise<T>.Rejected(new Exception("NYI: LoadAssetFromBundle"));
         }
 
-        public static IPromise<T> LoadJson<T>( VersionManifestEntry entry) where T : HBS.Util.IJsonTemplated {
+        public static IPromise<T> LoadJson<T>(this VersionManifestEntry entry) where T : HBS.Util.IJsonTemplated {
             return MapSync( entry
                           , System.Text.Encoding.UTF8.GetString
                           , (TextAsset t) => t.text

@@ -316,6 +316,8 @@ namespace BattletechPerformanceFix
                        , NiceList(cpool)
                        , lrubundles.Dump(false));
                 });
+
+            BattletechPerformanceFix.AlternativeLoading.DMGlue.Initialize();
         }
 
         // Anything re-used from the pool with contain the state it was pooled with
