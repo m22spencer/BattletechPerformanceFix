@@ -75,8 +75,10 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(SGNegotiationWidget), "ReceiveButtonPress").Track();
 
             // We want to request the map here, but this makes DataManager just stop loading because "reasons"
-            // Main.harmony.Patch( AccessTools.Method(typeof(LanceConfiguratorPanel), "ContinueConfirmClicked")
-            //                   , new HarmonyMethod(AccessTools.Method(self, nameof(LanceConfiguratorPanel_SetData))));
+            /*
+            Main.harmony.Patch( AccessTools.Method(typeof(LanceConfiguratorPanel), "ContinueConfirmClicked")
+                              , new HarmonyMethod(AccessTools.Method(self, nameof(LanceConfiguratorPanel_SetData))));
+                              */
             Main.harmony.Patch( AccessTools.Method(typeof(Contract)
                                                   //, "BeginRequestResources")
                                                   , "RequestResourcesComplete")
@@ -91,20 +93,21 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
             AccessTools.Method(typeof(DataManager), "Clear").Track();
 
-            //"Load".Pre<LoadTransitioning>();
+            "Load".Pre<LoadTransitioning>();
         }
 
-        /*
+        public static bool FIRST = true;
         public static void Load_Pre(BattleTech.Save.SaveGameStructure.SlotModel save) {
-            if (Scratch.WANTCLEARDEFS) return;
+            LogDebug($"Load_Pre");
+            if (FIRST) { FIRST = false; return; }
             if (!save.HasCombatData) {
+                Log("SimGame IMMEDIATE");
                 if (Scene != null) LogError("An early scene load was triggered, but a scene is already buffered");
                 Log($"Early scene load trigger for SimGame");
                 if (SceneManager.GetActiveScene().name == "SimGame") SceneManager.UnloadScene("SimGame");   //FIXME: Won't work as there is no existing scene to fallback to. Probably keep Empty around all the time and just switch to it.
                 Scene = "SimGame".LoadSceneAsync();
             }
         }
-        */
 
         // I'd like to do this at SetData, but we need to be able to cancel the map load request to do that.
         public static void LanceConfiguratorPanel_SetData(Contract __instance) {
@@ -160,8 +163,6 @@ namespace BattletechPerformanceFix
                     combat.SetAudioFromSaveState();
                 }
                 Log($"Done");
-                LoadingCurtain.Hide();
-                Log($"Hid loading curtain");
             }
 
             game.MessageCenter.AddSubscriber(MessageCenterMessageType.OnInitializeContractComplete, InitContractComplete);
@@ -191,6 +192,8 @@ namespace BattletechPerformanceFix
                                                                          //___interstitialComplete = null; // FIXME
                                   }
                                   if (loadingInterstitialScene == "Interstitial_Briefing") Virtual_Briefing();
+
+                                  // Wait 4 frames because meh.
                                   WaitAFrame().Done(() => { Log($"Hide loading curtain.. hopefully?");
                                                             LoadingCurtain.Hide(); });
                                 });

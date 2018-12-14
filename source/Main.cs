@@ -55,7 +55,7 @@ namespace BattletechPerformanceFix
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "??");
             Log("Mod-Dir? {0}", ModDir);
             
             Trap(() =>
@@ -145,7 +145,7 @@ namespace BattletechPerformanceFix
         {
             try { 
                 var omsg = Trap(() => string.Format(msg, values));
-                LogStream.WriteLine(omsg);
+                LogStream.WriteLine(UnityEngine.Time.frameCount + ": " + omsg);
                 LogStream.Flush();
 
                 // It's possible to log during a patch that can't access HBS logging tools

@@ -146,7 +146,9 @@ namespace BattletechPerformanceFix {
             IEnumerator TillDone() { var sn = sceneName ?? "?";
                                      LogDebug($"Scene[{sn}] load started ----------");
                                      var timer = Stopwatch.StartNew();
-                                     while (!operation.isDone && operation.progress < .9f) { LogDebug($"WFF {Time.frameCount} {operation.progress}"); yield return null; }
+                                     while (!operation.isDone && operation.progress < .9f) { LoadDesc["Scene"] = $"{operation.progress:P2}";
+                                                                                             LogDebug($"WFF {Time.frameCount} {operation.progress}");
+                                                                                             yield return null; }
                                      var loadTime = timer.Elapsed.TotalSeconds;
                                      LogDebug($"Scene[{sn}] ready for activation after {loadTime} seconds");
                                      while (!operation.allowSceneActivation) { yield return null; }
@@ -160,13 +162,13 @@ namespace BattletechPerformanceFix {
         }
 
 
-        public static IPromise WaitAFrame()
-            => Promise.Resolved().WaitAFrame();
+        public static IPromise WaitAFrame(int n = 1)
+            => Promise.Resolved().WaitAFrame(n);
 
-        public static IPromise WaitAFrame(this IPromise p) {
-            IEnumerator OneFrame() { yield return null; }
+        public static IPromise WaitAFrame(this IPromise p, int n = 1) {
+            IEnumerator OneFrame(int x) { for (var i = 0; i < x; i++) yield return null; }
             var next = new Promise();
-            p.Done(() => BPF_CoroutineInvoker.Invoke(OneFrame(), next.Resolve));
+            p.Done(() => BPF_CoroutineInvoker.Invoke(OneFrame(n), next.Resolve));
             return next;
         }
 
@@ -237,7 +239,7 @@ namespace BattletechPerformanceFix {
             return __PreDB[key](__instance);
         }
 
-        public delegate void P1(BattleTech.UI.SGRoomManager ___roomManager);
+        public static Dictionary<string,string> LoadDesc = new Dictionary<string,string>();
     }
 
     class BPF_CoroutineInvoker : UnityEngine.MonoBehaviour {
@@ -251,7 +253,23 @@ namespace BattletechPerformanceFix {
             instance = go.AddComponent<BPF_CoroutineInvoker>();
             UnityEngine.GameObject.DontDestroyOnLoad(go);
 
+
+            instance.StartCoroutine(UpdateLoadScreen());
+
             return instance;
+        }
+
+        public static IEnumerator UpdateLoadScreen() {
+            while(true) {
+                var text = Extensions.LoadDesc.Aggregate("", (acc,a) => $"{a.Key}: {a.Value}\n{acc}");
+                Extensions.Trap(() => new Traverse(typeof(BattleTech.UI.LoadingCurtain)).Field("activeInstance")
+                                                                                        .Field("spinnerAndTipWidget")
+                                                                                        .Field("tipText")
+                                                                                        .Method("SetText", text, new object[0])
+                                                                                        .GetValue());
+
+                yield return null;
+            }
         }
 
         public static void Invoke(IEnumerator coroutine, Action done) {
