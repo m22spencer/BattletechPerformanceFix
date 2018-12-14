@@ -115,6 +115,7 @@
     <Compile Include="LoadFixes.cs" />
     <Compile Include="OverridePrefabCache.cs" />
     <Compile Include="ParallelizeLoad.cs" />
+    <Compile Include="Scratch.cs" />
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
     <Compile Include="PatchMechLabPanelLoadThrottling.cs" />

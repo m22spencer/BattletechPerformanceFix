@@ -101,9 +101,11 @@ namespace BattletechPerformanceFix
                     { typeof(ParallelizeLoad), false },
                     { typeof(SimpleMetrics), false },
                     { typeof(OverridePrefabCache), false },
-                    { typeof(EnableLoggingDuringLoads), true }
+                    { typeof(EnableLoggingDuringLoads), true },
+                    { typeof(Scratch), true }
+
                 };
-                               
+
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
                 settings.features = want.ToDictionary(kv => kv.Key.Name, kv => kv.Value);
                 File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(settings, Formatting.Indented));

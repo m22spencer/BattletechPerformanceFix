@@ -200,11 +200,15 @@ namespace BattletechPerformanceFix {
             var onType = new StackFrame(1).GetMethod().DeclaringType;
             patchmethod = patchmethod ?? (method == ".ctor" ? "CTOR_Pre" : (method+"_Pre"));
             var pmeth = onType.GetMethod(patchmethod, AccessTools.all).NullCheckError($"Missing patch method {patchmethod} on {onType.FullName}");
-            var meth = (method == ".ctor"
-                         ? (MethodBase)typeof(T).GetConstructors(AccessTools.all)[0]
-                         : (MethodBase)typeof(T).GetMethods(AccessTools.all)
-                                                .FirstOrDefault(mm => mm.Name == method && mm.GetMethodBody() != null))
-                .NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
+            if (!pmeth.IsStatic) LogError($"Patch method {patchmethod} must be static");
+            MethodBase meth = null;
+            if (method == ".ctor") meth = (MethodBase)typeof(T).GetConstructors(AccessTools.all)[0];
+            else if (method.StartsWith("get_")) meth = (MethodBase)typeof(T).GetProperties(AccessTools.all)
+                                                                          .FirstOrDefault(mm => { LogDebug($"{mm.Name}"); return method.EndsWith(mm.Name); })
+                                                  ?.GetGetMethod();
+            else meth = (MethodBase)typeof(T).GetMethods(AccessTools.all)
+                                             .FirstOrDefault(mm => mm.Name == method && mm.GetMethodBody() != null);
+            meth.NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
             Log($"Prepatch: {meth.DeclaringType.FullName}::{meth.ToString()} -> {onType.FullName}::{pmeth.ToString()}");
             if (meth.IsGenericMethodDefinition) LogError("Can't patch a generic method def for {method} on {meth.DeclaringType.FullName}");
             else Trap(() => Main.harmony.Patch( meth

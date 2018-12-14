@@ -91,9 +91,20 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
             AccessTools.Method(typeof(DataManager), "Clear").Track();
 
-
-            SceneManager.sceneLoaded += (_, m) => Log($"SCENELOADED");
+            //"Load".Pre<LoadTransitioning>();
         }
+
+        /*
+        public static void Load_Pre(BattleTech.Save.SaveGameStructure.SlotModel save) {
+            if (Scratch.WANTCLEARDEFS) return;
+            if (!save.HasCombatData) {
+                if (Scene != null) LogError("An early scene load was triggered, but a scene is already buffered");
+                Log($"Early scene load trigger for SimGame");
+                if (SceneManager.GetActiveScene().name == "SimGame") SceneManager.UnloadScene("SimGame");   //FIXME: Won't work as there is no existing scene to fallback to. Probably keep Empty around all the time and just switch to it.
+                Scene = "SimGame".LoadSceneAsync();
+            }
+        }
+        */
 
         // I'd like to do this at SetData, but we need to be able to cancel the map load request to do that.
         public static void LanceConfiguratorPanel_SetData(Contract __instance) {

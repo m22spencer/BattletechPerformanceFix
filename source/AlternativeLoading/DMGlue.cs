@@ -48,6 +48,11 @@ namespace BattletechPerformanceFix.AlternativeLoading
                                          new Traverse(DM).Property("MessageCenter").GetValue<MessageCenter>()
                                                          .PublishMessage(new BattleTech.DataManagerRequestCompleteMessage<BattleTech.MechDef>(resourceType, identifier, mdef));
                                          var mstore = new Traverse(DM).Field("mechDefs").GetValue<HBS.Data.DictionaryStore<BattleTech.MechDef>>();
+                                         Measure( (b,t) => LogDebug($"MDEF copy bad: {t.TotalMilliseconds}")
+                                                , () => { new BattleTech.MechDef().FromJSON(mdef.ToJSON()); return 0; });
+                                         Measure( (b,t) => LogDebug($"MDEF copy fast: {t.TotalMilliseconds}")
+                                                , () => { new BattleTech.MechDef(mdef); return 0; });
+
                                          mstore.Add(identifier, mdef);
                                        }
 

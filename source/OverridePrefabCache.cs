@@ -330,7 +330,67 @@ namespace BattletechPerformanceFix
                        , NiceList(cpool)
                        , lrubundles.Dump(false)
                        , Cache.Pooled.Select(kv => kv.Value.Count()).Sum());
+
+                    Trap(() => {
+                    var tc = new Traverse(dataManager).Property("TextureManager").GetValue<TextureManager>();
+                    var sc = new Traverse(dataManager).Property("SpriteCache").GetValue<SpriteCache>();
+                    
+                    var hash = new HashSet<Texture2D>();
+                    foreach(var tex in new Traverse(tc).Field("loadedTextures").GetValue<Dictionary<string,Texture2D>>())
+                        hash.Add(tex.Value);
+                    foreach(var spr in new Traverse(sc).Field("cache").GetValue<Dictionary<string,Sprite>>())
+                        hash.Add(spr.Value.texture);
+
+                    Resources.FindObjectsOfTypeAll(typeof(Texture2D))
+                             .ForEach(t => hash.Add((Texture2D)t));
+
+                    var bppmap = new Dictionary<TextureFormat, int>{ { TextureFormat.DXT5, 8 }
+                                                                   , { TextureFormat.DXT1, 4 }
+                                                                   , { TextureFormat.RGBA32, 32 }
+                                                                   , { TextureFormat.ARGB32, 32 }
+                                                                   , { TextureFormat.RGB24, 24 }
+                                                                   , { TextureFormat.Alpha8, 8 }
+                                                                   , { TextureFormat.R16, 16 }
+                                                                   , { TextureFormat.ARGB4444, 16 }
+                                                                   , { TextureFormat.BC6H, 48 }
+                                                                   , { TextureFormat.BC7, 8 }
+                                                                   , { TextureFormat.RGBAHalf, 64 }
+                                                                   , { TextureFormat.BC4, 4 }};
+                   
+
+                    var pixels = 0;
+                    long bits = 0;
+                    hash.ToList().ForEach(tex => { var ps = tex.width * tex.height;
+                                                   pixels += ps;
+                                                   bits += bppmap[tex.format] * ps;
+                                                 });
+
+                    var ttypes = new Dictionary<TextureFormat,int>();
+                    hash.ToList().Where(t => t is Texture2D)
+                        .Select(t => t as Texture2D)
+                        .ForEach(tex => { ttypes.GetWithDefault(tex.format, () => 0);
+                                          ttypes[tex.format]++; });
+
+                    hash.ToList().ForEach(tex => tex.Compress(true));
+
+                    var o = "";
+                    ttypes.ToList()
+                          .ForEach(ty => o += $"{ty.Key.ToString()} => {ty.Value}\n");
+
+
+                    LogDebug($"TEXNL :pixels {pixels} :bits {bits}");
+                    LogDebug(o);
+                        });
+                    LogDebug($"Should be here");
                 });
+
+
+            // Lets try an experiment with heraldries!
+            //"get_TextureLogo".Pre<HeraldryDef>();
+        }
+
+        public static void get_TextureLogo_Pre() {
+            LogDebug("Get Heraldry");
         }
 
         // Anything re-used from the pool with contain the state it was pooled with
