@@ -26,6 +26,7 @@ namespace BattletechPerformanceFix
 
             "RequestResource_Internal".Pre<DataManager>();
             "Exists".Post<DictionaryStore<object>>();
+            "Exists".Pre<DictionaryStore<object>>();
             "Get".Pre<DictionaryStore<object>>();
             "TryGet".Pre<DictionaryStore<object>>();
             "get_Keys".Post<DictionaryStore<object>>();
@@ -128,6 +129,17 @@ namespace BattletechPerformanceFix
             Report();
             Report();
             Report();
+        }
+
+        public static bool Add_Pre(
+
+        public static bool Exists_Pre(ref bool __result, string id) {
+            if (id == null) {
+                Spam(() => "Null id for Exists from {new StackTrace().ToString()}");
+                __result = false;
+                return false;
+            }
+            return true;
         }
 
         public static void Exists_Post(ref bool __result, string id) {

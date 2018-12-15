@@ -27,6 +27,7 @@ namespace BattletechPerformanceFix
         }
 
         public static VersionManifestEntry Locate(string id, RT? type = null) {
+            if (id == null) return null;
             if (DM == null) LogError("DM is null");
             var locator = DM.ResourceLocator;
             if (locator == null) LogError("locator is null");
@@ -52,7 +53,7 @@ namespace BattletechPerformanceFix
             "Contains".Post<SVGCache>(nameof(ID));
             "IsPrefabInPool".Post<PrefabCache>(nameof(ID));
 
-            "RequestResource_Internal".Pre<DataManager>();
+            "RequestResource_Internal".Pre<DataManager>("RequestResource_Internal_Pre", Priority.Last);
 
             "Exists".Post<HBS.Data.DictionaryStore<object>>("Exists_CS");
 
@@ -78,8 +79,12 @@ namespace BattletechPerformanceFix
 
         public static bool RequestResource_Internal_Pre(string identifier, RT resourceType) {
             var t = resourceType;
-            if (t == RT.Prefab || t == RT.UIModulePrefabs || t == RT.ColorSwatch)
+            if (t == RT.Prefab || t == RT.UIModulePrefabs || t == RT.ColorSwatch
+                 || t == RT.Sprite || t == RT.Texture2D || t == RT.SimGameConversations
+                 || t == RT.SVGAsset)
                 return false;
+
+            Log($"RRI: {identifier}:{resourceType}");
             return true;
         }
 
