@@ -44,7 +44,6 @@ namespace BattletechPerformanceFix
 
         public static bool Has(string id, RT? type = null) => Locate(id, type) != null;
 
-
         public void Activate() {
             ".ctor".Pre<DataManager>();
             "Contains".Post<TextureManager>(nameof(RID));
@@ -52,6 +51,30 @@ namespace BattletechPerformanceFix
             "Contains".Post<SpriteCache>(nameof(ID));
             "Contains".Post<SVGCache>(nameof(ID));
             "IsPrefabInPool".Post<PrefabCache>(nameof(ID));
+
+            "RequestResource_Internal".Pre<DataManager>();
+
+            "Exists".Post<HBS.Data.DictionaryStore<BattleTech.Rendering.MechCustomization.ColorSwatch>>("Exists_CS");
+
+            "Exists".Post<DataManager>(nameof(DM_Exists));
+        }
+
+        public static void DM_Exists(ref bool __result, RT resourceType, string id) {
+            if (__result == false && resourceType == RT.Prefab) {
+                Spam(() => "Sneaky DM said a prefab doesn't exist. Stop that.");
+                __result = CollectSingletons.PC.IsPrefabInPool(id);
+            }
+        }
+
+        public static void Exists_CS(ref bool __result, string id) {
+            if (!__result) Spam(() => $"Exists[false] for {id}");
+        }
+
+        public static bool RequestResource_Internal_Pre(string identifier, RT resourceType) {
+            var t = resourceType;
+            if (t == RT.Prefab || t == RT.UIModulePrefabs)
+                return false;
+            return true;
         }
 
         public static void RID(string resourceId, ref bool __result)

@@ -87,9 +87,8 @@ namespace BattletechPerformanceFix
                     WaitAFrame(240)
                         .Done(() => {
                                 var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
-                                var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}").Take(10).ToArray());
+                                var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}[{lr.State}]").Take(10).ToArray());
                                 LogDebug($"ProcessRequests :10waiting [{byid}]"); // from {new StackTrace().ToString()}");
-
 
                                 PingQueue();
                             });

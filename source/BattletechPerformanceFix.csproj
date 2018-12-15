@@ -100,6 +100,7 @@
     <Compile Include="AlternativeLoading\DMGlue.cs" />
     <Compile Include="AlternativeLoading\Load.cs" />
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="CollectSingletons.cs" />
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="EnableLoggingDuringLoads.cs" />

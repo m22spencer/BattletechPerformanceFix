@@ -8,6 +8,7 @@ using Harmony;
 using BattleTech;
 using UnityEngine;
 using BattleTech.Data;
+using BattleTech.Assetbundles;
 using static BattletechPerformanceFix.Extensions;
 
 // NOTE: Bundles & Resources that are async loaded seem to be force-able
@@ -30,10 +31,38 @@ namespace BattletechPerformanceFix.AlternativeLoading
             return Promise<T>.Rejected(new Exception($"Missing method to load {entry.Id}"));
         }
 
+        public static string AssetBundleNameToFilePath(string assetBundleName)
+            => new Traverse(typeof(AssetBundleManager)).Method("AssetBundleNameToFilepath", assetBundleName).GetValue<string>();
 
-        public static IPromise<T> LoadAssetFromBundle<T>(string id, string bundleName) {
-            return Promise<T>.Rejected(new Exception("NYI: LoadAssetFromBundle"));
+        public static AssetBundleManifest manifest;
+        public static IEnumerable<string> GetBundleDependencies(string bundleName) {
+            if (manifest == null) { manifest = new Traverse(CollectSingletons.BM.NullCheckError("No bundle manager")).Field("manifest").GetValue<AssetBundleManifest>();
+                                    manifest.NullCheckError("Unable to find asset bundle manifest"); }
+            return manifest.GetAllDependencies(bundleName);
         }
+
+        public static Dictionary<string, AssetBundle> Bundles = new Dictionary<string, AssetBundle>();
+        public static List<AssetBundle> LRUBundles = new List<AssetBundle>();
+        public static AssetBundle LoadBundle(string bundleName) {
+            AssetBundle Load() {
+                LogDebug($"Loading bundle {bundleName}");
+                GetBundleDependencies(bundleName).ForEach(depName => LoadBundle(depName));
+                var path = AssetBundleNameToFilePath(bundleName);
+                var newBundle =  Measure( (b,t) => Log($"LoadBundle {b}b in {t.TotalMilliseconds}ms")
+                                        , () => AssetBundle.LoadFromFile(path)).NullCheckError($"Missing bundle {bundleName} from {path}");
+                Bundles[bundleName] = newBundle;
+                return newBundle;
+            }
+
+
+            var bundle = Bundles.GetWithDefault(bundleName, Load);
+            LRUBundles.Remove(bundle);
+            LRUBundles.Add(bundle);
+            return bundle;
+        }
+
+        public static IPromise<T> LoadAssetFromBundle<T>(string id, string bundleName) where T : UnityEngine.Object
+            => TrapAsPromise<T>(() => LoadBundle(bundleName)?.LoadAsset<T>(id).NullThrowError($"Unable to load {id} from bundle {bundleName}"));
 
         public static IPromise<string> LoadText(this VersionManifestEntry entry) {
             return MapSync( entry

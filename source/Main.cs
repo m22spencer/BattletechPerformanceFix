@@ -89,6 +89,7 @@ namespace BattletechPerformanceFix
 
                 var allFeatures = new Dictionary<Type, bool> {
                     //{ typeof(LazyRoomInitialization), false },
+                    { typeof(CollectSingletons), true },
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), true },
@@ -123,6 +124,7 @@ namespace BattletechPerformanceFix
                     if (feature.Value) {
                         try
                         {
+                            Log($"Activating feature [{feature.Key.FullName}]");
                             var f = (Feature)AccessTools.CreateInstance(feature.Key);
                             f.Activate();
                         } catch (Exception e)

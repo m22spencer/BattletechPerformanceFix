@@ -63,6 +63,12 @@ namespace BattletechPerformanceFix {
             try { return f(); } catch (Exception e) { Main.__Log("Exception {0}", e); return default(T);  }
         }
 
+        public static IPromise<T> TrapAsPromise<T>(Func<T> f) {
+            var prom = new Promise<T>();
+            try { prom.Resolve(f()); } catch (Exception e) { prom.Reject(e); }
+            return prom;
+        }
+
         public static T TrapAndTerminate<T>(string msg, Func<T> f)
         {
             try {
