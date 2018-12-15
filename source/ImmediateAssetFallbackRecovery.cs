@@ -19,20 +19,33 @@ namespace BattletechPerformanceFix
     {
         public static DataManager DM = null;
         public static TextureManager TM = null;
+        public static PrefabCache PC = null;
 
-        public static void CTOR_Pre(DataManager __instance) {
+        public static void SetUnityDataManagers_Post(DataManager __instance) {
             DM = __instance;
-            TM = new Traverse(__instance).Property("TextureManager").GetValue<TextureManager>();
+            TM = new Traverse(__instance).Property("TextureManager").GetValue<TextureManager>()
+                                         .NullCheckError("Unable to locate TextureManager");
+
+            PC = new Traverse(__instance).Property("GameObjectPool").GetValue<PrefabCache>()
+                                         .NullCheckError("Unable to locate GameObjectPool");
         }
 
         public void Activate() {
-            ".ctor".Pre<DataManager>();
+            "SetUnityDataManagers".Post<DataManager>();
 
             "PooledInstantiate".Post<PrefabCache>();
             "GetSprite".Post<SpriteCache>();
             "GetAsset".Post<SVGCache>();
             "GetLoadedTexture".Pre<TextureManager>();
             "RequestTexture".Pre<TextureManager>();
+
+            "Contains".Pre<TextureManager>();
+        }
+
+        public static bool Contains_Pre(string resourceId, ref bool __result) {
+            __result = Locate(resourceId, RT.Texture2D) != null;
+
+            return false;
         }
 
         public static VersionManifestEntry Locate(string id, RT? type = null) {
@@ -87,7 +100,7 @@ namespace BattletechPerformanceFix
                 // Need some handling for actual sprites here.
                 if (sprite != null) { Spam(() => $"Fallback[{id}:Sprite] Loaded");
                                       ___cache[id] = sprite; }
-                else LogWarning(() => $"Fallback[{id}:Sprite] Failed");
+                else LogWarning(() => $"Fallback[{id}:Sprite] Failed. Why? No backing texture entry");
                 __result = sprite;
             }
         }
@@ -107,9 +120,20 @@ namespace BattletechPerformanceFix
             }
         }
 
-        public static void PooledInstantiate_Post(ref GameObject __result, string id) {
-            if (__result == null)
-                LogWarning($"Request Prefab {id} but it does not exist");
+        public static void PooledInstantiate_Post(ref GameObject __result, string id
+                                                 , Vector3? position = null, Quaternion? rotation = null, Transform parent = null) {
+            if (__result == null) {
+                var entry = Locate(id);
+                var res = __result;
+                entry.LoadPrefab()
+                     .Then(go => go.NullThrowError("Recieved empty prefab"))
+                     .Done(go => { Spam(() => $"Fallback[{id}:Prefab] Loaded {go != null}");
+                                   PC.AddPrefabToPool(id, go);
+                                   res = PC.PooledInstantiate(id, position, rotation, parent);
+                                 }
+                          , exn => LogWarning(() => $"Fallback[{id}:Prefab] Failed. Why? {exn.Message}"));
+                __result = res;
+            }
         }
     }
 }

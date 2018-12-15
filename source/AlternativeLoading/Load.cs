@@ -62,5 +62,12 @@ namespace BattletechPerformanceFix.AlternativeLoading
                                                , Identity
                                                , Identity);
         }
+
+        public static IPromise<GameObject> LoadPrefab(this VersionManifestEntry entry) {
+            return MapSync<GameObject,GameObject>( entry
+                                                 , null
+                                                 , Identity
+                                                 , Identity);
+        }
     }
 }
