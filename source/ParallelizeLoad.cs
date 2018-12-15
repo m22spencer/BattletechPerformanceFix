@@ -114,6 +114,8 @@ namespace BattletechPerformanceFix
 
         // I'd like to do this at SetData, but we need to be able to cancel the map load request to do that.
         public static void LanceConfiguratorPanel_SetData(Contract ___activeContract) {
+            //FIXME: Need to make sure this actually progressed.
+            //   If the UI pops up with a warning, the user can cancel
             Log($"LanceConfiguratorPanel: checking if we can early load map");
             var contract = ___activeContract;
             if (contract != null) {
