@@ -131,8 +131,6 @@ namespace BattletechPerformanceFix
             Report();
         }
 
-        public static bool Add_Pre(
-
         public static bool Exists_Pre(ref bool __result, string id) {
             if (id == null) {
                 Spam(() => "Null id for Exists from {new StackTrace().ToString()}");
