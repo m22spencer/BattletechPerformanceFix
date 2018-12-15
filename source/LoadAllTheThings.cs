@@ -29,6 +29,8 @@ namespace BattletechPerformanceFix
                     .Where(ty => !Array("CombatGameConstants", "SimGameConstants").Contains(ty.Name))
                     .ToList();
 
+            Log("Autoresolve {0}", alljtypes.Select(ty => ty.Name).ToArray().Dump());
+
             var rl = new BattleTechResourceLocator();
 
             var allentries = Measure( "Json-Entries"
@@ -56,9 +58,12 @@ namespace BattletechPerformanceFix
             alldefs.ForEach(ed => AllTheThings[ed.entry.Id] = ed.def);
             LogDebug($"AllTheThings[{alldefs.Count}] done");
 
+            Spam(() => $"LiterallyAllTheThings {AllTheThings.Keys.ToArray().Dump()}");
+
             "RequestResource_Internal".Pre<DataManager>();
             "Exists".Post<DictionaryStore<object>>();
             "Get".Pre<DictionaryStore<object>>();
+            "TryGet".Pre<DictionaryStore<object>>();
             "get_Keys".Pre<DictionaryStore<object>>();
             "get_Count".Pre<DictionaryStore<object>>();
             "SetUnityDataManagers".Post<DataManager>();
@@ -71,6 +76,8 @@ namespace BattletechPerformanceFix
             if (Initialized) return;
             Initialized = true;
 
+            System.Threading.Thread.Sleep(10000);
+
             var allTheDeps = AllTheThings.Where(thing => thing.Value is DataManager.ILoadDependencies)
                                          .Select(thing => thing.Value as DataManager.ILoadDependencies)
                                          .ToList();
@@ -82,8 +89,14 @@ namespace BattletechPerformanceFix
                                         Trap(() => new Traverse(dep).Field("loadRequest").SetValue(dummy));
                                       });
 
+            var dmrc = new DataManagerRequestCompleteMessage(0, null);
+            bool CheckDeps(DataManager.ILoadDependencies ild) {
+                Trap(() => ild.CheckDependenciesAfterLoad(dmrc)); //Crashes for a few things like MechDef
+                return ild.DependenciesLoaded(0);
+            }
+
             void Report() {
-                var sWithDeps = allTheDeps.Where(thing => !Trap(() => thing.DependenciesLoaded(0), () => false));
+                var sWithDeps = allTheDeps.Where(thing => !Trap(() => CheckDeps(thing), () => false));
                 var types = sWithDeps.Select(d => d.GetType().FullName).Distinct().ToArray();
                 Log("{0}", $"Need to determine [{sWithDeps.Count()}] dependencies of types {types.Dump()}");
 
@@ -102,6 +115,15 @@ namespace BattletechPerformanceFix
             if (AllTheThings.TryGetValue(id, out var thething)) { __result = thething;
                                                                   Spam(() => $"Found the thing[{id}]");
                                                                   return false; }
+            return true;
+        }
+
+        public static bool TryGet_Pre(ref bool __result, string id, out object t) {
+            if (AllTheThings.TryGetValue(id, out var thething)) { __result = true;
+                                                                  t = thething;
+                                                                  Spam(() => $"Found the thing[{id}]");
+                                                                  return false; }
+            t = null;
             return true;
         }
 
