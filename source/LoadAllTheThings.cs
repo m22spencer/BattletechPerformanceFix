@@ -59,6 +59,8 @@ namespace BattletechPerformanceFix
             "RequestResource_Internal".Pre<DataManager>();
             "Exists".Post<DictionaryStore<object>>();
             "Get".Pre<DictionaryStore<object>>();
+            "get_Keys".Pre<DictionaryStore<object>>();
+            "get_Count".Pre<DictionaryStore<object>>();
             "SetUnityDataManagers".Post<DataManager>();
 
             "ProcessRequests".Pre<DataManager>();
@@ -102,6 +104,26 @@ namespace BattletechPerformanceFix
                                                                   return false; }
             return true;
         }
+
+        public static bool get_Keys_Pre(object __instance, ref IEnumerable<string> __result) {
+            var type = __instance.GetType().GetGenericArguments()[0];
+            var rttype = Trap(() => (RT?)type.Name.ToRT(), () => null);
+            if (rttype != null) {
+                LogWarning($"Something tried to pull the Keys for {type.FullName}, we returned AllManifestEntryKeys");
+                __result = CollectSingletons.RL.AllEntriesOfResource(rttype.Value, true).Select(e => e.Id);
+                return false;
+            } else {
+                LogWarning($"Something tried to pull the Keys for {type.FullName}, we returned *nothing*");
+                return true;
+            }
+        }
+
+        public static bool get_Count_Pre(object __instance) {
+            var type = __instance.GetType().GetGenericArguments()[0];
+            LogWarning($"Something tried to pull the Count for {type.FullName}, we returned *0*");
+            return true;
+        }
+
 
         public static bool RequestResource_Internal_Pre(string identifier) {
             if (AllTheThings.ContainsKey(identifier)) return false;
