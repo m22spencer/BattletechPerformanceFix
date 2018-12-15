@@ -59,9 +59,9 @@ namespace BattletechPerformanceFix {
         public static void Trap(Action f)
         { try { f(); } catch (Exception e) { Main.__Log("Exception {0}", e); } }
 
-        public static T Trap<T>(Func<T> f)
+        public static T Trap<T>(Func<T> f, Func<T> or = null)
         {
-            try { return f(); } catch (Exception e) { Main.__Log("Exception {0}", e); return default(T);  }
+            try { return f(); } catch (Exception e) { Main.__Log("Exception {0}", e); return or == null ? default(T) : or(); }
         }
 
         public static IPromise<T> TrapAsPromise<T>(Func<T> f) {

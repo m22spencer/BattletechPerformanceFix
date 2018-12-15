@@ -59,6 +59,37 @@ namespace BattletechPerformanceFix
             "RequestResource_Internal".Pre<DataManager>();
             "Exists".Post<DictionaryStore<object>>();
             "Get".Pre<DictionaryStore<object>>();
+            "SetUnityDataManagers".Post<DataManager>();
+
+            "ProcessRequests".Pre<DataManager>();
+        }
+
+        public static bool Initialized = false;
+        public static void SetUnityDataManagers_Post(DataManager __instance) {
+            if (Initialized) return;
+            Initialized = true;
+
+            var allTheDeps = AllTheThings.Where(thing => thing.Value is DataManager.ILoadDependencies)
+                                         .Select(thing => thing.Value as DataManager.ILoadDependencies)
+                                         .ToList();
+            if (__instance == null) LogError("DM instance is null");
+
+            var dummy = new AlternativeLoading.DMGlue.DummyLoadRequest(__instance, "dummy", 0);
+            allTheDeps.ForEach(dep => { dep.DataManager = __instance;
+                                        Trap(() => new Traverse(dep).Field("dataManager").SetValue(__instance));
+                                        Trap(() => new Traverse(dep).Field("loadRequest").SetValue(dummy));
+                                      });
+
+            void Report() {
+                var sWithDeps = allTheDeps.Where(thing => !Trap(() => thing.DependenciesLoaded(0), () => false));
+                var types = sWithDeps.Select(d => d.GetType().FullName).Distinct().ToArray();
+                Log("{0}", $"Need to determine [{sWithDeps.Count()}] dependencies of types {types.Dump()}");
+
+            }
+
+            Report();
+            Report();
+            Report();
         }
 
         public static void Exists_Post(ref bool __result, string id) {
@@ -75,6 +106,17 @@ namespace BattletechPerformanceFix
         public static bool RequestResource_Internal_Pre(string identifier) {
             if (AllTheThings.ContainsKey(identifier)) return false;
             else return true;
+        }
+
+        public static void ProcessRequests_Pre(DataManager __instance) {
+            var calledFrom = new StackTrace().ToString();
+            var isFromExternal = new StackFrame(2).GetMethod().DeclaringType.Name != "DataManager";
+
+            var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
+            if (dmlr.Count == 0) LogDebug($"ProcessRequests[external? {isFromExternal}] started with an EMPTY queue from {calledFrom}");
+            else LogDebug($"ProcessRequests[external? {isFromExternal}] started from {calledFrom}");
+
+
         }
     }
 }
