@@ -105,7 +105,8 @@ namespace BattletechPerformanceFix
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(Scratch), true },
                     { typeof(ImmediateAssetFallbackRecovery), true },
-                    { typeof(SureIHaveThat), true }
+                    { typeof(SureIHaveThat), true },
+                    { typeof(LoadAllTheThings), true }
 
                 };
 

@@ -9,6 +9,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using Newtonsoft.Json;
+using RT = BattleTech.BattleTechResourceType;
 
 namespace BattletechPerformanceFix {
     public static class Extensions {
@@ -102,6 +103,9 @@ namespace BattletechPerformanceFix {
             return t;
         }
 
+        public static RT ToRT(this string name)
+            => Trap(() => (RT)Enum.Parse(typeof(RT), name));
+
         public static T[] Array<T>(params T[] p) => p;
         public static List<T> List<T>(params T[] p) => p.ToList();
         public static IEnumerable<T> Sequence<T>(params T[] p) => p;
@@ -124,6 +128,10 @@ namespace BattletechPerformanceFix {
             stats(delta, sw.Elapsed);
             return item;
         }
+
+        public static T Measure<T>( string tag, Func<T> f)
+            => Measure((b,t) => LogDebug("Measure[{0}] :bytes {1} :seconds {2}", tag, b, t.TotalSeconds)
+                      , f);
 
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
