@@ -54,7 +54,7 @@ namespace BattletechPerformanceFix
 
             "RequestResource_Internal".Pre<DataManager>();
 
-            "Exists".Post<HBS.Data.DictionaryStore<BattleTech.Rendering.MechCustomization.ColorSwatch>>("Exists_CS");
+            "Exists".Post<HBS.Data.DictionaryStore<object>>("Exists_CS");
 
             "Exists".Post<DataManager>(nameof(DM_Exists));
         }
@@ -63,16 +63,22 @@ namespace BattletechPerformanceFix
             if (__result == false && resourceType == RT.Prefab) {
                 Spam(() => "Sneaky DM said a prefab doesn't exist. Stop that.");
                 __result = CollectSingletons.PC.IsPrefabInPool(id);
+            } else if (__result == false && resourceType == RT.ColorSwatch) {
+                Spam(() => "Looking for ColorSwatch, we'll need to override");
+                __result = Has(id);
             }
         }
 
         public static void Exists_CS(ref bool __result, string id) {
-            if (!__result) Spam(() => $"Exists[false] for {id}");
+            var entry = Locate(id, RT.ColorSwatch);
+            if (entry != null) {
+                __result = true;
+            }
         }
 
         public static bool RequestResource_Internal_Pre(string identifier, RT resourceType) {
             var t = resourceType;
-            if (t == RT.Prefab || t == RT.UIModulePrefabs)
+            if (t == RT.Prefab || t == RT.UIModulePrefabs || t == RT.ColorSwatch)
                 return false;
             return true;
         }

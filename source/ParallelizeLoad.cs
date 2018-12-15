@@ -75,16 +75,18 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(SGNegotiationWidget), "ReceiveButtonPress").Track();
 
             // We want to request the map here, but this makes DataManager just stop loading because "reasons"
-            /*
             Main.harmony.Patch( AccessTools.Method(typeof(LanceConfiguratorPanel), "ContinueConfirmClicked")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(LanceConfiguratorPanel_SetData))));
-                              */
+
+            /*
             Main.harmony.Patch( AccessTools.Method(typeof(Contract)
-                                                  //, "BeginRequestResources")
-                                                  , "RequestResourcesComplete")
+                                                  , "BeginRequestResources")
+                                                  //, "RequestResourcesComplete")
                               , new HarmonyMethod(AccessTools.Method(self, nameof(LanceConfiguratorPanel_SetData))));
+                              */
 
 
+            /*
             AccessTools.Method(typeof(SimGameState), "StartContract").Track();
             AccessTools.Method(typeof(Contract), "Begin").Track();
             AccessTools.Method(typeof(Contract), "BeginRequestResources").Track();
@@ -92,6 +94,7 @@ namespace BattletechPerformanceFix
             AccessTools.Method(typeof(LevelLoadRequestListener), "Start").Track();
             AccessTools.Method(typeof(LevelLoadRequestListener), "OnRequestLevelLoad").Track();
             AccessTools.Method(typeof(DataManager), "Clear").Track();
+            */
 
             "Load".Pre<LoadTransitioning>();
         }
@@ -110,16 +113,15 @@ namespace BattletechPerformanceFix
         }
 
         // I'd like to do this at SetData, but we need to be able to cancel the map load request to do that.
-        public static void LanceConfiguratorPanel_SetData(Contract __instance) {
+        public static void LanceConfiguratorPanel_SetData(Contract ___activeContract) {
             Log($"LanceConfiguratorPanel: checking if we can early load map");
-            var contract = __instance;
+            var contract = ___activeContract;
             if (contract != null) {
                 if (Scene != null) LogError("A scene load was in progress, not good");
                 //FIXME: This needs handling for bundle based maps
                 Log($"Background loading {contract.mapName}");
                 var entry = OverridePrefabCache.lookupId(contract.mapName);
-                var green = OverridePrefabCache.lookupId("Green_01");
-                Log($"Map needs bundle? {(entry == null ? "no" : "yes")} :fp {green.FilePath} :iab {green.IsAssetBundled} :abn {green.AssetBundleName} :rp {green.ResourcesLoadPath}");
+                Log($"Map needs bundle? {(entry == null ? "no" : "yes")}");
                 Scene = Trap(() => contract.mapName.LoadSceneAsync());
             }
         }

@@ -154,19 +154,6 @@ namespace BattletechPerformanceFix
             var type = __instance.GetType().GetGenericArguments()[0];
 
             __result = __result.Concat(AllTheThings.Where(thing => thing.Value.GetType() == type).Select(thing => thing.Key)).Distinct();
-            /*
-            return false;
-
-            var rttype = Trap(() => (RT?)type.Name.ToRT(), () => null);
-            if (rttype != null) {
-                LogWarning($"Something tried to pull the Keys for {type.FullName}, we returned AllManifestEntryKeys");
-                __result = CollectSingletons.RL.AllEntriesOfResource(rttype.Value, true).Select(e => e.Id);
-                return false;
-            } else {
-                LogWarning($"Something tried to pull the Keys for {type.FullName}, we returned *nothing*");
-                return true;
-            }
-            */
         }
 
         public static bool get_Count_Pre(object __instance) {
@@ -193,12 +180,13 @@ namespace BattletechPerformanceFix
             if (!isFromExternal) return;
 
             var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
-            if (dmlr.Count > 0) return;
-
+            if (dmlr.Count > 0) {
+                var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}").Take(10).ToArray());
+                LogDebug($"ProcessRequests started with: {byid}");
+            } else {
             LogDebug($"ProcessRequests[external? {isFromExternal}] started with an EMPTY queue from {fromMethod.DeclaringType.FullName}.{fromMethod.Name} this will never complete!");
             CollectSingletons.MC.PublishMessage(new DataManagerLoadCompleteMessage());
-
-
+            }
         }
     }
 }

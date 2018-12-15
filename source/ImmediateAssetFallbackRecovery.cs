@@ -10,6 +10,8 @@ using RT = BattleTech.BattleTechResourceType;
 using BattleTech;
 using BattleTech.Data;
 using UnityEngine;
+using HBS.Data;
+using BattleTech.Rendering.MechCustomization;
 using BattletechPerformanceFix.AlternativeLoading;
 using static BattletechPerformanceFix.Extensions;
 
@@ -40,6 +42,25 @@ namespace BattletechPerformanceFix
             "RequestTexture".Pre<TextureManager>();
 
             "Contains".Pre<TextureManager>();
+
+            "Get".Pre<DictionaryStore<object>>("Get_CS", Priority.First);
+        }
+
+        // FIXME: this is likely patching all the Get checks
+        public static bool Get_CS(string id, ref ColorSwatch __result) {
+            var entry = Locate(id, RT.ColorSwatch);
+
+            if (entry != null) {
+                LogDebug($"Get.ColorSwatch for {id}");
+                var res = __result;
+                entry.MapSync<ColorSwatch,ColorSwatch>( null, Identity, Identity)
+                     .Done( cs => { LogDebug($"Fallback[{id}:ColorSwatch] Loaded");
+                                    res = cs; }
+                          , err => LogDebug($"Fallback[{id}:ColorSwatch] Failed. Why? {err}"));
+                __result = res;
+                return false;
+            }
+            return true;
         }
 
         public static bool Contains_Pre(string resourceId, ref bool __result) {
