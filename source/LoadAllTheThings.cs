@@ -8,6 +8,7 @@ using Harmony;
 using BattleTech;
 using BattleTech.Data;
 using ILD = BattleTech.Data.DataManager.ILoadDependencies;
+using isogame;
 using Harmony;
 using System.Diagnostics;
 using RT = BattleTech.BattleTechResourceType;
@@ -22,21 +23,43 @@ namespace BattletechPerformanceFix
         public static Dictionary<string,object> AllTheThings = new Dictionary<string,object>();
             
         public void Activate() {
+
+            "RequestResource_Internal".Pre<DataManager>();
+            "Exists".Post<DictionaryStore<object>>();
+            "Get".Pre<DictionaryStore<object>>();
+            "TryGet".Pre<DictionaryStore<object>>();
+            "get_Keys".Post<DictionaryStore<object>>();
+            "get_Count".Pre<DictionaryStore<object>>();
+            "SetUnityDataManagers".Post<DataManager>();
+
+            "ProcessRequests".Pre<DataManager>();
+        }
+
+        public static bool Initialized = false;
+        public static void SetUnityDataManagers_Post(DataManager __instance) {
+            if (Initialized) return;
+            Initialized = true;
+
+
+
+            //For debugger hook
+            //System.Threading.Thread.Sleep(10000);
+
             var alljtypes = Assembly.GetAssembly(typeof(RT))
-                    .GetTypes()
-                    .Where(ty => ty.GetInterface(typeof(HBS.Util.IJsonTemplated).FullName) != null)
-                    .Where(ty => Enum.GetNames(typeof(RT)).Contains(ty.Name))
-                    .Where(ty => !Array("CombatGameConstants", "SimGameConstants").Contains(ty.Name))
-                    .ToList();
+                                    .GetTypes()
+                                    .Where(ty => ty.GetInterface(typeof(HBS.Util.IJsonTemplated).FullName) != null)
+                                    .Where(ty => Enum.GetNames(typeof(RT)).Contains(ty.Name))
+                                    .Where(ty => !Array("CombatGameConstants", "SimGameConstants").Contains(ty.Name))
+                                    .ToList();
 
             Log("Autoresolve {0}", alljtypes.Select(ty => ty.Name).ToArray().Dump());
 
             var rl = new BattleTechResourceLocator();
 
             var allentries = Measure( "Json-Entries"
-                                        , () => alljtypes.SelectMany(type => rl.AllEntriesOfResource(type.Name.ToRT(), true)
-                                                                               .Select(entry => new { type, entry }))
-                                                         .ToList());
+                                    , () => alljtypes.SelectMany(type => rl.AllEntriesOfResource(type.Name.ToRT(), true)
+                                                                           .Select(entry => new { type, entry }))
+                                                     .ToList());
                                                                       
 
             var alljson = Measure( "Load-Json-String"
@@ -58,25 +81,25 @@ namespace BattletechPerformanceFix
             alldefs.ForEach(ed => AllTheThings[ed.entry.Id] = ed.def);
             LogDebug($"AllTheThings[{alldefs.Count}] done");
 
+            Measure( "All speakerlists"
+                   , () => rl.AllEntriesOfResource(RT.SimGameSpeakers, true)
+                             .ForEach(entry => AlternativeLoading.Load.MapSync<ConversationSpeakerList,GameObject>( entry, bytes => SimGameConversationManager.LoadSpeakerListFromStream(new HBS.Util.SerializationStream(bytes)), null, null)
+                                                                 .Done(list => { LogDebug($"ADDSPEAKER: {entry.Id} as {entry.Name}");
+                                                                                 AllTheThings[entry.Name] = list; }
+                                                                      , LogException)));
+
+            Measure( "All conversations"
+                   , () => rl.AllEntriesOfResource(RT.SimGameConversations, true)
+                             .ForEach(entry => AlternativeLoading.Load.MapSync<Conversation,GameObject>( entry, bytes => SimGameConversationManager.LoadConversationFromStream(new HBS.Util.SerializationStream(bytes)), null, null)
+                                                                 .Done(convo => { LogDebug($"ADDCONVO: {entry.Id} as {convo.idRef.id}");
+                                                                                  AllTheThings[convo.idRef.id] = convo;
+                                                                                  //FIXME:
+                                                                                }
+                                                                      , LogException)));
+
+
             Spam(() => $"LiterallyAllTheThings {AllTheThings.Keys.ToArray().Dump()}");
 
-            "RequestResource_Internal".Pre<DataManager>();
-            "Exists".Post<DictionaryStore<object>>();
-            "Get".Pre<DictionaryStore<object>>();
-            "TryGet".Pre<DictionaryStore<object>>();
-            "get_Keys".Pre<DictionaryStore<object>>();
-            "get_Count".Pre<DictionaryStore<object>>();
-            "SetUnityDataManagers".Post<DataManager>();
-
-            "ProcessRequests".Pre<DataManager>();
-        }
-
-        public static bool Initialized = false;
-        public static void SetUnityDataManagers_Post(DataManager __instance) {
-            if (Initialized) return;
-            Initialized = true;
-
-            System.Threading.Thread.Sleep(10000);
 
             var allTheDeps = AllTheThings.Where(thing => thing.Value is DataManager.ILoadDependencies)
                                          .Select(thing => thing.Value as DataManager.ILoadDependencies)
@@ -127,8 +150,13 @@ namespace BattletechPerformanceFix
             return true;
         }
 
-        public static bool get_Keys_Pre(object __instance, ref IEnumerable<string> __result) {
+        public static void get_Keys_Post(object __instance, ref IEnumerable<string> __result) {
             var type = __instance.GetType().GetGenericArguments()[0];
+
+            __result = __result.Concat(AllTheThings.Where(thing => thing.Value.GetType() == type).Select(thing => thing.Key)).Distinct();
+            /*
+            return false;
+
             var rttype = Trap(() => (RT?)type.Name.ToRT(), () => null);
             if (rttype != null) {
                 LogWarning($"Something tried to pull the Keys for {type.FullName}, we returned AllManifestEntryKeys");
@@ -138,6 +166,7 @@ namespace BattletechPerformanceFix
                 LogWarning($"Something tried to pull the Keys for {type.FullName}, we returned *nothing*");
                 return true;
             }
+            */
         }
 
         public static bool get_Count_Pre(object __instance) {
@@ -148,7 +177,12 @@ namespace BattletechPerformanceFix
 
 
         public static bool RequestResource_Internal_Pre(string identifier) {
-            if (AllTheThings.ContainsKey(identifier)) return false;
+            if (AllTheThings.ContainsKey(identifier)) {
+                var item = AllTheThings[identifier];
+                if (item is DesignMaskDef)
+                    CollectSingletons.MC.PublishMessage(new DataManagerRequestCompleteMessage<DesignMaskDef>(RT.DesignMaskDef, identifier, item as DesignMaskDef));
+                return false;
+            }
             else return true;
         }
 

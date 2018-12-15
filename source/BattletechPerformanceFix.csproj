@@ -65,6 +65,10 @@
       <HintPath>$(BTechData)Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="ShadowrunDTO, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\BattleTech_Data\Managed\ShadowrunDTO.dll</HintPath>
+    </Reference>
     <Reference Include="System">
       <HintPath>$(BTechData)System.dll</HintPath>
       <Private>False</Private>

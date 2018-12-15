@@ -133,6 +133,10 @@ namespace BattletechPerformanceFix {
             => Measure((b,t) => LogDebug("Measure[{0}] :bytes {1} :seconds {2}", tag, b, t.TotalSeconds)
                       , f);
 
+        public static void Measure( string tag, Action f)
+            => Measure((b,t) => LogDebug("Measure[{0}] :bytes {1} :seconds {2}", tag, b, t.TotalSeconds)
+                      , () => { f(); return 0; });
+
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
 
         // Do not let BattleTech recover anything. Forcibly close.
