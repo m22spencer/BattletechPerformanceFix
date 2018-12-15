@@ -74,6 +74,8 @@ namespace BattletechPerformanceFix {
             }
         }
 
+        public static T Identity<T>(T t) => t;
+
         public static K SafeCast<K>(this object t) where K : class
             => (t as K).NullCheckError($"Safe cast failed of {t.GetType().FullName} to {typeof(K).FullName}");
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using RSG;
+using Harmony;
 using BattleTech;
 using UnityEngine;
 using BattleTech.Data;
@@ -16,7 +17,7 @@ namespace BattletechPerformanceFix.AlternativeLoading
     public delegate void AcceptReject<T>(Action<T> accept, Action<Exception> reject);
     public static class Load
     {
-        public static IPromise<T> MapSync<T,R>( VersionManifestEntry entry
+        public static IPromise<T> MapSync<T,R>( this VersionManifestEntry entry
                                               , Func<byte[],T> byFile
                                               , Func<R,T> byResource 
                                               , Func<R,T> byBundle
@@ -53,6 +54,13 @@ namespace BattletechPerformanceFix.AlternativeLoading
 
         public static IPromise<T> LoadJson<T>(this VersionManifestEntry entry) where T : class, HBS.Util.IJsonTemplated {
             return LoadJsonD(entry, typeof(T)).Then(x => x.SafeCast<T>());
+        }
+
+        public static IPromise<Texture2D> LoadTexture2D(this VersionManifestEntry entry) {
+            return MapSync<Texture2D,Texture2D>( entry
+                                               , bytes => new Traverse(typeof(TextureManager)).Method("TextureFromBytes", bytes).GetValue<Texture2D>()
+                                               , Identity
+                                               , Identity);
         }
     }
 }

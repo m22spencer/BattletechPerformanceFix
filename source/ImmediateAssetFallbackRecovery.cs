@@ -4,11 +4,13 @@ using Harmony;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using RSG;
 
 using RT = BattleTech.BattleTechResourceType;
 using BattleTech;
 using BattleTech.Data;
 using UnityEngine;
+using BattletechPerformanceFix.AlternativeLoading;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -16,9 +18,11 @@ namespace BattletechPerformanceFix
     class ImmediateAssetFallbackRecovery : Feature
     {
         public static DataManager DM = null;
+        public static TextureManager TM = null;
 
         public static void CTOR_Pre(DataManager __instance) {
             DM = __instance;
+            TM = new Traverse(__instance).Property("TextureManager").GetValue<TextureManager>();
         }
 
         public void Activate() {
@@ -27,7 +31,7 @@ namespace BattletechPerformanceFix
             "PooledInstantiate".Post<PrefabCache>();
             "GetSprite".Post<SpriteCache>();
             "GetAsset".Post<SVGCache>();
-            "GetLoadedTexture".Post<TextureManager>();
+            "GetLoadedTexture".Pre<TextureManager>();
             "RequestTexture".Pre<TextureManager>();
         }
 
@@ -45,20 +49,47 @@ namespace BattletechPerformanceFix
             return null;
         }
 
-        public static void GetLoadedTexture_Post(ref Texture2D __result, string resourceId) {
-            if (__result == null) {
+        public static bool GetLoadedTexture_Pre(ref Texture2D __result, string resourceId, Dictionary<string, Texture2D> ___loadedTextures) {
+            if (___loadedTextures.TryGetValue(resourceId, out var texture)) {
+                __result = texture;
+            } else {
                 LogWarning($"Request Texture.Get {resourceId} but it does not exist");
+                var entry = Locate(resourceId, RT.Texture2D);
+                var res = __result;
+                entry.LoadTexture2D()
+                     .Done( tex => { Spam(() => $"Fallback[{resourceId}:Texture2D] Loaded");
+                                     res = tex;
+                                     ___loadedTextures.Add(resourceId, tex); }
+                          , err => LogWarning(() => $"Fallback[{resourceId}:Texture2D] Failed"));
+                __result = res;
             }
+
+            return false;
         }
 
-        public static void RequestTexture_Pre(string resourceId, TextureLoaded loadedCallback, ref LoadFailed error, Dictionary<string, Texture2D> ___loadedTextures) {
-            error = (msg) => LogWarning($"Request Texture.Async {resourceId} but it does not exist :with [{msg}]");
-
+        public static void RequestTexture_Pre(TextureManager __instance, string resourceId, TextureLoaded loadedCallback, ref LoadFailed error, Dictionary<string, Texture2D> ___loadedTextures) {
+            var olderr = error;
+            error = (msg) => { var tex = __instance.GetLoadedTexture(resourceId);
+                               if (tex == null) olderr(msg);
+                               else loadedCallback(tex); };
         }
 
-        public static void GetSprite_Post(ref Sprite __result, string id) {
-            if (__result == null)
-                LogWarning($"Request Sprite {id} but it does not exist");
+        public static void GetSprite_Post(ref Sprite __result, string id, Dictionary<string,Sprite> ___cache) {
+            if (__result == null) {
+                Sprite MkSprite(Texture2D t)
+                    => Sprite.Create(t, new UnityEngine.Rect(0f, 0f, (float)t.width, (float)t.height), new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect, Vector4.zero);
+                    
+                var tex = TM.GetLoadedTexture(id);
+                Sprite sprite = null;
+                if (tex != null) {
+                    sprite = MkSprite(tex);
+                }
+                // Need some handling for actual sprites here.
+                if (sprite != null) { Spam(() => $"Fallback[{id}:Sprite] Loaded");
+                                      ___cache[id] = sprite; }
+                else LogWarning(() => $"Fallback[{id}:Sprite] Failed");
+                __result = sprite;
+            }
         }
 
         public static void GetAsset_Post(ref SVGImporter.SVGAsset __result, string id) {
