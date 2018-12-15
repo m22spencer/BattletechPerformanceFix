@@ -102,7 +102,8 @@ namespace BattletechPerformanceFix
                     { typeof(SimpleMetrics), false },
                     { typeof(OverridePrefabCache), false },
                     { typeof(EnableLoggingDuringLoads), true },
-                    { typeof(Scratch), true }
+                    { typeof(Scratch), true },
+                    { typeof(ImmediateAssetFallbackRecovery), true }
 
                 };
 

@@ -12,6 +12,10 @@ using Newtonsoft.Json;
 
 namespace BattletechPerformanceFix {
     public static class Extensions {
+        public static void Spam(Func<string> msg) {
+            LogDebug(msg);
+        }
+
         public static void LogDebug(Func<string> lmsg) {
              if (Main.LogLevel == "Debug") LogDebug(lmsg());
         }
