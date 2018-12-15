@@ -46,28 +46,39 @@ namespace BattletechPerformanceFix
         }
 
         public static void GetLoadedTexture_Post(ref Texture2D __result, string resourceId) {
-            if (__result == null)
-                LogError($"Request Texture.Get {resourceId} but it does not exist");
+            if (__result == null) {
+                LogWarning($"Request Texture.Get {resourceId} but it does not exist");
+            }
         }
 
         public static void RequestTexture_Pre(string resourceId, TextureLoaded loadedCallback, ref LoadFailed error, Dictionary<string, Texture2D> ___loadedTextures) {
-            error = (msg) => LogError($"Request Texture.Async {resourceId} but it does not exist :with [{msg}]");
+            error = (msg) => LogWarning($"Request Texture.Async {resourceId} but it does not exist :with [{msg}]");
 
         }
 
         public static void GetSprite_Post(ref Sprite __result, string id) {
             if (__result == null)
-                LogError($"Request Sprite {id} but it does not exist");
+                LogWarning($"Request Sprite {id} but it does not exist");
         }
 
         public static void GetAsset_Post(ref SVGImporter.SVGAsset __result, string id) {
-            if (__result == null)
-                LogError($"Request SVGAsset {id} but it does not exist");
+            if (__result == null) {
+                var entry = Locate(id, RT.SVGAsset);
+                SVGImporter.SVGAsset asset = null;
+                Exception ex = null;
+                AlternativeLoading.Load.MapSync(entry, null
+                                               , (SVGImporter.SVGAsset x) => x
+                                               , (SVGImporter.SVGAsset y) => y)
+                                  .Done( svg => asset = svg
+                                       , exn => ex = exn);
+
+                LogWarning(() => $"Request missing SVGAsset {id}. Can we get it? {entry != null}. Did we get it? {asset != null}. Why? {ex?.Message}");
+            }
         }
 
         public static void PooledInstantiate_Post(ref GameObject __result, string id) {
             if (__result == null)
-                LogError($"Request Prefab {id} but it does not exist");
+                LogWarning($"Request Prefab {id} but it does not exist");
         }
     }
 }

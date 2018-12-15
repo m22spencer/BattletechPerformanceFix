@@ -38,6 +38,10 @@ namespace BattletechPerformanceFix {
             Trap(() => Main.HBSLogger.LogError(string.Format(msg, values)));
         }
 
+        public static void LogWarning(Func<string> msg) {
+            LogWarning("{0}", msg());
+        }
+
         public static void LogWarning(string msg, params object[] values)
         {
             Main.__Log("[Warning] " + msg, values);
