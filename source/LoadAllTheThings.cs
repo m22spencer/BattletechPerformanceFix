@@ -109,12 +109,16 @@ namespace BattletechPerformanceFix
         }
 
         public static void ProcessRequests_Pre(DataManager __instance) {
-            var calledFrom = new StackTrace().ToString();
-            var isFromExternal = new StackFrame(2).GetMethod().DeclaringType.Name != "DataManager";
+            var fromMethod = new StackFrame(2).GetMethod();
+            var isFromExternal = fromMethod.DeclaringType.Name != "DataManager";
+
+            if (!isFromExternal) return;
 
             var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
-            if (dmlr.Count == 0) LogDebug($"ProcessRequests[external? {isFromExternal}] started with an EMPTY queue from {calledFrom}");
-            else LogDebug($"ProcessRequests[external? {isFromExternal}] started from {calledFrom}");
+            if (dmlr.Count > 0) return;
+
+            LogDebug($"ProcessRequests[external? {isFromExternal}] started with an EMPTY queue from {fromMethod.DeclaringType.FullName}.{fromMethod.Name} this will never complete!");
+            CollectSingletons.MC.PublishMessage(new DataManagerLoadCompleteMessage());
 
 
         }

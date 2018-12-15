@@ -19,6 +19,7 @@ namespace BattletechPerformanceFix
         public static SVGCache SVC;
         public static BattleTechResourceLocator RL;
         public static AssetBundleManager BM;
+        public static MessageCenter MC;
 
         public static void SetUnityDataManagers_Post(DataManager __instance) {
             DM = __instance;
@@ -35,6 +36,10 @@ namespace BattletechPerformanceFix
             SVC = f<SVGCache>("SVGCache");
             RL = DM.ResourceLocator;
             BM = f<AssetBundleManager>("AssetBundleManager");
+            MC = f<MessageCenter>("MessageCenter");
+
+            MC.AddSubscriber( MessageCenterMessageType.DataManagerLoadCompleteMessage
+                            , _ => Spam(() => "DataManagerLoadComplete"));
         }
 
         public void Activate() {
