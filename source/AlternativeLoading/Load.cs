@@ -34,15 +34,25 @@ namespace BattletechPerformanceFix.AlternativeLoading
             return Promise<T>.Rejected(new Exception("NYI: LoadAssetFromBundle"));
         }
 
-        public static IPromise<T> LoadJson<T>(this VersionManifestEntry entry) where T : HBS.Util.IJsonTemplated {
+        public static IPromise<string> LoadText(this VersionManifestEntry entry) {
+            return MapSync( entry
+                          , System.Text.Encoding.UTF8.GetString
+                          , (TextAsset t) => t.text
+                          , (TextAsset t) => t.text);
+        }
+
+        public static IPromise<HBS.Util.IJsonTemplated> LoadJsonD(this VersionManifestEntry entry, Type type) {
             return MapSync( entry
                           , System.Text.Encoding.UTF8.GetString
                           , (TextAsset t) => t.text
                           , (TextAsset t) => t.text)
-                .Then(str => { var inst = Activator.CreateInstance<T>().NullThrowError($"No Activator for {typeof(T).FullName}");
+                .Then(str => { var inst = (HBS.Util.IJsonTemplated)Activator.CreateInstance(type).NullThrowError($"No Activator for {type.FullName}");
                                inst.FromJSON(str);
                                return inst; });
+        }
 
+        public static IPromise<T> LoadJson<T>(this VersionManifestEntry entry) where T : class, HBS.Util.IJsonTemplated {
+            return LoadJsonD(entry, typeof(T)).Then(x => x.SafeCast<T>());
         }
     }
 }

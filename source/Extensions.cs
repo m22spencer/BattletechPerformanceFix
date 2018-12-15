@@ -217,6 +217,27 @@ namespace BattletechPerformanceFix {
                                               , new HarmonyMethod(pmeth.DeclaringType, pmeth.Name)));
         }
 
+        public static void Post<T>(this string method, string patchmethod = null) {
+            var onType = new StackFrame(1).GetMethod().DeclaringType;
+            patchmethod = patchmethod ?? (method == ".ctor" ? "CTOR_Post" : (method+"_Post"));
+            var pmeth = onType.GetMethod(patchmethod, AccessTools.all).NullCheckError($"Missing patch method {patchmethod} on {onType.FullName}");
+            if (!pmeth.IsStatic) LogError($"Patch method {patchmethod} must be static");
+            MethodBase meth = null;
+            if (method == ".ctor") meth = (MethodBase)typeof(T).GetConstructors(AccessTools.all)[0];
+            else if (method.StartsWith("get_")) meth = (MethodBase)typeof(T).GetProperties(AccessTools.all)
+                                                                          .FirstOrDefault(mm => { LogDebug($"{mm.Name}"); return method.EndsWith(mm.Name); })
+                                                  ?.GetGetMethod();
+            else meth = (MethodBase)typeof(T).GetMethods(AccessTools.all)
+                                             .FirstOrDefault(mm => mm.Name == method && mm.GetMethodBody() != null);
+            meth.NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
+            Log($"Postpatch: {meth.DeclaringType.FullName}::{meth.ToString()} -> {onType.FullName}::{pmeth.ToString()}");
+            if (meth.IsGenericMethodDefinition) LogError("Can't patch a generic method def for {method} on {meth.DeclaringType.FullName}");
+            else Trap(() => Main.harmony.Patch( meth
+                                              , null
+                                              , new HarmonyMethod(pmeth.DeclaringType, pmeth.Name)));
+        }
+
+
         // C# macros when...
         public static void Pre<T>(this string method, Action<T> f) where T : class 
             => method.Pre<T>(x => { f(x); return true; });
