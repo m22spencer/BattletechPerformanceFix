@@ -62,6 +62,24 @@ namespace BattletechPerformanceFix
             "ProcessRequests".Pre<DataManager>();
         }
 
+        public static VersionManifestEntry Locate(string id, BattleTechResourceType? type = null) {
+            // FIXME: This also needs the following checks
+            // - this.manifestEntry.ResourcesLoadPath.StartsWith("UnlockedAssets")
+            // - dataManager.Unlocks.IsAllowedTextureId(resourceId)
+            var locator = DM.ResourceLocator;
+            if (type != null) return DM.ResourceLocator.EntryByID(id, type.Value, true);
+
+            var baseManifest = new Traverse(locator).Field("baseManifest").GetValue<Dictionary<BattleTechResourceType, Dictionary<string, VersionManifestEntry>>>();
+            baseManifest.NullCheckError("Unable to access baseManifest");
+            new Traverse(locator).Method("UpdateTypedEntriesIfNeeded");
+            // FIXME: Terribly slow
+            foreach(var types in baseManifest) {
+                if (types.Value.TryGetValue(id, out var ent)) return ent;
+            }
+            LogWarning($"Locate needs content pack check, but it is NYI");
+            return null;
+        }
+
         // Fix a bug where DataManager hangs forever if it has nothing to load
         public static void ProcessRequests_Pre(DataManager __instance) {
             var fromMethod = new StackFrame(2).GetMethod();
