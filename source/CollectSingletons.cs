@@ -66,6 +66,10 @@ namespace BattletechPerformanceFix
             // FIXME: This also needs the following checks
             // - this.manifestEntry.ResourcesLoadPath.StartsWith("UnlockedAssets")
             // - dataManager.Unlocks.IsAllowedTextureId(resourceId)
+            //
+            // Additionally, modtek patches EntryByID, which we need to call to get ModTek overrides
+            // Suggest patching EntryByID to handle missing type lookups rather than doing via reflection
+            //  use Priority.First
             var locator = DM.ResourceLocator;
             if (type != null) return DM.ResourceLocator.EntryByID(id, type.Value, true);
 
