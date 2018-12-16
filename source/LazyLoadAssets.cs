@@ -79,9 +79,10 @@ namespace BattletechPerformanceFix
         void ActivateFetches() {
             "GetLoadedTexture".Pre<TextureManager>();
             "GetSprite".Post<SpriteCache>();
+            "PooledInstantiate".Post<PrefabCache>();
         }
 
-        public static bool GetLoadedTexture(ref Texture2D __result, string resourceId, Dictionary<string,Texture2D> ___loadedTextures) {
+        public static bool GetLoadedTexture_Pre(ref Texture2D __result, string resourceId, Dictionary<string,Texture2D> ___loadedTextures) {
             if (___loadedTextures.TryGetValue(resourceId, out var texture)) __result = texture;
             else { var entry = C.Locate(resourceId, RT.Texture2D);
                    __result = entry.Load<Texture2D,Texture2D>( TextureFromBytes
@@ -91,12 +92,11 @@ namespace BattletechPerformanceFix
                        Spam(() => $"GetLoadedTexture[success] for {resourceId}");
                        C.TM.InsertTexture(resourceId, __result);
                    }
-
             }
             return false;
         }
 
-        public static void GetSprite(ref Sprite __result, string id) {
+        public static void GetSprite_Post(ref Sprite __result, string id) {
             Sprite MkSprite(Texture2D t)
                 => Sprite.Create(t, new UnityEngine.Rect(0f, 0f, (float)t.width, (float)t.height), new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect, Vector4.zero);
 
@@ -117,6 +117,23 @@ namespace BattletechPerformanceFix
                 if (__result != null) {
                     Spam(() => $"GetSprite[success] for {id}");
                     C.SC.AddSprite(id, __result);
+                }
+            }
+        }
+
+        public static void PooledInstantiate_Post( ref GameObject __result, string id, Vector3? position = null
+                                                 , Quaternion? rotation = null, Transform parent = null) {
+            if (__result == null) {
+                var entry = C.Locate(id);
+                if (entry != null) {
+                    var prefab = entry.Load<GameObject,GameObject>( null
+                                                                , Identity
+                                                                , Identity);
+                    if (prefab != null) {
+                        Spam(() => $"GetPrefab[success] for {id}");
+                        C.PC.AddPrefabToPool(id, prefab);
+                        __result = C.PC.PooledInstantiate(id, position, rotation, parent);
+                    }
                 }
             }
         }
