@@ -3,6 +3,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using SVGImporter;
 
 using HBS.Data;
 using BattleTech;
@@ -27,9 +28,10 @@ namespace BattletechPerformanceFix
         }
 
         static bool Has(string id) {
-            var entry = C.Locate(id) != null;
-            Spam(() => $"Has on {id}? {entry}");
-            return entry;
+            var entry = C.Locate(id);
+            var yes = entry != null;
+            Spam(() => $"Has on {id}:{entry.Type}? {yes}");
+            return yes;
         }
 
         /* Every check in the game that looks for a UnityEngine.Object based
@@ -77,11 +79,23 @@ namespace BattletechPerformanceFix
          * Note: This will cause stutter without a smarter caching system. The goal is to be correct, not fast.
          */
         void ActivateFetches() {
+            "GetAsset".Post<SVGCache>();
             "RequestTexture".Pre<TextureManager>();
             "GetLoadedTexture".Pre<TextureManager>();
             "GetSprite".Post<SpriteCache>();
             "PooledInstantiate".Post<PrefabCache>();
             "Get".Pre<DictionaryStore<ColorSwatch>>(nameof(Get_CS));
+        }
+
+        public static void GetAsset_Post(ref SVGAsset __result, string id) {
+            if (__result == null) {
+                var entry = C.Locate(id, RT.SVGAsset);
+                if (entry != null) {
+                    __result = entry.Load<SVGAsset, SVGAsset>( null, Identity, Identity);
+                }
+                if (__result != null)
+                    C.SVC.AddSVGAsset(id, __result);
+            }
         }
 
         public static bool RequestTexture_Pre(string resourceId, TextureLoaded loadedCallback, LoadFailed error) {
@@ -134,6 +148,7 @@ namespace BattletechPerformanceFix
         public static void PooledInstantiate_Post( ref GameObject __result, string id, Vector3? position = null
                                                  , Quaternion? rotation = null, Transform parent = null) {
             if (__result == null) {
+                Spam(() => $"Need prefab {id}");
                 var entry = C.Locate(id);
                 if (entry != null) {
                     var prefab = entry.Load<GameObject,GameObject>( null
@@ -178,11 +193,14 @@ namespace BattletechPerformanceFix
                                  , Func<R,T> byResource 
                                  , Func<R,T> byBundle
                                  , AcceptReject<T> recover = null) where R : UnityEngine.Object {
-            if (entry == null) throw new Exception("MapSync: null entry");
-            if (entry.IsAssetBundled && byBundle != null) throw new Exception("Cannot load from bundles");
-            if (entry.IsResourcesAsset && byResource != null) return byResource(Resources.Load<R>(entry.ResourcesLoadPath));
-            if (entry.IsFileAsset && byFile != null) return byFile(File.ReadAllBytes(entry.FilePath));
-            throw new Exception("Ran out of ways to load asset");
+            T Wrap() {
+                if (entry == null) throw new Exception("MapSync: null entry");
+                if (entry.IsAssetBundled && byBundle != null) throw new Exception("Cannot load from bundles");
+                if (entry.IsResourcesAsset && byResource != null) return byResource(Resources.Load<R>(entry.ResourcesLoadPath));
+                if (entry.IsFileAsset && byFile != null) return byFile(File.ReadAllBytes(entry.FilePath));
+                throw new Exception("Ran out of ways to load asset");
+            }
+            return Trap(Wrap);
         }
     }
 }
