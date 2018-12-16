@@ -94,7 +94,8 @@ namespace BattletechPerformanceFix
                     { typeof(ContractLagFix), true },
                     { typeof(ParallelizeLoad), false },
                     { typeof(SimpleMetrics), false },
-                    { typeof(LazyLoadAssets), true }
+                    { typeof(LazyLoadAssets), true },
+                    { typeof(EnableLoggingDuringLoads), true },
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
