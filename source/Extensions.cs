@@ -270,13 +270,14 @@ namespace BattletechPerformanceFix {
             meth.Patch<T>(premethod, postmethod, transpilemethod, priority);
         }
 
-        public static void Pre<T>(this string method, string patchmethod = null, int priority = Priority.Normal) {
-            method.Patch<T>(patchmethod ?? $"{method}_Pre");
-        }
+        public static void Pre<T>(this string method, string patchmethod = null, int priority = Priority.Normal)
+            => method.Patch<T>(patchmethod ?? $"{method}_Pre", null, null, priority);
 
-        public static void Post<T>(this string method, string patchmethod = null) {
-            method.Patch<T>(null, patchmethod ?? $"{method}_Post");
-        }
+        public static void Post<T>(this string method, string patchmethod = null, int priority = Priority.Normal)
+            => method.Patch<T>(null, patchmethod ?? $"{method}_Post", null, priority);
+
+        public static void Transpile<T>(this string method, string patchmethod = null, int priority = Priority.Normal)
+            => method.Patch<T>(null, null, patchmethod ?? $"{method}_Transpile", priority);
 
         // C# macros when...
         public static void Pre<T>(this string method, Action<T> f) where T : class 
