@@ -83,19 +83,7 @@ namespace BattletechPerformanceFix
                 MC.AddSubscriber( MessageCenterMessageType.DataManagerLoadCompleteMessage
                                 , (msg) => LogDebug("DM Load complete"));
 
-                void PingQueue() {
-                    WaitAFrame(240)
-                        .Done(() => {
-                                var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
-                                var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}[{lr.State}]").Take(10).ToArray());
-                                LogDebug($"ProcessRequests :10waiting [{byid}]"); // from {new StackTrace().ToString()}");
-
-                                PingQueue();
-                            });
-                }
-
-                PingQueue();
-            }
+                            }
             if (dl == null) dl = new AlternativeLoading.DMGlue.DummyLoadRequest(DM);
             var t = resourceType;
             if (Has.Contains(identifier)) {
