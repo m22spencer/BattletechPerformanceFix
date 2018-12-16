@@ -100,17 +100,25 @@ namespace BattletechPerformanceFix
                 settings.features = want.ToDictionary(kv => kv.Key.Name, kv => kv.Value);
                 File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(settings, Formatting.Indented));
 
+                var alwaysOn = new Dictionary<Type, bool>
+                {
+                    { typeof(CollectSingletons), true },
+                };
+
+                var allwant = alwaysOn.Concat(want);
+
                 Log("Features ----------");
-                foreach (var feature in want)
+                foreach (var feature in allwant)
                 {
                     Log("Feature {0} is {1}", feature.Key.Name, feature.Value ? "ON" : "OFF");
                 }
                 Log("Patches ----------");
-                foreach (var feature in want)
+                foreach (var feature in allwant)
                 {
                     if (feature.Value) {
                         try
                         {
+                            Log("Feature {0}:", feature.Key.Name);
                             var f = (Feature)AccessTools.CreateInstance(feature.Key);
                             f.Activate();
                         } catch (Exception e)

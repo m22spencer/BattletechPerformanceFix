@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Harmony;
+using UnityEngine;
+using BattleTech.Data;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -19,11 +21,45 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.UI.SGLoadSavedGameScreen), "LoadSelectedSlot")
                               , new HarmonyMethod(AccessTools.Method(self, "Summary")));
             Active = true;
+
+            "Update".Post<BattleTech.UnityGameInstance>();
+
+            var meths = Measure( "AllPatchableTypes"
+                               , () => AppDomain
+                                 .CurrentDomain.GetAssemblies().SelectMany(asm => asm.GetTypes())
+                                 .Where(ty => !ty.IsAbstract && !ty.IsGenericTypeDefinition)
+                                 .SelectMany(ty => ty.GetMethods(AccessTools.all))
+                                 .Where(meth => !meth.IsGenericMethodDefinition && meth.GetMethodBody() != null)
+                                 .ToList());
+
+
+            var uo = typeof(UnityEngine.Object);
+            var uomeths = meths.Where(m => uo.IsAssignableFrom(m.DeclaringType))
+                               .ToList();
+
+            // Awakes
+            uomeths.Where(m => m.Name == "Awake" && m.ReturnType == typeof(void))
+                   .ForEach(m => Trap(() => m.Instrument()));
+
+            // Starts
+            uomeths.Where(m => m.Name == "Start" && m.ReturnType == typeof(void))
+                   .ForEach(m => Trap(() => m.Instrument()));
+
+            var names = List( "Load", "PoolModule", "PooledInstantiate", "LoadResource", "RequestDependencies"
+                            , "RehydrateObjectFromDictionary");
+
+            meths.Where(m => names.Contains(m.Name))
+                 .ForEach(m => m.Instrument());
+        }
+
+        public static void Update_Post() {
+            if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.M)) {
+                Summary();
+            }
         }
 
 
         public static void Instrument(MethodBase meth) {
-            if (!Active) return;
             if (meth == null)
                 LogError($"Cannot instrument null meth from {new StackTrace().ToString()}");
 
@@ -48,6 +84,29 @@ namespace BattletechPerformanceFix
             }
         }
 
+        public static void Track(MethodBase meth) {
+            if (meth == null)
+                LogError($"Cannot instrument null meth from {new StackTrace().ToString()}");
+
+            LogDebug($"Tracking {meth.DeclaringType.FullName}::{meth.ToString()}");
+
+            if(TrackHook == null) {
+                Log("Initializing tracking hooks");
+
+                var self = typeof(SimpleMetrics);
+                TrackHook = new HarmonyMethod(AccessTools.Method(self, nameof(__Track)));
+                TrackHook.prioritiy = Priority.First;
+            }
+
+            if (meth.IsGenericMethod || meth.IsGenericMethodDefinition) {
+                LogError($"Cannot instrument a generic method {meth.DeclaringType.FullName}::{meth.ToString()}");
+            } else if (meth.GetMethodBody() == null) {
+                LogError($"Cannot instrument a method with no body {meth.DeclaringType.FullName}::{meth.ToString()}");
+            } else {
+                Trap(() => Main.harmony.Patch(meth, TrackHook));
+            }
+        }
+
         static HarmonyMethod PreHook;
         static HarmonyMethod PostHook;
         static Dictionary<string,Metric> Metrics = new Dictionary<string,Metric>();
@@ -66,6 +125,13 @@ namespace BattletechPerformanceFix
             try { 
             __state.timer.Stop();
             } catch(Exception e) { LogException(e); }
+        }
+
+        static HarmonyMethod TrackHook;
+        public static void __Track(object __instance) {
+            var meth = new StackFrame(1).GetMethod();
+            var hash = __instance.GetHashCode();
+            LogDebug($"Tracked[{hash}] {meth.DeclaringType.FullName}::{meth.ToString()}");
         }
 
         public static void Summary() {
