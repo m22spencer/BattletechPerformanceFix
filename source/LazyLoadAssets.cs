@@ -195,12 +195,16 @@ namespace BattletechPerformanceFix
                                  , AcceptReject<T> recover = null) where R : UnityEngine.Object {
             T Wrap() {
                 if (entry == null) throw new Exception("MapSync: null entry");
-                if (entry.IsAssetBundled && byBundle != null) throw new Exception("Cannot load from bundles");
-                if (entry.IsResourcesAsset && byResource != null) return byResource(Resources.Load<R>(entry.ResourcesLoadPath));
                 if (entry.IsFileAsset && byFile != null) return byFile(File.ReadAllBytes(entry.FilePath));
+                if (entry.IsResourcesAsset && byResource != null) return byResource(Resources.Load<R>(entry.ResourcesLoadPath));
+                if (entry.IsAssetBundled && byBundle != null) return byBundle(entry.LoadFromBundle<R>());
                 throw new Exception("Ran out of ways to load asset");
             }
             return Trap(Wrap);
+        }
+
+        public static T LoadFromBundle<T>( this VersionManifestEntry entry) where T : UnityEngine.Object {
+            return null;
         }
     }
 }
