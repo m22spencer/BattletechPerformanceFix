@@ -8,6 +8,7 @@ using SVGImporter;
 using HBS.Data;
 using BattleTech;
 using BattleTech.Data;
+using BattleTech.Assetbundles;
 using RT = BattleTech.BattleTechResourceType;
 using BattleTech.Rendering.MechCustomization;
 
@@ -30,7 +31,7 @@ namespace BattletechPerformanceFix
         static bool Has(string id) {
             var entry = C.Locate(id);
             var yes = entry != null;
-            Spam(() => $"Has on {id}:{entry.Type}? {yes}");
+            Spam(() => $"Has on {id}:{entry?.Type}? {yes}");
             return yes;
         }
 
@@ -84,6 +85,8 @@ namespace BattletechPerformanceFix
             "GetLoadedTexture".Pre<TextureManager>();
             "GetSprite".Post<SpriteCache>();
             "PooledInstantiate".Post<PrefabCache>();
+            "AddToPoolList".Pre<DataManager>(_ => { Spam(() => "Dropping pool request");
+                                                    return false; });
             "Get".Pre<DictionaryStore<ColorSwatch>>(nameof(Get_CS));
         }
 
@@ -203,8 +206,23 @@ namespace BattletechPerformanceFix
             return Trap(Wrap);
         }
 
+        public static AssetBundle ForceBundle(string bundleName) {
+            if (C.BM.IsBundleLoaded(bundleName)) return C.BM.GetLoadedAssetBundle(bundleName);
+            C.BM.RequestBundle(bundleName, b => {});
+
+            // Bundle has to be forced. we need it *right now*
+            var l = new Traverse(C.BM).Field("loadOperations").GetValue<Dictionary<string, AssetBundleLoadOperation>>();
+            if (l == null) LogError("Couldn't get loadOperation field");
+            var op = l[bundleName].NullThrowError($"No load operation for {bundleName}");
+            var req = new Traverse(op).Field("loadRequest").GetValue<AssetBundleCreateRequest>().NullThrowError($"No bundle create asyncop for {bundleName}");
+            var bundle = req.assetBundle.NullThrowError("Forced the bundle, but got nothing");
+            LogDebug($"Was able to get bundle {bundleName} by forcing the load operation");
+            return bundle;
+        }
+
         public static T LoadFromBundle<T>( this VersionManifestEntry entry) where T : UnityEngine.Object {
-            return null;
+            var bundle = ForceBundle(entry.AssetBundleName);
+            return bundle.LoadAsset<T>(entry.Id);
         }
     }
 }
