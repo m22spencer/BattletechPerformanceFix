@@ -77,9 +77,18 @@ namespace BattletechPerformanceFix
          * Note: This will cause stutter without a smarter caching system. The goal is to be correct, not fast.
          */
         void ActivateFetches() {
+            "RequestTexture".Pre<TextureManager>();
             "GetLoadedTexture".Pre<TextureManager>();
             "GetSprite".Post<SpriteCache>();
             "PooledInstantiate".Post<PrefabCache>();
+        }
+
+        public static bool RequestTexture_Pre(string resourceId, TextureLoaded loadedCallback, LoadFailed error) {
+            var tex = C.TM.GetLoadedTexture(resourceId);
+            if (tex == null) error("No texture");
+            else loadedCallback(tex);
+
+            return false;
         }
 
         public static bool GetLoadedTexture_Pre(ref Texture2D __result, string resourceId, Dictionary<string,Texture2D> ___loadedTextures) {
