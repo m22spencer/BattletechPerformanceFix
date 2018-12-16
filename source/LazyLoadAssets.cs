@@ -53,7 +53,7 @@ namespace BattletechPerformanceFix
 
         // FIXME: This recieves all DictionaryStore types, a transpile is likely necessary but increases complexity
         public static void Exists_CS(object __instance, ref bool __result, string id) {
-            if (!(__instance is DictionaryStore<ColorSwatch>)) LogWarning($"Exist_CS on {__instance.GetType().FullName}");
+            if (!(__instance is DictionaryStore<ColorSwatch>)) {} //LogWarning($"Exist_CS on {__instance.GetType().FullName}");
             else __result = __result || Has(id);
         }
 
@@ -81,6 +81,7 @@ namespace BattletechPerformanceFix
             "GetLoadedTexture".Pre<TextureManager>();
             "GetSprite".Post<SpriteCache>();
             "PooledInstantiate".Post<PrefabCache>();
+            "Get".Pre<DictionaryStore<ColorSwatch>>(nameof(Get_CS));
         }
 
         public static bool RequestTexture_Pre(string resourceId, TextureLoaded loadedCallback, LoadFailed error) {
@@ -136,8 +137,8 @@ namespace BattletechPerformanceFix
                 var entry = C.Locate(id);
                 if (entry != null) {
                     var prefab = entry.Load<GameObject,GameObject>( null
-                                                                , Identity
-                                                                , Identity);
+                                                                  , Identity
+                                                                  , Identity);
                     if (prefab != null) {
                         Spam(() => $"GetPrefab[success] for {id}");
                         C.PC.AddPrefabToPool(id, prefab);
@@ -145,6 +146,23 @@ namespace BattletechPerformanceFix
                     }
                 }
             }
+        }
+
+        public static bool Get_CS(object __instance, ref object __result, string id, Dictionary<string,object> ___items) {
+            if (!(__instance is DictionaryStore<ColorSwatch>)) {} //LogWarning($"Get_CS on {__instance.GetType().FullName}");
+            else {
+                if (___items.TryGetValue(id, out var cs)) __result = cs;
+                else { var entry = C.Locate(id);
+                       __result = entry.Load<ColorSwatch,ColorSwatch>( null
+                                                                     , Identity
+                                                                     , Identity);
+                       if (__result != null) {
+                           ___items[id] = __result;
+                       }
+                }
+                return false;
+            }
+            return true;
         }
     }
 
