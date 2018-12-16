@@ -14,7 +14,8 @@ using RT = BattleTech.BattleTechResourceType;
 namespace BattletechPerformanceFix {
     public static class Extensions {
         public static void Spam(Func<string> msg) {
-            LogDebug(msg);
+            if (Main.LogLevel == "Debug")
+                Main.__Log("[Spam] " + msg());
         }
 
         public static void LogDebug(Func<string> lmsg) {
