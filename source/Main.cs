@@ -99,14 +99,15 @@ namespace BattletechPerformanceFix
                     { typeof(ShopTabLagFix), true },
                     { typeof(MDDB_InMemoryCache), true },
                     { typeof(ContractLagFix), true },
-                    { typeof(ParallelizeLoad), false },
-                    { typeof(SimpleMetrics), false },
-                    { typeof(OverridePrefabCache), false },
+                    //{ typeof(ParallelizeLoad), false },
+                    { typeof(SimpleMetrics), true },
+                    //{ typeof(OverridePrefabCache), false },
                     { typeof(EnableLoggingDuringLoads), true },
-                    { typeof(Scratch), true },
-                    { typeof(ImmediateAssetFallbackRecovery), true },
-                    { typeof(SureIHaveThat), true },
-                    { typeof(LoadAllTheThings), true }
+                    { typeof(DMPersist), true }
+                    //{ typeof(Scratch), true },
+                    //{ typeof(ImmediateAssetFallbackRecovery), true },
+                    //{ typeof(SureIHaveThat), true },
+                    //{ typeof(LoadAllTheThings), true }
 
                 };
 

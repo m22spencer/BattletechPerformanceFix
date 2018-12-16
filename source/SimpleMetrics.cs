@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Harmony;
+using UnityEngine;
+using BattleTech.Data;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -19,6 +21,41 @@ namespace BattletechPerformanceFix
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.UI.SGLoadSavedGameScreen), "LoadSelectedSlot")
                               , new HarmonyMethod(AccessTools.Method(self, "Summary")));
             Active = true;
+
+            "Update".Post<BattleTech.UnityGameInstance>();
+
+            var meths = Measure( "AllPatchableTypes"
+                               , () => AppDomain
+                                 .CurrentDomain.GetAssemblies().SelectMany(asm => asm.GetTypes())
+                                 .Where(ty => !ty.IsAbstract && !ty.IsGenericTypeDefinition)
+                                 .SelectMany(ty => ty.GetMethods(AccessTools.all))
+                                 .Where(meth => !meth.IsGenericMethodDefinition && meth.GetMethodBody() != null)
+                                 .ToList());
+
+
+            var uo = typeof(UnityEngine.Object);
+            var uomeths = meths.Where(m => uo.IsAssignableFrom(m.DeclaringType))
+                               .ToList();
+
+            // Awakes
+            uomeths.Where(m => m.Name == "Awake" && m.ReturnType == typeof(void))
+                   .ForEach(m => Trap(() => m.Instrument()));
+
+            // Starts
+            uomeths.Where(m => m.Name == "Start" && m.ReturnType == typeof(void))
+                   .ForEach(m => Trap(() => m.Instrument()));
+
+            var names = List( "Load", "PoolModule", "PooledInstantiate", "LoadResource", "RequestDependencies"
+                            , "RehydrateObjectFromDictionary");
+
+            meths.Where(m => names.Contains(m.Name))
+                 .ForEach(m => m.Instrument());
+        }
+
+        public static void Update_Post() {
+            if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.M)) {
+                Summary();
+            }
         }
 
 
