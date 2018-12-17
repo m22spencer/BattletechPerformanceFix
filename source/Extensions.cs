@@ -208,6 +208,7 @@ namespace BattletechPerformanceFix {
             => SimpleMetrics.Track(meth);
 
         public static T Let<T>(this T t, Func<T,T> f) => f(t);
+        public static void Let<T>(this T t, Action<T> f) => f(t);
 
         public static HarmonyMethod Drop = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__Drop)));
         public static bool  __Drop() {
