@@ -41,10 +41,11 @@ namespace BattletechPerformanceFix
 
             void f<T>() where T : ILD {
                 "RequestDependencies".Transpile<T>();
-                "RequestDependencies".Pre<T>();
+                //"RequestDependencies".Pre<T>();  Disabled for a temp build
             }
 
             f<MechDef>();
+            f<ChassisDef>();
             f<WeaponDef>();
             f<PilotDef>();
             f<HeraldryDef>();

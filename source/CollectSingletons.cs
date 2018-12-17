@@ -64,7 +64,7 @@ namespace BattletechPerformanceFix
 
         public static VersionManifestEntry Locate(string id, BattleTechResourceType? type = null) {
             var dt = (object)-1;
-            var manifest = Trap(() => DM.ResourceLocator.EntryByID(id, (BattleTechResourceType)dt));
+            var manifest = Trap(() => DM.ResourceLocator.EntryByID(id, (BattleTechResourceType)dt, true));
             if (manifest != null) {
                 LogDebug("ModTek-override: {0}", manifest.Dump(false));
                 return manifest;
