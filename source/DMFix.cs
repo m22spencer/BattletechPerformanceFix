@@ -39,12 +39,20 @@ namespace BattletechPerformanceFix
             // - Register a DataManagerRequestComplete listener
             //   - Right before data manager announces, check if we have all deps and report any issues.
 
-            "RequestDependencies".Transpile<MechDef>();
-            "RequestDependencies".Pre<MechDef>();
+            void f<T>() {
+                "RequestDependencies".Transpile<MechDef>();
+                "RequestDependencies".Pre<MechDef>();
+            }
+
+            f<MechDef>();
         }
 
+        // We fill this queue during the DM load process, and then do a CDAL at the very end.
+        public static List<ILD> RequiresResolution = new List<ILD>();
+
         public static void RequestDependencies_Pre(MechDef __instance) {
-            Spam(() => $"RequestDepenencies of {__instance.ChassisID}");
+            RequiresResolution.Add(__instance);
+            Spam(() => $"RequestDepenencies of {__instance.ChassisID} in queue {RequiresResolution.Count}");
         }
 
         public static IEnumerable<CodeInstruction> RequestDependencies_Transpile(IEnumerable<CodeInstruction> ins) {
