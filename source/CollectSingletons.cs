@@ -63,6 +63,12 @@ namespace BattletechPerformanceFix
         }
 
         public static VersionManifestEntry Locate(string id, BattleTechResourceType? type = null) {
+            var dt = (object)-1;
+            var manifest = Trap(() => DM.ResourceLocator.EntryByID(id, (BattleTechResourceType)dt));
+            if (manifest != null) {
+                LogDebug("ModTek-override: {0}", manifest.Dump(false));
+                return manifest;
+            }
             // FIXME: This also needs the following checks
             // - this.manifestEntry.ResourcesLoadPath.StartsWith("UnlockedAssets")
             // - dataManager.Unlocks.IsAllowedTextureId(resourceId)

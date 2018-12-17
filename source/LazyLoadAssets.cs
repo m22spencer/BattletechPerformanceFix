@@ -161,7 +161,8 @@ namespace BattletechPerformanceFix
                     if (prefab != null) {
                         Spam(() => $"GetPrefab[success] for {id}");
                         C.PC.AddPrefabToPool(id, prefab);
-                        __result = C.PC.PooledInstantiate(id, position, rotation, parent);
+                        __result = Measure( $"Prefab instantiate {id}"
+                                          , () => C.PC.PooledInstantiate(id, position, rotation, parent));
                     }
                 }
             }
