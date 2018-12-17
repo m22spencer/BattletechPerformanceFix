@@ -55,6 +55,8 @@ namespace BattletechPerformanceFix
             Spam(() => $"RequestDepenencies of {__instance.ChassisID} in queue {RequiresResolution.Count}");
         }
 
+        // It's preferable to patch out all the "DependenciesLoaded"/"RequestDependencies" methods called within
+        //    but this adds complexity, which we want to avoid for now.
         public static IEnumerable<CodeInstruction> RequestDependencies_Transpile(IEnumerable<CodeInstruction> ins) {
             var found = false;
             var nins = ins.SelectMany(i => {
