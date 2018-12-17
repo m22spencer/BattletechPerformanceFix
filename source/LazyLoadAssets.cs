@@ -201,27 +201,31 @@ namespace BattletechPerformanceFix
                 if (entry.IsFileAsset && byFile != null) return byFile(File.ReadAllBytes(entry.FilePath));
                 if (entry.IsResourcesAsset && byResource != null) return byResource(Resources.Load<R>(entry.ResourcesLoadPath));
                 if (entry.IsAssetBundled && byBundle != null) return byBundle(entry.LoadFromBundle<R>());
-                throw new Exception("Ran out of ways to load asset");
+                throw new Exception("Ran out of ways to load asset {entry.Dump(false)}");
             }
             return Trap(Wrap);
         }
 
-        public static AssetBundle ForceBundle(string bundleName) {
+        // TODO: Check if this also needs to force dependencies
+        public static AssetBundle GetOrLoadBundle(string bundleName) {
             if (C.BM.IsBundleLoaded(bundleName)) return C.BM.GetLoadedAssetBundle(bundleName);
-            C.BM.RequestBundle(bundleName, b => {});
 
-            // Bundle has to be forced. we need it *right now*
+            // BundleManager did not have the bundle, or it is being loaded.
+            C.BM.RequestBundle(bundleName, b => {});  // Request it so that an Async op is created
+
+            // Get around all the private method crap
             var l = new Traverse(C.BM).Field("loadOperations").GetValue<Dictionary<string, AssetBundleLoadOperation>>();
             if (l == null) LogError("Couldn't get loadOperation field");
             var op = l[bundleName].NullThrowError($"No load operation for {bundleName}");
             var req = new Traverse(op).Field("loadRequest").GetValue<AssetBundleCreateRequest>().NullThrowError($"No bundle create asyncop for {bundleName}");
+            // Force immediate load of bundle by accessing the getter on the async op `req`
             var bundle = req.assetBundle.NullThrowError("Forced the bundle, but got nothing");
             LogDebug($"Was able to get bundle {bundleName} by forcing the load operation");
             return bundle;
         }
 
         public static T LoadFromBundle<T>( this VersionManifestEntry entry) where T : UnityEngine.Object {
-            var bundle = ForceBundle(entry.AssetBundleName);
+            var bundle = GetOrLoadBundle(entry.AssetBundleName);
             return bundle.LoadAsset<T>(entry.Id);
         }
     }
