@@ -154,9 +154,10 @@ namespace BattletechPerformanceFix
                 Spam(() => $"Need prefab {id}");
                 var entry = C.Locate(id);
                 if (entry != null) {
-                    var prefab = entry.Load<GameObject,GameObject>( null
-                                                                  , Identity
-                                                                  , Identity);
+                    var prefab = Measure( $"Prefab {id}"
+                                        , () => entry.Load<GameObject,GameObject>( null
+                                                                                 , Identity
+                                                                                 , Identity));
                     if (prefab != null) {
                         Spam(() => $"GetPrefab[success] for {id}");
                         C.PC.AddPrefabToPool(id, prefab);
