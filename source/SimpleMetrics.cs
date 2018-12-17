@@ -46,10 +46,19 @@ namespace BattletechPerformanceFix
                    .ForEach(m => Trap(() => m.Instrument()));
 
             var names = List( "Load", "PoolModule", "PooledInstantiate", "LoadResource", "RequestDependencies"
+                            , "CheckDependenciesAfterLoad", "RequestResource_Internal"
                             , "RehydrateObjectFromDictionary");
 
             meths.Where(m => names.Contains(m.Name))
                  .ForEach(m => m.Instrument());
+
+
+            Assembly.GetAssembly(typeof(BattleTech.Data.DataManager))
+                    .GetTypes()
+                    .Where(ty => ty.GetInterface(typeof(BattleTech.Data.DataManager.ILoadDependencies).FullName) != null)
+                    .ForEach(ty => { var t = typeof(HBS.Data.DictionaryStore<>).MakeGenericType(ty);
+                                     var e = AccessTools.Method(t, "Exists");
+                                     e.Instrument(); });
         }
 
         public static void Update_Post() {
@@ -145,5 +154,5 @@ namespace BattletechPerformanceFix
         }
     }
 
-    class Metric { public int times = 0; public Stopwatch timer = new Stopwatch(); }
+    class Metric { public long times = 0; public Stopwatch timer = new Stopwatch(); }
 }
