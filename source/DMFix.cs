@@ -39,20 +39,28 @@ namespace BattletechPerformanceFix
             // - Register a DataManagerRequestComplete listener
             //   - Right before data manager announces, check if we have all deps and report any issues.
 
-            void f<T>() {
-                "RequestDependencies".Transpile<MechDef>();
-                "RequestDependencies".Pre<MechDef>();
+            void f<T>() where T : ILD {
+                "RequestDependencies".Transpile<T>();
+                "RequestDependencies".Pre<T>();
             }
 
             f<MechDef>();
+            f<WeaponDef>();
+            f<PilotDef>();
+            f<HeraldryDef>();
+            f<AbilityDef>();
+            f<BaseComponentRef>();
+            f<MechComponentDef>();
+            f<BackgroundDef>();
+            f<FactionDef>();
         }
 
         // We fill this queue during the DM load process, and then do a CDAL at the very end.
         public static List<ILD> RequiresResolution = new List<ILD>();
 
-        public static void RequestDependencies_Pre(MechDef __instance) {
+        public static void RequestDependencies_Pre(ILD __instance) {
             RequiresResolution.Add(__instance);
-            Spam(() => $"RequestDepenencies of {__instance.ChassisID} in queue {RequiresResolution.Count}");
+            Spam(() => $"RequestDepenencies of {__instance.GetType().Name} in queue {RequiresResolution.Count}");
         }
 
         // It's preferable to patch out all the "DependenciesLoaded"/"RequestDependencies" methods called within
@@ -63,7 +71,7 @@ namespace BattletechPerformanceFix
                     if ((i.operand is MethodInfo) && (i.operand as MethodInfo).Name == "AddSubscriber") {
                         i.opcode = OpCodes.Pop;
                         i.operand = null;
-                        // pop this, pop message center guid, pop CDAL call
+                        // pop instance, pop message center guid, pop CDAL call
                         found = true;
                         return Sequence(i, new CodeInstruction(OpCodes.Pop), new CodeInstruction(OpCodes.Pop));
                     } else {
