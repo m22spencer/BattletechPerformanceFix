@@ -14,7 +14,7 @@ using static BattletechPerformanceFix.Extensions;
 namespace BattletechPerformanceFix
 {
     public class Settings {
-        public string logLevel = "Debug";
+        public string logLevel = "debug";
         public Dictionary<string,bool> features = new Dictionary<string,bool>();
     }
 
@@ -33,7 +33,7 @@ namespace BattletechPerformanceFix
         private static StreamWriter LogStream;
 
         public static ILog HBSLogger;
-        public static string LogLevel = "Debug";
+        public static string LogLevel = "debug";
 
         public static void Start(string modDirectory, string json)
         {
@@ -77,7 +77,7 @@ namespace BattletechPerformanceFix
                 catch { LogWarning("Settings file is invalid or missing, regenerating with defaults"); }
 
                 Log($"LogLevel {settings.logLevel}");
-                LogLevel = settings.logLevel;
+                LogLevel = settings.logLevel.ToLower();
 
                 harmony = HarmonyInstance.Create(ModFullName);
 
