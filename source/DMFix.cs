@@ -38,10 +38,10 @@ namespace BattletechPerformanceFix
 
             // - Register a DataManagerRequestComplete listener
             //   - Right before data manager announces, check if we have all deps and report any issues.
+            //     ^ This step is already done by DataManager within CheckRequestsComplete, is this good enough?
 
             void f<T>() where T : ILD {
                 "RequestDependencies".Transpile<T>();
-                //"RequestDependencies".Pre<T>();  Disabled for a temp build
             }
 
             f<MechDef>();
@@ -54,14 +54,6 @@ namespace BattletechPerformanceFix
             f<MechComponentDef>();
             f<BackgroundDef>();
             f<FactionDef>();
-        }
-
-        // We fill this queue during the DM load process, and then do a CDAL at the very end.
-        public static List<ILD> RequiresResolution = new List<ILD>();
-
-        public static void RequestDependencies_Pre(ILD __instance) {
-            RequiresResolution.Add(__instance);
-            Spam(() => $"RequestDepenencies of {__instance.GetType().Name} in queue {RequiresResolution.Count}");
         }
 
         // It's preferable to patch out all the "DependenciesLoaded"/"RequestDependencies" methods called within

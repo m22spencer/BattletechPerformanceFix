@@ -66,7 +66,7 @@ namespace BattletechPerformanceFix
             var dt = (object)-1;
             var manifest = Trap(() => DM.ResourceLocator.EntryByID(id, (BattleTechResourceType)dt, true));
             if (manifest != null) {
-                LogDebug("ModTek-override: {0}", manifest.Dump(false));
+                LogDebug("ModTek-override[{0}]", id);
                 return manifest;
             }
             // FIXME: This also needs the following checks
@@ -86,7 +86,7 @@ namespace BattletechPerformanceFix
             foreach(var types in baseManifest) {
                 if (types.Value.TryGetValue(id, out var ent)) return ent;
             }
-            LogWarning($"Locate needs content pack check, but it is NYI");
+            LogWarning($"Locate needs content pack check for {id}, but it is NYI");
             return null;
         }
 
