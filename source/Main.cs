@@ -49,7 +49,7 @@ namespace BattletechPerformanceFix
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-DMFix-Alpha");
             Log("Mod-Dir? {0}", ModDir);
             
             Trap(() =>
@@ -85,16 +85,16 @@ namespace BattletechPerformanceFix
                     //{ typeof(LazyRoomInitialization), false },
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
-                    { typeof(MissingAssetsContinueLoad), true },
+                    { typeof(MissingAssetsContinueLoad), false },
                     { typeof(DataLoaderGetEntryCheck), true },
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
                     { typeof(MDDB_InMemoryCache), true },
                     { typeof(ContractLagFix), true },
-                    { typeof(ParallelizeLoad), false },
+                    //{ typeof(ParallelizeLoad), false },
                     { typeof(SimpleMetrics), false },
-                    { typeof(LazyLoadAssets), true },
+                    //{ typeof(LazyLoadAssets), true },
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(DMFix), true },
                 };
