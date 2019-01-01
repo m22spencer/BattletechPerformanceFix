@@ -15,16 +15,16 @@ using BattleTech.UI;
 namespace BattletechPerformanceFix {
     public static class Extensions {
         public static void Spam(Func<string> msg) {
-            if (Main.LogLevel == "Debug")
+            if (Main.LogLevel == "debug")
                 Main.__Log("[Spam] " + msg());
         }
 
         public static void LogDebug(Func<string> lmsg) {
-             if (Main.LogLevel == "Debug") LogDebug(lmsg());
+             if (Main.LogLevel == "debug") LogDebug(lmsg());
         }
         public static void LogDebug(string msg, params object[] values)
         {
-            if (Main.LogLevel == "Debug")
+            if (Main.LogLevel == "debug")
                 Main.__Log("[Debug] " + msg, values);
             // Far too much data passes through here to hit the HBS log
             //     it's simply too slow to handle it

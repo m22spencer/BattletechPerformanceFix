@@ -16,7 +16,7 @@ using static BattletechPerformanceFix.Extensions;
 namespace BattletechPerformanceFix
 {
     public class Settings {
-        public string logLevel = "Debug";
+        public string logLevel = "debug";
         public Dictionary<string,bool> features = new Dictionary<string,bool>();
     }
 
@@ -35,7 +35,7 @@ namespace BattletechPerformanceFix
         private static StreamWriter LogStream;
 
         public static ILog HBSLogger;
-        public static string LogLevel = "Debug";
+        public static string LogLevel = "debug";
 
         public static void Start(string modDirectory, string json)
         {
@@ -51,7 +51,7 @@ namespace BattletechPerformanceFix
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-DMFix-Alpha");
             Log("Mod-Dir? {0}", ModDir);
             
             Trap(() =>
@@ -79,7 +79,7 @@ namespace BattletechPerformanceFix
                 catch { LogWarning("Settings file is invalid or missing, regenerating with defaults"); }
 
                 Log($"LogLevel {settings.logLevel}");
-                LogLevel = settings.logLevel;
+                LogLevel = settings.logLevel.ToLower();
 
                 harmony = HarmonyInstance.Create(ModFullName);
 
@@ -87,14 +87,14 @@ namespace BattletechPerformanceFix
                     //{ typeof(LazyRoomInitialization), false },
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
-                    { typeof(MissingAssetsContinueLoad), true },
+                    { typeof(MissingAssetsContinueLoad), false },
                     { typeof(DataLoaderGetEntryCheck), true },
                     { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
                     { typeof(MDDB_InMemoryCache), true },
                     { typeof(ContractLagFix), true },
-                    { typeof(ParallelizeLoad), false },
+                    //{ typeof(ParallelizeLoad), false },
                     { typeof(SimpleMetrics), false },
                     { typeof(LazyLoadAssets), false },
                     { typeof(EnableLoggingDuringLoads), true },
