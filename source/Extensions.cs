@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using Newtonsoft.Json;
 using RT = BattleTech.BattleTechResourceType;
+using BattleTech.UI;
 
 namespace BattletechPerformanceFix {
     public static class Extensions {
@@ -56,6 +57,10 @@ namespace BattletechPerformanceFix {
             Trap(() => Main.HBSLogger.LogException(e));
         }
 
+        public static void AlertUser(string title, string message) {
+            GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create(title, message);
+            genericPopupBuilder.Render();
+        }
 
         public static void Trap(Action f)
         { try { f(); } catch (Exception e) { Main.__Log("Exception {0}", e); } }
@@ -212,7 +217,7 @@ namespace BattletechPerformanceFix {
 
         public static HarmonyMethod Drop = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__Drop)));
         public static bool  __Drop() {
-            LogDebug($"Dropping call to {new StackFrame(1).ToString()}");
+            //LogDebug($"Dropping call to {new StackFrame(1).ToString()}");
             return false;
         }
 
@@ -230,12 +235,12 @@ namespace BattletechPerformanceFix {
         }
 
 
-        public static void Patch<T>( this MethodBase method
-                                   , string premethod = null
-                                   , string postmethod = null
-                                   , string transpilemethod = null
-                                   , int priority = Priority.Normal
-                                   ) {
+        public static void Patch( this MethodBase method
+                                , string premethod = null
+                                , string postmethod = null
+                                , string transpilemethod = null
+                                , int priority = Priority.Normal
+                                ) {
             var onType = new StackTrace().GetFrames()
                                          .Select(frame => frame.GetMethod().DeclaringType)
                                          .FirstOrDefault(dtype => dtype?.GetInterface(typeof(Feature).FullName) != null)
@@ -269,7 +274,7 @@ namespace BattletechPerformanceFix {
             else meth = (MethodBase)typeof(T).GetMethods(AccessTools.all)
                                              .FirstOrDefault(mm => mm.Name == method && mm.GetMethodBody() != null);
             meth.NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
-            meth.Patch<T>(premethod, postmethod, transpilemethod, priority);
+            meth.Patch(premethod, postmethod, transpilemethod, priority);
         }
 
         public static void Pre<T>(this string method, string patchmethod = null, int priority = Priority.Normal)

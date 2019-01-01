@@ -7,6 +7,7 @@ using Harmony;
 using BattleTech;
 using BattleTech.Data;
 using BattleTech.Assetbundles;
+using RSG;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -23,6 +24,7 @@ namespace BattletechPerformanceFix
         public static MessageCenter MC;
 
 
+        public static Promise OnInit = new Promise();
         public static bool Initialized = false;
         public static void SetUnityDataManagers_Post(DataManager __instance) {
             if (Initialized) return;
@@ -60,6 +62,8 @@ namespace BattletechPerformanceFix
             PingQueue();
 
             "ProcessRequests".Pre<DataManager>();
+
+            OnInit.Resolve();
         }
 
         public static VersionManifestEntry Locate(string id, BattleTechResourceType? type = null) {

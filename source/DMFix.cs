@@ -41,8 +41,7 @@ namespace BattletechPerformanceFix
             //     ^ This step is already done by DataManager within CheckRequestsComplete, is this good enough?
 
             void f<T>() where T : ILD {
-                "RequestDependencies".Transpile<T>();
-            }
+                "RequestDependencies".Transpile<T>();            }
 
             f<MechDef>();
             f<ChassisDef>();
@@ -54,7 +53,49 @@ namespace BattletechPerformanceFix
             f<MechComponentDef>();
             f<BackgroundDef>();
             f<FactionDef>();
+
+            CollectSingletons.OnInit
+                             .Done(() => { CollectSingletons.MC
+                                                            .AddSubscriber( MessageCenterMessageType.DataManagerLoadCompleteMessage
+                                                                          , _ => VerifyDependencies());
+                                           CollectSingletons.MC
+                                                            .AddSubscriber( MessageCenterMessageType.DataManagerRequestCompleteMessage
+                                                                          , AddCheckDep); });
         }
+
+        public static List<KeyValuePair<string,ILD>> ToVerify = new List<KeyValuePair<string,ILD>>();
+
+        public static void AddCheckDep(MessageCenterMessage m) {
+            if (m is DataManagerRequestCompleteMessage) {
+                var res = Trap(() => new Traverse(m).Property("Resource").GetValue<object>());
+                if (res != null && res is ILD) {
+                    LogDebug($"AddCheckDep {(m as DataManagerRequestCompleteMessage).ResourceId}");
+                    ToVerify.Add(new KeyValuePair<string,ILD>((m as DataManagerRequestCompleteMessage).ResourceId, res as ILD));
+                }
+            }
+        }
+
+        public static void VerifyDependencies() {
+            LogDebug($"Checking {ToVerify.Count()} dependencies for validity");
+
+            // Try and pull the weight from the ild, falling back to a default of 10000 (data + assets)
+            bool Check(ILD ild) {
+                var weight = new Traverse(ild).Field("loadRequest").GetValue<DataManager.DataManagerLoadRequest>()?.RequestWeight?.AllowedWeight ?? 10000;
+                return ild.DependenciesLoaded(weight);
+            }
+
+            var dmrc = new DataManagerRequestCompleteMessage(default(RT), default(string));
+            var failed = ToVerify.Where(dep => { dep.Value.CheckDependenciesAfterLoad(dmrc);
+                                                 return !Check(dep.Value); })
+                                 .ToList();
+            if (failed.Any()) {
+                LogError($"The following[{failed.Count} items did not resolve dependencies {failed.Select(x => x.Key).ToArray().Dump(false)}");
+
+                AlertUser("DMFix: Failed Dependencies", $"{failed.Count} dependencies did not resolve\nCheck your Mods/BattletechPerformanceFix/BattletechPerformanceFix.log file");
+            }
+            ToVerify.Clear();
+        }
+
 
         // It's preferable to patch out all the "DependenciesLoaded"/"RequestDependencies" methods called within
         //    but this adds complexity, which we want to avoid for now.

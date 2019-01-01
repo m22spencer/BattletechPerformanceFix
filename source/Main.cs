@@ -1,10 +1,12 @@
 using Harmony;
 using System;
 using System.Linq;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
@@ -94,7 +96,7 @@ namespace BattletechPerformanceFix
                     { typeof(ContractLagFix), true },
                     { typeof(ParallelizeLoad), false },
                     { typeof(SimpleMetrics), false },
-                    { typeof(LazyLoadAssets), true },
+                    { typeof(LazyLoadAssets), false },
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(DMFix), true },
                 };
@@ -138,8 +140,44 @@ namespace BattletechPerformanceFix
                 new DisableSensitiveDataLogDump().Activate();
 
 
+                var t = Assembly.GetAssembly(ModTekType)
+                                .GetType("ModTek.Logger", true);
+
+                return;
+                Main.harmony.Patch( AccessTools.Method(t, "Log")
+                                  , Drop);
+                Main.harmony.Patch( AccessTools.Method(t, "LogWithDate")
+                                  , Drop);
+
                 Trap(() => PatchMechlabLimitItems.Initialize());
             });
+        }
+
+        public static bool MoveNextIntercept(IEnumerator e) {
+            LogDebug("MNI");
+            return e.MoveNext();
+        }
+
+
+        public static IEnumerable<CodeInstruction> PP_TP(IEnumerable<CodeInstruction> ins) {
+            var found = false;
+            var nins = ins.Select(i => {
+                    if (i.operand is MethodBase) {
+                        var amb = i.operand as MethodBase;
+                        LogDebug($"Trying {amb.DeclaringType.FullName}::{amb.ToString()}");
+                    }
+                    if (i.operand is MethodBase && (i.operand as MethodBase).Name == "MoveNext") {
+                        LogDebug("Intercepting movenext");
+                        i.opcode = OpCodes.Call;
+                        i.operand = AccessTools.Method(typeof(Main), "MoveNextIntercept");
+                        return i;
+                    } else {
+                        return i;
+                    }
+
+                }).ToList();
+            if (!found) LogError("Unable to find MoveNext to intercept");
+            return nins;
         }
 
         public static void __Log(string msg, params object[] values)
