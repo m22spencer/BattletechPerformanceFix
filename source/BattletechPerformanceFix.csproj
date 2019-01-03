@@ -102,6 +102,7 @@
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="DMFix.cs" />
+    <Compile Include="ExtraLogging.cs" />
     <Compile Include="LazyLoadAssets.cs" />
     <Compile Include="MDDB_InMemoryCache.cs" />
     <Compile Include="Main.cs" />

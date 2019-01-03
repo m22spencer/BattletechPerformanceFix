@@ -11,6 +11,8 @@ using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
 using HBS.Logging;
+using BattleTech;
+using BattleTech.Framework;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -51,9 +53,9 @@ namespace BattletechPerformanceFix
             Log("Unity? {0}", UnityEngine.Application.unityVersion);
             Log("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version);
             Log("ModTek? {0}", ModTekType.Assembly.GetName().Version);
-            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version + "-DMFix-Alpha");
+            Log("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version);
             Log("Mod-Dir? {0}", ModDir);
-            
+
             Trap(() =>
             {
                 var WantHarmonyVersion = "1.2";
@@ -98,7 +100,8 @@ namespace BattletechPerformanceFix
                     { typeof(SimpleMetrics), false },
                     { typeof(LazyLoadAssets), false },
                     { typeof(EnableLoggingDuringLoads), true },
-                    { typeof(DMFix), true },
+                    { typeof(DMFix), false },
+                    { typeof(ExtraLogging), true },
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
@@ -138,16 +141,6 @@ namespace BattletechPerformanceFix
 
                 Log("Patch out sensitive data log dumps");
                 new DisableSensitiveDataLogDump().Activate();
-
-
-                var t = Assembly.GetAssembly(ModTekType)
-                                .GetType("ModTek.Logger", true);
-
-                return;
-                Main.harmony.Patch( AccessTools.Method(t, "Log")
-                                  , Drop);
-                Main.harmony.Patch( AccessTools.Method(t, "LogWithDate")
-                                  , Drop);
 
                 Trap(() => PatchMechlabLimitItems.Initialize());
             });
