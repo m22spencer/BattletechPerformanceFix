@@ -155,6 +155,8 @@ namespace BattletechPerformanceFix
            Since only 7 visual elements are allocated, this is required.
         */
         List<ListElementController_BASE_NotListView> Sort(List<ListElementController_BASE_NotListView> items) {
+            //LogDebug($"Sorting: {items.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
+
             var sw = Stopwatch.StartNew();
             var _a = new ListElementController_InventoryGear_NotListView();
             var _b = new ListElementController_InventoryGear_NotListView();
@@ -164,16 +166,22 @@ namespace BattletechPerformanceFix
             _bc.controller = _b;
             var _cs = new Traverse(inventoryWidget).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
             var cst = _cs.Method;
-            LogDebug("Sort using {0}", cst.DeclaringType.FullName);
+            LogDebug("Sort using {0}::{1}", cst.DeclaringType.FullName, cst.ToString());
 
             var tmp = items.ToList();
             tmp.Sort(new Comparison<ListElementController_BASE_NotListView>((l,r) => {
                 _ac.ComponentRef = _a.componentRef = GetRef(l);
                 _bc.ComponentRef = _b.componentRef = GetRef(r);
-                return _cs.Invoke(_ac, _bc);
+                _ac.controller = l;
+                _bc.controller = r;
+                var res = _cs.Invoke(_ac, _bc);
+                //LogDebug($"Compare {_a.componentRef.ComponentDefID} & {_b.componentRef.ComponentDefID} -> {res}");
+                return res;
             }));
             var delta = sw.Elapsed.TotalMilliseconds;
             LogDebug("Sorted in {0} ms", delta);
+
+            //LogDebug($"Sorted: {tmp.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
 
             return tmp;
         }
@@ -575,6 +583,9 @@ namespace BattletechPerformanceFix
         {
                 if (limitItems != null && limitItems.inventoryWidget == __instance) {
                     // it's a mechlab screen, we do our own sort.
+                    var _cs = new Traverse(__instance).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+                    var cst = _cs.Method;
+                    LogDebug("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString());
                     limitItems.FilterChanged(false);
                     return false;
                 } else {
