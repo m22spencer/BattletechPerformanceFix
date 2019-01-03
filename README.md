@@ -30,11 +30,18 @@ For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop
    - Prevent the hang on HBS logo + general game speedup by transferring the disk MDDB to an in memory one.
 - ContractLagFix
    - Speeds up Contract generation in the command center, and removes some stutter from battle when completing objectives.
-- ParallelizeLoad (Disabled by default: Experimental, Dangerous)
-   - An in progress patch, it is recommended you do not enable this patch at this time.
-- MechLabFix (Currently cannot be disabled)
+- MechLabFix
    - Replace the MechLab UI with a virtual one, which allocates only enough prefabs for what you're currently seeing on the screen.
    - This fix sees more gain for late game players with lots of items inventory.
+- DMFix
+   - Fix exponential dependency checking explosion (Drops around 2 minutes from loads in roguetech)
+
+# Upcoming patches
+- ParallelizeLoad (Disabled by default: Experimental, Dangerous)
+   - An in progress patch, it is recommended you do not enable this patch at this time.
+- LLA (Disabled by default: Experimental, Dangerous)
+   - Lazily load assets, unstable, not recommended.
+
 
 # How do I disable/enable X
    Set it to `true` or `false` in `BATTLETECH/Mods/BattletechPerformanceFix/Settings.json`
