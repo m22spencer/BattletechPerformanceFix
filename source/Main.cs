@@ -87,6 +87,7 @@ namespace BattletechPerformanceFix
 
                 var allFeatures = new Dictionary<Type, bool> {
                     //{ typeof(LazyRoomInitialization), false },
+                    { typeof(MechlabFix), true },
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), false },
@@ -141,8 +142,6 @@ namespace BattletechPerformanceFix
 
                 Log("Patch out sensitive data log dumps");
                 new DisableSensitiveDataLogDump().Activate();
-
-                Trap(() => PatchMechlabLimitItems.Initialize());
             });
         }
 

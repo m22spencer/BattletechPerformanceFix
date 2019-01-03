@@ -10,6 +10,13 @@ using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
 {
+    public class MechlabFix : Feature {
+        public void Activate() {
+            PatchMechlabLimitItems.Initialize();
+        }
+    }
+
+
     // Deprecated, will be removed.
     public class DefAndCount {
         public MechComponentRef ComponentRef;
