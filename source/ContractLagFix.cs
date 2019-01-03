@@ -60,7 +60,7 @@ namespace BattletechPerformanceFix
             {
                 var cached = eld_cache.Where(c => c != null && c.isActiveAndEnabled).FirstOrDefault();
                 // integrity check, negates patch. Need to have a Verify flag in the json to enable this.
-                /*
+                //*
                 var wants = UnityEngine.Object.FindObjectOfType<EncounterLayerData>();
                 if (cached != wants)
                 {
@@ -75,7 +75,7 @@ namespace BattletechPerformanceFix
                 }
                 //*/
 
-                return cached;
+                return wants;
             });
         }
 
