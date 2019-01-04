@@ -169,7 +169,7 @@ namespace BattletechPerformanceFix
            Since only 7 visual elements are allocated, this is required.
         */
         List<ListElementController_BASE_NotListView> Sort(List<ListElementController_BASE_NotListView> items) {
-            LogDebug($"Sorting: {items.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
+            LogSpam($"Sorting: {items.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
 
             var sw = Stopwatch.StartNew();
             var _a = new ListElementController_InventoryGear_NotListView();
@@ -195,7 +195,7 @@ namespace BattletechPerformanceFix
                 _ac.ItemType = ToDraggableType(l.componentDef);
                 _bc.ItemType = ToDraggableType(r.componentDef);
                 var res = _cs.Invoke(_ac, _bc);
-                LogDebug($"Compare {_a.componentRef.ComponentDefID}({_ac != null},{_ac.controller.ItemWidget != null}) & {_b.componentRef.ComponentDefID}({_bc != null},{_bc.controller.ItemWidget != null}) -> {res}");
+                LogSpam($"Compare {_a.componentRef.ComponentDefID}({_ac != null},{_ac.controller.ItemWidget != null}) & {_b.componentRef.ComponentDefID}({_bc != null},{_bc.controller.ItemWidget != null}) -> {res}");
                 return res;
             }));
 
@@ -203,9 +203,9 @@ namespace BattletechPerformanceFix
             UnityEngine.GameObject.Destroy(go2);
 
             var delta = sw.Elapsed.TotalMilliseconds;
-            LogDebug(string.Format("Sorted in {0} ms", delta));
+            LogInfo(string.Format("Sorted in {0} ms", delta));
 
-            LogDebug($"Sorted: {tmp.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
+            LogSpam($"Sorted: {tmp.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
 
             return tmp;
         }
