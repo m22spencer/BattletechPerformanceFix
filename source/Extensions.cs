@@ -281,9 +281,6 @@ namespace BattletechPerformanceFix {
             instance = go.AddComponent<BPF_CoroutineInvoker>();
             UnityEngine.GameObject.DontDestroyOnLoad(go);
 
-
-            instance.StartCoroutine(UpdateLoadScreen());
-
             return instance;
         }
 
