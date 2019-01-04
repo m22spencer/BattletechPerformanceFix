@@ -36,7 +36,7 @@ namespace BattletechPerformanceFix
                     last = BTLightController.GetLightArray(camera, simGame, cullBuffer, lightMatricies, out lastNumLights, isPortrait);
                     sw.Stop();
 
-                    LogDebug("GetLightArray :frame {0} :ms {1}", Time.unscaledTime, sw.Elapsed.TotalMilliseconds);
+                    LogSpam(string.Format("GetLightArray :frame {0} :ms {1}", Time.unscaledTime, sw.Elapsed.TotalMilliseconds));
                 }
             });
             numLights = lastNumLights;

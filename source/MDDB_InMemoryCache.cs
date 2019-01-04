@@ -17,7 +17,7 @@ namespace BattletechPerformanceFix
         public void Activate()
         {
             var modtek = Main.ModTekType;
-            Log("Found modtek? {0}", modtek?.FullName);
+            LogInfo($"Found modtek? {modtek?.FullName}");
 
             if (modtek == null)
                 throw new Exception("Aborting MDDB_InMEmoryCache patch: Could not find ModTek");
@@ -62,13 +62,13 @@ namespace BattletechPerformanceFix
             {
                 if (ConnectionURI != null && ConnectionURI != __instance.ConnectionURI)
                 {
-                    LogError("MDDB_InMemoryCache: Expected {0} but got {1}", ConnectionURI, __instance.ConnectionURI);
+                    LogError($"MDDB_InMemoryCache: Expected {ConnectionURI} but got {__instance.ConnectionURI}");
                 }
                 if (memoryStore == null)
                 {
 
                     ConnectionURI = __instance.ConnectionURI;
-                    Log("MDDB_InMemoryCache Open {0} -> :memory:", ConnectionURI);
+                    LogInfo($"MDDB_InMemoryCache Open {ConnectionURI} -> :memory:");
                     mstore = new SQLiteConnection("Data Source=:memory:");
                     mstore.Open();
                     var disk = new SQLiteConnection(__instance.ConnectionURI);
@@ -95,7 +95,7 @@ namespace BattletechPerformanceFix
                     return;
                 }
                 
-                Log("MDDB_InMemoryCache Write :memory: {0}", ConnectionURI);
+                LogInfo($"MDDB_InMemoryCache Write :memory: {ConnectionURI}");
                 var disk = new SQLiteConnection(ConnectionURI);
                 disk.Open();
                 
@@ -124,14 +124,14 @@ namespace BattletechPerformanceFix
         public IDbTransaction BeginTransaction() => conn.BeginTransaction();
         public IDbTransaction BeginTransaction(IsolationLevel il) => conn.BeginTransaction(il);
         public void ChangeDatabase(string databaseName) => conn.ChangeDatabase(databaseName);
-        public void Close() { Log("EFXR CLOSE"); conn.Close(); }
+        public void Close() { LogSpam("EFXR CLOSE"); conn.Close(); }
         public IDbCommand CreateCommand() => conn.CreateCommand();
-        public void Open() { Log("EFXR OPEN"); conn.Open(); }
+        public void Open() { LogSpam("EFXR OPEN"); conn.Open(); }
         public string ConnectionString { get => conn.ConnectionString; set => conn.ConnectionString = value; }
         public int ConnectionTimeout { get => conn.ConnectionTimeout; }
         public string Database { get => conn.Database; }
         public ConnectionState State { get => conn.State; }
-        public void Dispose() { Log("EFXR DISPOSE"); conn.Dispose(); }
+        public void Dispose() { LogSpam("EFXR DISPOSE"); conn.Dispose(); }
 }
 }
 

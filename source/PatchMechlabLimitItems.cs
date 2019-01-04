@@ -76,7 +76,7 @@ namespace BattletechPerformanceFix
                 new Traverse(instance).Field("originalStorageInventory").SetValue(instance.storageInventory);
             }
 
-            Log("Mechbay Patch initialized :simGame? {0}", instance.IsSimGame);
+            LogDebug($"Mechbay Patch initialized :simGame? {instance.IsSimGame}");
 
                 inventory = instance.storageInventory.Select(mcr =>
                 {
@@ -138,7 +138,7 @@ namespace BattletechPerformanceFix
 
             DummyStart.SetParent(lp, false);
             DummyEnd.SetParent(lp, false);
-            Log(string.Format("[LimitItems] inventory cached in {0} ms", sw.Elapsed.TotalMilliseconds));
+            LogDebug(string.Format("[LimitItems] inventory cached in {0} ms", sw.Elapsed.TotalMilliseconds));
 
             FilterChanged();
             } catch(Exception e) {
@@ -182,7 +182,7 @@ namespace BattletechPerformanceFix
             _bc.controller = _b;
             var _cs = new Traverse(inventoryWidget).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
             var cst = _cs.Method;
-            LogDebug("Sort using {0}::{1}", cst.DeclaringType.FullName, cst.ToString());
+            LogDebug(string.Format("Sort using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
 
             var tmp = items.ToList();
             tmp.Sort(new Comparison<ListElementController_BASE_NotListView>((l,r) => {
@@ -203,7 +203,7 @@ namespace BattletechPerformanceFix
             UnityEngine.GameObject.Destroy(go2);
 
             var delta = sw.Elapsed.TotalMilliseconds;
-            LogDebug("Sorted in {0} ms", delta);
+            LogDebug(string.Format("Sorted in {0} ms", delta));
 
             LogDebug($"Sorted: {tmp.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
 
@@ -252,7 +252,7 @@ namespace BattletechPerformanceFix
                     break;
                 }
                 var yes = filter.Execute(Enumerable.Repeat(tmpctl, 1)).Any();
-                if (!yes) LogDebug("[Filter] Removing :id {0} :componentType {1} :quantity {2}", def.Description.Id, def.ComponentType, item.quantity);
+                if (!yes) LogDebug(string.Format("[Filter] Removing :id {0} :componentType {1} :quantity {2}", def.Description.Id, def.ComponentType, item.quantity));
                 return yes;
                 }).ToList();
             return current;
@@ -289,12 +289,15 @@ namespace BattletechPerformanceFix
                 filterGuard = false;
                 lec.ItemWidget = null;
                 var yes = iw.gameObject.activeSelf == true;
-                if (!yes) LogDebug("[FilterUsingHBSCode] Removing :id {0} :componentType {1} :quantity {2} :tonnage {3}", lec.componentDef.Description.Id, lec.componentDef.ComponentType, lec.quantity
-                                  , (inventoryWidget.ParentDropTarget as MechLabPanel)?.activeMechDef?.Chassis?.Tonnage);
+                if (!yes) LogDebug(string.Format( "[FilterUsingHBSCode] Removing :id {0} :componentType {1} :quantity {2} :tonnage {3}"
+                                                , lec.componentDef.Description.Id
+                                                , lec.componentDef.ComponentType
+                                                , lec.quantity
+                                                , (inventoryWidget.ParentDropTarget as MechLabPanel)?.activeMechDef?.Chassis?.Tonnage));
                 return yes;
             }).ToList();
             inventoryWidget.localInventory = tmp;
-            Log(string.Format("Filter took {0} ms and resulted in {1} items", sw.Elapsed.TotalMilliseconds, okItems.Count));
+            LogInfo(string.Format("Filter took {0} ms and resulted in {1} items", sw.Elapsed.TotalMilliseconds, okItems.Count));
 
             return okItems;
             } catch (Exception e) {
@@ -316,17 +319,17 @@ namespace BattletechPerformanceFix
                 var iw = new Traverse(inventoryWidget);
                 Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
 
-                Log("[LimitItems] Filter changed (reset? {9}):\n  :weapons {0}\n  :equip {1}\n  :ballistic {2}\n  :energy {3}\n  :missile {4}\n  :small {5}\n  :heatsink {6}\n  :jumpjet {7}\n  :upgrade {8}"
-                           , f("filteringWeapons")
-                           , f("filteringEquipment")
-                           , f("filterEnabledWeaponBallistic")
-                           , f("filterEnabledWeaponEnergy")
-                           , f("filterEnabledWeaponMissile")
-                           , f("filterEnabledWeaponSmall")
-                           , f("filterEnabledHeatsink")
-                           , f("filterEnabledJumpjet")
-                           , f("filterEnabledUpgrade")
-                           , resetIndex);
+                LogDebug(string.Format("[LimitItems] Filter changed (reset? {9}):\n  :weapons {0}\n  :equip {1}\n  :ballistic {2}\n  :energy {3}\n  :missile {4}\n  :small {5}\n  :heatsink {6}\n  :jumpjet {7}\n  :upgrade {8}"
+                                      , f("filteringWeapons")
+                                      , f("filteringEquipment")
+                                      , f("filterEnabledWeaponBallistic")
+                                      , f("filterEnabledWeaponEnergy")
+                                      , f("filterEnabledWeaponMissile")
+                                      , f("filterEnabledWeaponSmall")
+                                      , f("filterEnabledHeatsink")
+                                      , f("filterEnabledJumpjet")
+                                      , f("filterEnabledUpgrade")
+                                      , resetIndex));
             if (resetIndex) {
                 new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
                 index = 0;
@@ -486,7 +489,7 @@ namespace BattletechPerformanceFix
         public static bool PopulateInventory(MechLabPanel __instance)
         {
             if (limitItems != null) LogError("[LimitItems] PopulateInventory was not properly cleaned");
-            Log("[LimitItems] PopulateInventory patching (Mechlab fix)");
+            LogDebug("[LimitItems] PopulateInventory patching (Mechlab fix)");
             limitItems = new PatchMechlabLimitItems(__instance);
             return false;
         }
@@ -494,18 +497,18 @@ namespace BattletechPerformanceFix
         public static void OpenSalvageScreen()
         {
             // Only for logging purposes.
-            Log("[LimitItems] Open Salvage screen");
+            LogDebug("[LimitItems] Open Salvage screen");
         }
 
         public static void ConfirmRevertMech()
         {
-            Log("[LimitItems] RevertMech");
+            LogDebug("[LimitItems] RevertMech");
         }
 
         public static void ExitMechLab(MechLabPanel __instance)
         {
             if (limitItems == null) { LogError("[LimitItems] Unhandled ExitMechLab"); return; }
-            Log("[LimitItems] Exiting mechlab");
+            LogDebug("[LimitItems] Exiting mechlab");
             limitItems.Dispose();
             limitItems = null;
         }
@@ -596,7 +599,7 @@ namespace BattletechPerformanceFix
         public static bool OnApplyFiltering(MechLabInventoryWidget __instance, bool refreshPositioning)
         {
                 if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
-                    LogDebug("OnApplyFiltering (refresh-pos? {0})", refreshPositioning);
+                    LogDebug(string.Format("OnApplyFiltering (refresh-pos? {0})", refreshPositioning));
                     limitItems.FilterChanged(refreshPositioning);
                     return false;
                 } else {
@@ -610,7 +613,7 @@ namespace BattletechPerformanceFix
                     // it's a mechlab screen, we do our own sort.
                     var _cs = new Traverse(__instance).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
                     var cst = _cs.Method;
-                    LogDebug("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString());
+                    LogDebug(string.Format("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
                     limitItems.FilterChanged(false);
                     return false;
                 } else {

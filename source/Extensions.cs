@@ -11,44 +11,21 @@ using UnityEngine.SceneManagement;
 using Newtonsoft.Json;
 using RT = BattleTech.BattleTechResourceType;
 using BattleTech.UI;
+using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix {
     public static partial class Extensions {
-        public static void LogSpam(Func<string> msg)
-            => LogSpam_(msg());
-
-        public static void LogDebug(Func<string> lmsg)
-            => LogDebug_(lmsg());
-
-        public static void LogDebug(string msg, params object[] values)
-            => LogDebug_(string.Format(msg, values));
-
-        public static void Log(string msg, params object[] values)
-            => LogInfo_(string.Format(msg, values));
-
-        public static void LogError(string msg, params object[] values)
-            => LogError_(string.Format(msg, values));
-
-        public static void LogWarning(Func<string> msg)
-            => LogWarning_(msg());
-
-        public static void LogWarning(string msg, params object[] values)
-            => LogWarning_(string.Format(msg, values));
-
-        public static void LogException(Exception e)
-            => LogException_(e);
-
         public static void AlertUser(string title, string message) {
             GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create(title, message);
             genericPopupBuilder.Render();
         }
 
         public static void Trap(Action f)
-        { try { f(); } catch (Exception e) { Main.__Log("Exception {0}", e); } }
+        { try { f(); } catch (Exception e) { LogException(e); }}
 
         public static T Trap<T>(Func<T> f, Func<T> or = null)
         {
-            try { return f(); } catch (Exception e) { Main.__Log("Exception {0}", e); return or == null ? default(T) : or(); }
+            try { return f(); } catch (Exception e) { LogException(e); return or == null ? default(T) : or(); }
         }
 
         public static void TrapSilently(Action f)
@@ -66,7 +43,7 @@ namespace BattletechPerformanceFix {
             try {
                 return f();
             } catch (Exception e) {
-                Main.__Log("PANIC {0} {1}", msg, e);
+                LogError(string.Format("PANIC {0} {1}", msg, e));
                 TerminateImmediately();
                 return default(T);
             }
@@ -79,7 +56,7 @@ namespace BattletechPerformanceFix {
 
         // Do not use for unity Objects! 
         public static T NullCheckError<T>(this T t, string msg) {
-            if (t == null) LogError("{0} from {1}", msg, new StackTrace(1).ToString());
+            if (t == null) LogError($"{msg} from {new StackTrace(1).ToString()}");
             return t;
         }
 
@@ -90,7 +67,7 @@ namespace BattletechPerformanceFix {
             
 
         public static GameObject IsDestroyedError(this GameObject t, string msg) {
-            if (t == null && t?.GetType() != null) LogError("{0} from {1}", msg, new StackTrace(1).ToString());
+            if (t == null && t?.GetType() != null) LogError($"{msg} from {new StackTrace(1).ToString()}");
             return t;
         }
 
@@ -121,11 +98,11 @@ namespace BattletechPerformanceFix {
         }
 
         public static T Measure<T>( string tag, Func<T> f)
-            => Measure((b,t) => LogDebug("Measure[{0}] :bytes {1} :seconds {2}", tag, b, t.TotalSeconds)
+            => Measure((b,t) => LogDebug($"Measure[{tag}] :bytes {b} :seconds {t.TotalSeconds}")
                       , f);
 
         public static void Measure( string tag, Action f)
-            => Measure((b,t) => LogDebug("Measure[{0}] :bytes {1} :seconds {2}", tag, b, t.TotalSeconds)
+            => Measure((b,t) => LogDebug($"Measure[{tag}] :bytes {b} :seconds {t.TotalSeconds}")
                       , () => { f(); return 0; });
 
         public static void TrapAndTerminate(string msg, Action f) => TrapAndTerminate<int>(msg, () => { f(); return 0; });
@@ -239,7 +216,7 @@ namespace BattletechPerformanceFix {
 
             pnames.Where(p => p != null)
                   .ToList()
-                  .ForEach(p => Log($"Patch: {method.DeclaringType.Name}.{method.Name} -> {onType.Name}.{p}"));
+                  .ForEach(p => LogInfo($"Patch: {method.DeclaringType.Name}.{method.Name} -> {onType.Name}.{p}"));
             Trap(() => Main.harmony.Patch( method, patches[0], patches[1], patches[2]));
 
         }
@@ -301,7 +278,7 @@ namespace BattletechPerformanceFix {
         public static BPF_CoroutineInvoker Instance { get => instance ?? Init(); }
 
         static BPF_CoroutineInvoker Init() {
-            Extensions.Log("[BattletechPerformanceFix: Initializing a new coroutine proxy");
+            LogInfo("BattletechPerformanceFix: Initializing a new coroutine proxy");
             var go = new UnityEngine.GameObject();
             go.name = "BattletechPerformanceFix:CoroutineProxy";
             instance = go.AddComponent<BPF_CoroutineInvoker>();

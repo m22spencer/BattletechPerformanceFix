@@ -46,7 +46,7 @@ namespace BattletechPerformanceFix
             MC = f<MessageCenter>("MessageCenter");
 
             MC.AddSubscriber( MessageCenterMessageType.DataManagerLoadCompleteMessage
-                            , _ => LogSpam(() => "DataManagerLoadComplete"));
+                            , _ => LogSpam("DataManagerLoadComplete"));
 
             void PingQueue() {
                 WaitAFrame(600)
@@ -70,7 +70,7 @@ namespace BattletechPerformanceFix
             var dt = (object)-1;
             var manifest = Trap(() => DM.ResourceLocator.EntryByID(id, (BattleTechResourceType)dt, true));
             if (manifest != null) {
-                LogDebug("ModTek-override[{0}]", id);
+                LogDebug(string.Format("ModTek-override[{0}]", id));
                 return manifest;
             }
             // FIXME: This also needs the following checks

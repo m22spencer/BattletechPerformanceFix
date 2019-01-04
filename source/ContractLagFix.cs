@@ -34,7 +34,7 @@ namespace BattletechPerformanceFix
                                          , tpatch);
                 });
 
-            LogDebug("EncounterLayerData ctors {0}: ", typeof(EncounterLayerData).GetConstructors().Count());
+            LogDebug($"EncounterLayerData ctors {typeof(EncounterLayerData).GetConstructors().Count()}");
             typeof(EncounterLayerData).GetConstructors()
                 .ToList()
                 .ForEach(con =>
@@ -65,13 +65,13 @@ namespace BattletechPerformanceFix
                 if (cached != wants)
                 {
                     var inscene = UnityEngine.Object.FindObjectsOfType<EncounterLayerData>();
-                    LogError("eld_cache is out of sync, wants: {0}", wants?.GUID ?? "null");
-                    LogError("scene contains ({0})", string.Join(" ", inscene.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray()));
-                    Log("current EncounterLayerData ({0})", string.Join(" ", eld_cache.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray()));
+                    LogError($"eld_cache is out of sync, wants: {wants?.GUID ?? "null"}");
+                    LogError($"scene contains ({string.Join(" ", inscene.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray())})");
+                    LogError($"current EncounterLayerData ({string.Join(" ", eld_cache.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray())})");
                 }
                 if (cached == null)
                 {
-                    Log("ContractLagFix: No EncounterLayerData");
+                    LogError("ContractLagFix: No EncounterLayerData");
                 }
                 //*/
 

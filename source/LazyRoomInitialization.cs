@@ -30,13 +30,13 @@ namespace BattletechPerformanceFix
                             var patchfun = sn.Any() ? sn[0] : "Other";
                             if (patchfun != null)
                             {
-                                Log("LazyRoomInitialization methname {0}, patchfun {1}", meth.Name, patchfun);
+                                LogInfo($"LazyRoomInitialization methname {meth.Name}, patchfun {patchfun}");
                                 Main.harmony.Patch(meth, new HarmonyMethod(typeof(LazyRoomInitialization), patchfun), null);
                             }
                         }
                         catch (Exception e)
                         {
-                            Log("Exception {0}", e);
+                            LogInfo($"Exception {e}");
                         }
                     }
                 });
@@ -47,7 +47,7 @@ namespace BattletechPerformanceFix
 
         public static void CompleteLanceConfigurationPrep(BattleTech.SimGameState __instance)
         {
-            Log("New game ensure CmdCenterRoom is initialized");
+            LogInfo("New game ensure CmdCenterRoom is initialized");
             InitializeRoom(__instance.RoomManager.CmdCenterRoom);
         }
 
@@ -64,7 +64,7 @@ namespace BattletechPerformanceFix
         {
             return Trap(() =>
             {
-                Log("SGRoomControllerBase.InitWidgets (want initialize? {0})", allowInit);
+                LogInfo($"SGRoomControllerBase.InitWidgets (want initialize? {allowInit})");
                 if (!allowInit)
                 {
                     DB[__instance] = false;
@@ -79,7 +79,7 @@ namespace BattletechPerformanceFix
         {
             return Trap(() =>
             {
-                Log("SGRoomControllerBase_LeaveRoom");
+                LogInfo("SGRoomControllerBase_LeaveRoom");
                 if (___roomActive)
                     return true;
                 return false;
@@ -89,11 +89,11 @@ namespace BattletechPerformanceFix
         {
             Trap(() =>
             {
-                Log("SGRoomControllerBase_Other {0}", __originalMethod.Name);
+                LogInfo($"SGRoomControllerBase_Other {__originalMethod.Name}");
 
                 if (DB[__instance] == false)
                 {
-                    Log("Initialize Widgets");
+                    LogInfo("Initialize Widgets");
                     InitializeRoom(__instance);
                 }
             });

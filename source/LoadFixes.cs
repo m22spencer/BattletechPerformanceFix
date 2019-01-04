@@ -13,7 +13,7 @@ namespace BattletechPerformanceFix {
             if (AppDomain.CurrentDomain.GetAssemblies()
                          .Any(asm => asm.GetName().Name == "Turbine"))
             {
-                Log("LoadFixes disabled (Turbine is installed, and faster than LoadFixes)");
+                LogInfo("LoadFixes disabled (Turbine is installed, and faster than LoadFixes)");
             }
             else
             {

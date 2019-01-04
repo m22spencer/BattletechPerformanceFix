@@ -31,7 +31,7 @@ namespace BattletechPerformanceFix
         static bool Has(string id) {
             var entry = C.Locate(id);
             var yes = entry != null;
-            LogSpam(() => $"Has on {id}:{entry?.Type}? {yes}");
+            if (Spam) LogSpam($"Has on {id}:{entry?.Type}? {yes}");
             return yes;
         }
 
@@ -68,7 +68,7 @@ namespace BattletechPerformanceFix
         public static List<RT> ToGuard = List(RT.Texture2D, RT.Sprite, RT.SVGAsset, RT.Prefab, RT.UIModulePrefabs);
         public static bool RequestResource_Internal_Pre(ref bool __result, RT resourceType, string identifier) {
             if (ToGuard.Contains(resourceType)) {
-                LogSpam(() => $"RRI[Drop] {identifier}");
+                if (Spam) LogSpam($"RRI[Drop] {identifier}");
                 return false;
             }
             return true;
@@ -85,7 +85,7 @@ namespace BattletechPerformanceFix
             "GetLoadedTexture".Pre<TextureManager>();
             "GetSprite".Post<SpriteCache>();
             "PooledInstantiate".Post<PrefabCache>();
-            "AddToPoolList".Pre<DataManager>(_ => { LogSpam(() => "Dropping pool request");
+            "AddToPoolList".Pre<DataManager>(_ => { if(Spam) LogSpam("Dropping pool request");
                                                     return false; });
             "Get".Pre<DictionaryStore<ColorSwatch>>(nameof(Get_CS));
         }
@@ -116,7 +116,7 @@ namespace BattletechPerformanceFix
                                                              , Identity
                                                              , Identity);
                    if (__result != null) {
-                       LogSpam(() => $"GetLoadedTexture[success] for {resourceId}");
+                       if (Spam) LogSpam($"GetLoadedTexture[success] for {resourceId}");
                        C.TM.InsertTexture(resourceId, __result);
                    }
             }
@@ -142,7 +142,7 @@ namespace BattletechPerformanceFix
                     // else it's a SVGItem/null and the game wants us to not handle it
                 }
                 if (__result != null) {
-                    LogSpam(() => $"GetSprite[success] for {id}");
+                    if (Spam) LogSpam($"GetSprite[success] for {id}");
                     C.SC.AddSprite(id, __result);
                 }
             }
@@ -151,7 +151,7 @@ namespace BattletechPerformanceFix
         public static void PooledInstantiate_Post( ref GameObject __result, string id, Vector3? position = null
                                                  , Quaternion? rotation = null, Transform parent = null) {
             if (__result == null) {
-                LogSpam(() => $"Need prefab {id}");
+                if (Spam) LogSpam($"Need prefab {id}");
                 var entry = C.Locate(id);
                 if (entry != null) {
                     var prefab = Measure( $"Prefab {id}"
@@ -159,7 +159,7 @@ namespace BattletechPerformanceFix
                                                                                  , Identity
                                                                                  , Identity));
                     if (prefab != null) {
-                        LogSpam(() => $"GetPrefab[success] for {id}");
+                        if (Spam) LogSpam($"GetPrefab[success] for {id}");
                         C.PC.AddPrefabToPool(id, prefab);
                         __result = Measure( $"Prefab instantiate {id}"
                                           , () => C.PC.PooledInstantiate(id, position, rotation, parent));

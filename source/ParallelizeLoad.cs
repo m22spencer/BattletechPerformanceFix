@@ -70,9 +70,9 @@ namespace BattletechPerformanceFix
         }
 
         public static void HandleScene() {
-            Log($"Handling intercepted scene {SceneName}");
+            LogDebug($"Handling intercepted scene {SceneName}");
             SceneOp.allowSceneActivation = true;
-            Scene.Done(() => { Log($"Activating scene {SceneName}");
+            Scene.Done(() => { LogDebug($"Activating scene {SceneName}");
                                SceneManager.SetActiveScene(SceneManager.GetSceneByName(SceneName));
                                Scene = null; // This may need to apply next frame to prevent LL.Start from handling our custom load
                              });
@@ -81,24 +81,24 @@ namespace BattletechPerformanceFix
 
         public static bool LoadScene(string scene) {
             if (Scene != null) {
-                Log($"LL.LoadScene intercepted for :scene {scene}");
+                LogDebug($"LL.LoadScene intercepted for :scene {scene}");
                 HandleScene();
                 return false;
             }
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"LL.LoadScene {scene} :currentScenes {currentScenes} from {new StackTrace().ToString()}");
+            LogDebug($"LL.LoadScene {scene} :currentScenes {currentScenes} from {new StackTrace().ToString()}");
             return true;
         }
 
         public static bool LevelLoader_Start() {
             if (Scene != null) {
-                Log($"LL.Start intercepted");
+                LogDebug($"LL.Start intercepted");
                 Scene = null;
                 return false;
             }
 
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"LL.Start triggered :currentScenes {currentScenes}");
+            LogDebug($"LL.Start triggered :currentScenes {currentScenes}");
             return true;
         }
 
@@ -107,11 +107,11 @@ namespace BattletechPerformanceFix
         public static AsyncOperation SceneOp;
         public static void _OnBeginDefsLoad() {
             var currentScenes = string.Join(" ", SceneManager.GetAllScenes().Select(s => s.name).ToArray());
-            Log($"Load defs in parallel for :scene `SimGame` :frame {Time.frameCount} :time {Time.unscaledTime} :currentScenes {currentScenes} :from \r\n{new StackTrace().ToString()}");
+            LogDebug($"Load defs in parallel for :scene `SimGame` :frame {Time.frameCount} :time {Time.unscaledTime} :currentScenes {currentScenes} :from \r\n{new StackTrace().ToString()}");
 
-            if (SceneManager.GetAllScenes().ToList().Exists(s => s.name == "SimGame")) { Log("Sim game exists already - unloading");
+            if (SceneManager.GetAllScenes().ToList().Exists(s => s.name == "SimGame")) { LogDebug("Sim game exists already - unloading");
                                                                                          Trap(() => SceneManager.UnloadScene("SimGame"));
-                                                                                         Log("Sim game unloaded"); }
+                                                                                         LogDebug("Sim game unloaded"); }
             var sw = Stopwatch.StartNew();
             // FIXME: Can we use asyncOp.allowSceneActivation
 
@@ -122,7 +122,7 @@ namespace BattletechPerformanceFix
                     op.allowSceneActivation = false;
                     SceneName = "SimGame";
                     Scene = op.AsPromise();
-                    Scene.Done(() => Log($"Scene `SimGame` loaded :frame {Time.frameCount} :time {Time.unscaledTime}"));
+                    Scene.Done(() => LogDebug($"Scene `SimGame` loaded :frame {Time.frameCount} :time {Time.unscaledTime}"));
                 });
         }
     }

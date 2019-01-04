@@ -32,7 +32,7 @@ namespace BattletechPerformanceFix
                 {
                     num = 7;
                 }
-                LogDebug("HasAllPriority :negotiated {0} :available {1} :selected {2} :clamped {3}", negotiated, totalSalvageMadeAvailable, count, num);
+                LogDebug(string.Format("HasAllPriority :negotiated {0} :available {1} :selected {2} :clamped {3}", negotiated, totalSalvageMadeAvailable, count, num));
                 __result = count >= num;
                 return false;
             } catch (Exception e)

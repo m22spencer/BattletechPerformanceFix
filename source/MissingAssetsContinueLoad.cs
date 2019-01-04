@@ -68,7 +68,7 @@ namespace BattletechPerformanceFix
                     // So we find the first asset of the same type
                     WithDummyItem(dummy => {
                             var dummyId = dummy.Id;
-                            LogDebug("Missing asset {0}, replacing with dummy {1}", identifier, dummyId);
+                            LogWarning(string.Format("Missing asset {0}, replacing with dummy {1}", identifier, dummyId));
 
                             Substitutions.Add($"[id]{identifier} -> {dummyId}");
 

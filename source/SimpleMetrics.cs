@@ -75,7 +75,7 @@ namespace BattletechPerformanceFix
             LogDebug($"Instrumenting {meth.DeclaringType.FullName}::{meth.ToString()}");
 
             if(PreHook == null || PostHook == null) {
-                Log("Initializing simple metrics hooks");
+                LogInfo("Initializing simple metrics hooks");
 
                 var self = typeof(SimpleMetrics);
                 PreHook = new HarmonyMethod(AccessTools.Method(self, nameof(__Pre)));
@@ -100,7 +100,7 @@ namespace BattletechPerformanceFix
             LogDebug($"Tracking {meth.DeclaringType.FullName}::{meth.ToString()}");
 
             if(TrackHook == null) {
-                Log("Initializing tracking hooks");
+                LogInfo("Initializing tracking hooks");
 
                 var self = typeof(SimpleMetrics);
                 TrackHook = new HarmonyMethod(AccessTools.Method(self, nameof(__Track)));
@@ -149,8 +149,8 @@ namespace BattletechPerformanceFix
                 buf += $":times {kv.Value.times} :ms {kv.Value.timer.Elapsed.TotalMilliseconds} :method {kv.Key}\n";
             }
             Metrics.Clear();
-            Log( "SimpleMetrics -------------------------------------- \n{0}\n\n----------------------------------"
-               , buf);
+            LogInfo( string.Format("SimpleMetrics -------------------------------------- \n{0}\n\n----------------------------------"
+                                  , buf));
         }
     }
 
