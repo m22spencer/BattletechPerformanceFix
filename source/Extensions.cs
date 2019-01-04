@@ -188,7 +188,7 @@ namespace BattletechPerformanceFix {
         }
         public static HarmonyMethod No = new HarmonyMethod(AccessTools.Method(typeof(Extensions), nameof(__No)));
         public static bool  __No(ref bool __result) {
-            LogDebug($"Saying yes to to {new StackFrame(1).ToString()}");
+            LogDebug($"Saying no to to {new StackFrame(1).ToString()}");
             __result = false;
             return false;
         }
