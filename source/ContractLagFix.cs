@@ -71,7 +71,7 @@ namespace BattletechPerformanceFix
                 }
                 if (cached == null)
                 {
-                    LogError("ContractLagFix: No EncounterLayerData");
+                    LogSpam("ContractLagFix: No EncounterLayerData");
                 }
                 //*/
 

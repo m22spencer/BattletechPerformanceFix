@@ -104,9 +104,9 @@ namespace BattletechPerformanceFix
             var dmlr = new Traverse(__instance).Field("foregroundRequestsList").GetValue<List<DataManager.DataManagerLoadRequest>>();
             if (dmlr.Count > 0) {
                 var byid = string.Join(" ", dmlr.Select(lr => $"{lr.ResourceId}:{lr.ResourceType.ToString()}").Take(10).ToArray());
-                LogDebug($"ProcessRequests started with: {byid}");
+                LogSpam($"ProcessRequests started with: {byid}");
             } else {
-                LogDebug($"ProcessRequests[external? {isFromExternal}] started with an EMPTY queue from {fromMethod.DeclaringType.FullName}.{fromMethod.Name} this will never complete!");
+                LogWarning($"ProcessRequests[external? {isFromExternal}] started with an EMPTY queue from {fromMethod.DeclaringType.FullName}.{fromMethod.Name} this will never complete!");
                 CollectSingletons.MC.PublishMessage(new DataManagerLoadCompleteMessage());
             }
         }

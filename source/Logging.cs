@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
+using System.Diagnostics;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -14,6 +15,8 @@ namespace BattletechPerformanceFix
             File.Delete(logPath);
             LogStream = File.AppendText(logPath);
 
+            lastFlush = Stopwatch.StartNew();
+
             SetLogLevel("spam");
         }
 
@@ -22,14 +25,20 @@ namespace BattletechPerformanceFix
             var levels = List("spam","debug","info","warn","error");
             if (!levels.Contains(ll)) { ll = "info"; }
             Spam  = levels.IndexOf("spam") >= levels.IndexOf(ll);
-            Debug = levels.IndexOf("debug") >= levels.IndexOf(ll);
+            Extensions.Debug = levels.IndexOf("debug") >= levels.IndexOf(ll);
             Info  = levels.IndexOf("info") >= levels.IndexOf(ll);
             Warn  = levels.IndexOf("warn") >= levels.IndexOf(ll);
+
+            Log($"Levels :Spam {Spam} :Debug {Extensions.Debug} :Info {Info} :Warn {Warn}");
         }
 
+        public static Stopwatch lastFlush;
         internal static void Log(string message, bool flush = false) {
             LogStream.WriteLine(message);
-            if (flush) LogStream.Flush();
+            if (lastFlush.Elapsed.TotalMilliseconds > 100) flush = true;
+            if (flush) { lastFlush.Reset();
+                         lastFlush.Start();
+                         LogStream.Flush(); }
         }
     }
 
@@ -55,16 +64,19 @@ namespace BattletechPerformanceFix
         }
 
         public static void LogInfo(string message) {
+            if (!Info) return;
             Logging.Log($"[Info] {message}", false);
             TrapSilently(() => Main.HBSLogger.Log(message));
         }
 
         // Can't hit the HBSLogger with debug/spam. It's too slow
         public static void LogDebug(string message) {
+            if (!Debug) return;
             Logging.Log($"[Debug] {message}", false);
         }
 
         public static void LogSpam(string message) {
+            if (!Spam) return;
             Logging.Log($"[Spam] {message}", false);
         }
     }
