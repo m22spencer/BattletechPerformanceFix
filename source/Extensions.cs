@@ -13,49 +13,30 @@ using RT = BattleTech.BattleTechResourceType;
 using BattleTech.UI;
 
 namespace BattletechPerformanceFix {
-    public static class Extensions {
-        public static void Spam(Func<string> msg) {
-            if (Main.LogLevel == "debug")
-                Main.__Log("[Spam] " + msg());
-        }
+    public static partial class Extensions {
+        public static void LogSpam(Func<string> msg)
+            => LogSpam_(msg());
 
-        public static void LogDebug(Func<string> lmsg) {
-             if (Main.LogLevel == "debug") LogDebug(lmsg());
-        }
+        public static void LogDebug(Func<string> lmsg)
+            => LogDebug_(lmsg());
+
         public static void LogDebug(string msg, params object[] values)
-        {
-            if (Main.LogLevel == "debug")
-                Main.__Log("[Debug] " + msg, values);
-            // Far too much data passes through here to hit the HBS log
-            //     it's simply too slow to handle it
-        }
+            => LogDebug_(string.Format(msg, values));
 
-        public static void Log(string msg, params object[] values) {
-            Main.__Log("[Info]" + msg, values);
-            Trap(() => Main.HBSLogger.Log(string.Format(msg, values)));
-        }
+        public static void Log(string msg, params object[] values)
+            => LogInfo_(string.Format(msg, values));
 
         public static void LogError(string msg, params object[] values)
-        {
-            Main.__Log("[Error] " + msg, values);
-            Trap(() => Main.HBSLogger.LogError(string.Format(msg, values)));
-        }
+            => LogError_(string.Format(msg, values));
 
-        public static void LogWarning(Func<string> msg) {
-            LogWarning("{0}", msg());
-        }
+        public static void LogWarning(Func<string> msg)
+            => LogWarning_(msg());
 
         public static void LogWarning(string msg, params object[] values)
-        {
-            Main.__Log("[Warning] " + msg, values);
-            Trap(() => Main.HBSLogger.LogWarning(string.Format(msg, values)));
-        }
+            => LogWarning_(string.Format(msg, values));
 
         public static void LogException(Exception e)
-        {
-            Main.__Log("[Exception] {0}", e);
-            Trap(() => Main.HBSLogger.LogException(e));
-        }
+            => LogException_(e);
 
         public static void AlertUser(string title, string message) {
             GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create(title, message);
@@ -69,6 +50,10 @@ namespace BattletechPerformanceFix {
         {
             try { return f(); } catch (Exception e) { Main.__Log("Exception {0}", e); return or == null ? default(T) : or(); }
         }
+
+        public static void TrapSilently(Action f)
+        { try { f(); } catch {} }
+
 
         public static IPromise<T> TrapAsPromise<T>(Func<T> f) {
             var prom = new Promise<T>();

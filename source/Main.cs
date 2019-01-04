@@ -42,10 +42,12 @@ namespace BattletechPerformanceFix
         public static void Start(string modDirectory, string json)
         {
             ModDir = modDirectory;
-            var logFile = Path.Combine(ModDir, "BattletechPerformanceFix.log");
+            var logFile = Path.Combine(ModDir, "BattletechPerformanceFix-old.log");
             File.Delete(logFile);
             LogStream = File.AppendText(logFile);
             LogStream.AutoFlush = true;
+
+            Logging.Init(Path.Combine(ModDir, "BattletechPerformanceFix.log"));
 
             HBSLogger = Trap(() => Logger.GetLogger(ModName));
 
@@ -81,8 +83,11 @@ namespace BattletechPerformanceFix
                 catch { LogWarning("Settings file is invalid or missing, regenerating with defaults"); }
 
                 Log($"LogLevel {settings.logLevel}");
+
                 LogLevel = settings.logLevel.ToLower();
 
+                Logging.SetLogLevel(LogLevel);
+                
                 harmony = HarmonyInstance.Create(ModFullName);
 
                 var allFeatures = new Dictionary<Type, bool> {

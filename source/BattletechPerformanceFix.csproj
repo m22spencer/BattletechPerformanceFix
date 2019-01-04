@@ -104,6 +104,7 @@
     <Compile Include="DMFix.cs" />
     <Compile Include="ExtraLogging.cs" />
     <Compile Include="LazyLoadAssets.cs" />
+    <Compile Include="Logging.cs" />
     <Compile Include="MDDB_InMemoryCache.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Extensions.cs" />

@@ -46,7 +46,7 @@ namespace BattletechPerformanceFix
             MC = f<MessageCenter>("MessageCenter");
 
             MC.AddSubscriber( MessageCenterMessageType.DataManagerLoadCompleteMessage
-                            , _ => Spam(() => "DataManagerLoadComplete"));
+                            , _ => LogSpam(() => "DataManagerLoadComplete"));
 
             void PingQueue() {
                 WaitAFrame(600)
