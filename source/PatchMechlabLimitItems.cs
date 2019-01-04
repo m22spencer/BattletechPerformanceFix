@@ -151,17 +151,33 @@ namespace BattletechPerformanceFix
             return rawInventory.Where(ri => ri.componentDef == mcr.Def && mcr.DamageLevel == GetRef(ri).DamageLevel).FirstOrDefault();
         }
 
+        MechLabDraggableItemType ToDraggableType(MechComponentDef def) {
+            switch(def.ComponentType) {
+            case ComponentType.NotSet: return MechLabDraggableItemType.NOT_SET;
+            case ComponentType.Weapon: return MechLabDraggableItemType.InventoryWeapon;
+            case ComponentType.AmmunitionBox: return MechLabDraggableItemType.InventoryItem;
+            case ComponentType.HeatSink: return MechLabDraggableItemType.InventoryGear;
+            case ComponentType.JumpJet: return MechLabDraggableItemType.InventoryGear;
+            case ComponentType.Upgrade: return MechLabDraggableItemType.InventoryGear;
+            case ComponentType.Special: return MechLabDraggableItemType.InventoryGear;
+            case ComponentType.MechPart: return MechLabDraggableItemType.InventoryGear;
+            }
+            return MechLabDraggableItemType.NOT_SET;
+        }
+
         /* Fast sort, which works off data, rather than visual elements. 
            Since only 7 visual elements are allocated, this is required.
         */
         List<ListElementController_BASE_NotListView> Sort(List<ListElementController_BASE_NotListView> items) {
-            //LogDebug($"Sorting: {items.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
+            LogDebug($"Sorting: {items.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
 
             var sw = Stopwatch.StartNew();
             var _a = new ListElementController_InventoryGear_NotListView();
             var _b = new ListElementController_InventoryGear_NotListView();
-            var _ac = new InventoryItemElement_NotListView();
-            var _bc = new InventoryItemElement_NotListView();
+            var go = new UnityEngine.GameObject();
+            var _ac = go.AddComponent<InventoryItemElement_NotListView>(); //new InventoryItemElement_NotListView();
+            var go2 = new UnityEngine.GameObject();
+            var _bc = go2.AddComponent<InventoryItemElement_NotListView>();
             _ac.controller = _a;
             _bc.controller = _b;
             var _cs = new Traverse(inventoryWidget).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
@@ -174,14 +190,22 @@ namespace BattletechPerformanceFix
                 _bc.ComponentRef = _b.componentRef = GetRef(r);
                 _ac.controller = l;
                 _bc.controller = r;
+                _ac.controller.ItemWidget = _ac;
+                _bc.controller.ItemWidget = _bc;
+                _ac.ItemType = ToDraggableType(l.componentDef);
+                _bc.ItemType = ToDraggableType(r.componentDef);
                 var res = _cs.Invoke(_ac, _bc);
-                //LogDebug($"Compare {_a.componentRef.ComponentDefID} & {_b.componentRef.ComponentDefID} -> {res}");
+                LogDebug($"Compare {_a.componentRef.ComponentDefID}({_ac != null},{_ac.controller.ItemWidget != null}) & {_b.componentRef.ComponentDefID}({_bc != null},{_bc.controller.ItemWidget != null}) -> {res}");
                 return res;
             }));
+
+            UnityEngine.GameObject.Destroy(go);
+            UnityEngine.GameObject.Destroy(go2);
+
             var delta = sw.Elapsed.TotalMilliseconds;
             LogDebug("Sorted in {0} ms", delta);
 
-            //LogDebug($"Sorted: {tmp.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
+            LogDebug($"Sorted: {tmp.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
 
             return tmp;
         }
@@ -265,7 +289,8 @@ namespace BattletechPerformanceFix
                 filterGuard = false;
                 lec.ItemWidget = null;
                 var yes = iw.gameObject.activeSelf == true;
-                if (!yes) LogDebug("[FilterUsingHBSCode] Removing :id {0} :componentType {1} :quantity {2}", lec.componentDef.Description.Id, lec.componentDef.ComponentType, lec.quantity);
+                if (!yes) LogDebug("[FilterUsingHBSCode] Removing :id {0} :componentType {1} :quantity {2} :tonnage {3}", lec.componentDef.Description.Id, lec.componentDef.ComponentType, lec.quantity
+                                  , (inventoryWidget.ParentDropTarget as MechLabPanel)?.activeMechDef?.Chassis?.Tonnage);
                 return yes;
             }).ToList();
             inventoryWidget.localInventory = tmp;
