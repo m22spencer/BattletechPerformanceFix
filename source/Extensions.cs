@@ -80,10 +80,7 @@ namespace BattletechPerformanceFix {
         public static void ForEach<T>(this IEnumerable<T> xs, Action<T> f) {
            foreach (var x in xs) f(x);
         }
-
-        public static T Or<T>(this T a, Func<T> b)
-            => a == null ? b() : a;
-
+       
         public static T GetWithDefault<K,T>(this Dictionary<K,T> d, K key, Func<T> lazyDefault)
             => d.TryGetValue(key, out var val) ? val : d[key] = lazyDefault();
 
