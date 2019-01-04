@@ -140,63 +140,13 @@ namespace BattletechPerformanceFix
             });
         }
 
-        public static bool MoveNextIntercept(IEnumerator e) {
-            LogDebug("MNI");
-            return e.MoveNext();
-        }
-
-        public static IEnumerable<CodeInstruction> PP_TP(IEnumerable<CodeInstruction> ins) {
-            var found = false;
-            var nins = ins.Select(i => {
-                    if (i.operand is MethodBase) {
-                        var amb = i.operand as MethodBase;
-                        LogDebug($"Trying {amb.DeclaringType.FullName}::{amb.ToString()}");
-                    }
-                    if (i.operand is MethodBase && (i.operand as MethodBase).Name == "MoveNext") {
-                        LogDebug("Intercepting movenext");
-                        i.opcode = OpCodes.Call;
-                        i.operand = AccessTools.Method(typeof(Main), "MoveNextIntercept");
-                        return i;
-                    } else {
-                        return i;
-                    }
-
-                }).ToList();
-            if (!found) LogError("Unable to find MoveNext to intercept");
-            return nins;
-        }
-
-        public static string HashMethod(MethodBase meth)
-        {
-            var body = meth.GetMethodBody();
-            //ilbytes is different between battletech versions for same code. Jump/label maybe?
-            // TODO: push this through harmony api to get CodeInstructions and then hash that.
-            var ilbytes = body.GetILAsByteArray();
-            var methsig = meth.ToString();
-            var lvs = string.Join(":", body.LocalVariables.Select(lvi => lvi.ToString()).ToArray());
-
-            
-            var allbytes = Encoding.UTF8.GetBytes(methsig + ":" + lvs + ":").Concat(ilbytes).ToArray();
-
-            var s = System.Security.Cryptography.SHA256.Create();
-            //return string.Join("", s.ComputeHash(allbytes).Select(b => b.ToString("x2")).ToArray());
-
-            return methsig + ":" + lvs + ":" + string.Join("", ilbytes.Select(b => b.ToString("x2")).ToArray());
-        }
-
         public static MethodBase CheckPatch(MethodBase meth, params string[] sha256s)
         {
+            LogSpam("CheckPatch is NYI");
             if (meth == null)
             {
                 LogError("A CheckPatch recieved a null method, this is fatal");
             }
-            /*
-            var h = HashMethod(meth);
-            if (!sha256s.Contains(h))
-            {
-                LogWarning(":method {0}::{1} :hash {2} does not match any specified :hash ({3})", meth.DeclaringType.FullName, meth.ToString(), h, string.Join(" ", sha256s));
-            }
-            */
 
             return meth;
         }
