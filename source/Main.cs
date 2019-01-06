@@ -20,6 +20,8 @@ namespace BattletechPerformanceFix
     public class Settings {
         public string logLevel = "debug";
         public Dictionary<string,bool> features = new Dictionary<string,bool>();
+
+        public bool WantContractsLagFixVerify = true;
     }
 
     public static class Main
@@ -31,6 +33,8 @@ namespace BattletechPerformanceFix
         public static readonly string ModFullName = string.Format("{0}.{1}", ModPack, ModName);
         public static string ModDir;
         public static string SettingsPath { get => Path.Combine(ModDir, "Settings.json"); }
+
+        public static Settings settings;
 
         public static Type ModTekType = AppDomain.CurrentDomain.GetAssemblies().SelectMany(ty => ty.GetTypes()).FirstOrDefault(ty => ty.FullName == "ModTek.ModTek");
 
@@ -71,7 +75,7 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var settings = new Settings();
+                settings = new Settings();
                 try { settings = JsonConvert.DeserializeObject<Settings>(File.ReadAllText(SettingsPath)); }
                 catch { LogWarning("Settings file is invalid or missing, regenerating with defaults"); }
 

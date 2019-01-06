@@ -59,25 +59,26 @@ namespace BattletechPerformanceFix
             return Trap(() =>
             {
                 var cached = eld_cache.Where(c => c != null && c.isActiveAndEnabled).FirstOrDefault();
-                // integrity check, negates patch. Need to have a Verify flag in the json to enable this.
-                //*
-                var wants = UnityEngine.Object.FindObjectOfType<EncounterLayerData>();
-                if (cached != wants)
-                {
-                    var inscene = UnityEngine.Object.FindObjectsOfType<EncounterLayerData>();
-                    LogError($"eld_cache is out of sync, wants: {wants?.GUID ?? "null"}");
-                    LogError($"scene contains ({string.Join(" ", inscene.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray())})");
-                    LogError($"current EncounterLayerData ({string.Join(" ", eld_cache.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray())})");
-                    AlertUser( "ContractsLagFix: Verify error"
-                             , "Please report this to the BT Modding group, and include logs");
-                }
-                if (cached == null)
-                {
-                    LogSpam("ContractLagFix: No EncounterLayerData");
-                }
-                //*/
 
-                return wants;
+                if (Main.settings.WantContractsLagFixVerify) {
+                    LogSpam("Verify ELD");
+                    var wants = UnityEngine.Object.FindObjectOfType<EncounterLayerData>();
+
+                    Trap(() => {
+                            if (cached != wants)
+                            {
+                                var inscene = UnityEngine.Object.FindObjectsOfType<EncounterLayerData>();
+                                LogError($"eld_cache is out of sync, wants: {wants?.GUID ?? "null"}");
+                                LogError($"scene contains ({string.Join(" ", inscene.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray())})");
+                                LogError($"current EncounterLayerData ({string.Join(" ", eld_cache.Select(c => c == null ? "null" : string.Format("(:contractDefId {0} :contractDefIndex {1} :GUID {2})", c.contractDefId, c.contractDefIndex, c.GUID)).ToArray())})");
+                                AlertUser( "ContractsLagFix: Verify error"
+                                         , "Please report this to the BT Modding group, and include logs");
+                            }
+                        });
+                    return wants;
+                }
+
+                return cached;
             });
         }
 
