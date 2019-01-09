@@ -116,6 +116,7 @@
     <Compile Include="LazyRoomInitialization.cs" />
     <Compile Include="LoadFixes.cs" />
     <Compile Include="ParallelizeLoad.cs" />
+    <Compile Include="PerformanceTracking.cs" />
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
     <Compile Include="PatchMechLabPanelLoadThrottling.cs" />

@@ -80,6 +80,15 @@ namespace BattletechPerformanceFix {
         public static void ForEach<T>(this IEnumerable<T> xs, Action<T> f) {
            foreach (var x in xs) f(x);
         }
+
+        public static IEnumerable<KeyValuePair<T,K>> Zip<T,K>(this IEnumerable<T> left, IEnumerable<K> right) {
+            var itl = left.GetEnumerator();
+            var itr = right.GetEnumerator();
+
+            while(itl.MoveNext() && itr.MoveNext()) {
+                yield return new KeyValuePair<T,K>(itl.Current, itr.Current);
+            }
+        }
        
         public static T GetWithDefault<K,T>(this Dictionary<K,T> d, K key, Func<T> lazyDefault)
             => d.TryGetValue(key, out var val) ? val : d[key] = lazyDefault();
@@ -217,33 +226,50 @@ namespace BattletechPerformanceFix {
             Trap(() => Main.harmony.Patch( method, patches[0], patches[1], patches[2]));
 
         }
-                                    
 
-        public static void Patch<T>( this string method
-                                   , string premethod = null
-                                   , string postmethod = null
-                                   , string transpilemethod = null
-                                   , int priority = Priority.Normal
-                                   ) {
+        public static MethodBase FindQualifiedMethod(this string qualifiedName) {
+            var ss = qualifiedName.Split(Array("::"), StringSplitOptions.None).ToArray();
+            if (ss.Length != 2) throw new Exception($"Invalid QualifiedMethod string {qualifiedName}");
+            var type = ss[0];
+            var meth = ss[1];
+            LogSpam($"FindQualifiedMethod for {type} {meth}");
+            return AppDomain.CurrentDomain.GetAssemblies()
+                            .Select(asm => asm.GetType(type))
+                            .Where(t => t != null)
+                            .SingleOrDefault()
+                            ?.GetMethod(meth, AccessTools.all);
+        }
+            
+                                    
+        public static string QualifiedSignature(this MethodBase method)
+            => $"{method.DeclaringType.FullName}::{method.ToString()}";
+
+        public static void Patch( this string method
+                                , Type t
+                                , string premethod = null
+                                , string postmethod = null
+                                , string transpilemethod = null
+                                , int priority = Priority.Normal
+                                ) {
             MethodBase meth = null;
-            if (method.StartsWith("ctor")) meth = (MethodBase)typeof(T).GetConstructors(AccessTools.all)[0];
-            else if (method.StartsWith("get_")) meth = (MethodBase)typeof(T).GetProperties(AccessTools.all)
+            if (method.StartsWith("ctor")) meth = (MethodBase)t.GetConstructors(AccessTools.all)[0];
+            else if (method.StartsWith("get_")) meth = (MethodBase)t.GetProperties(AccessTools.all)
                                                                             .FirstOrDefault(mm => { LogDebug($"{mm.Name}"); return method.EndsWith(mm.Name); })
                                                     ?.GetGetMethod();
-            else meth = (MethodBase)typeof(T).GetMethods(AccessTools.all)
+            else meth = (MethodBase)t.GetMethods(AccessTools.all)
                                              .FirstOrDefault(mm => mm.Name == method && mm.GetMethodBody() != null);
-            meth.NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
+            meth.NullCheckError($"Failed to find patchable function {method} on {t.FullName}");
             meth.Patch(premethod, postmethod, transpilemethod, priority);
         }
 
         public static void Pre<T>(this string method, string patchmethod = null, int priority = Priority.Normal)
-            => method.Patch<T>(patchmethod ?? $"{method}_Pre", null, null, priority);
+            => method.Patch(typeof(T), patchmethod ?? $"{method}_Pre", null, null, priority);
 
         public static void Post<T>(this string method, string patchmethod = null, int priority = Priority.Normal)
-            => method.Patch<T>(null, patchmethod ?? $"{method}_Post", null, priority);
+            => method.Patch(typeof(T), null, patchmethod ?? $"{method}_Post", null, priority);
 
         public static void Transpile<T>(this string method, string patchmethod = null, int priority = Priority.Normal)
-            => method.Patch<T>(null, null, patchmethod ?? $"{method}_Transpile", priority);
+            => method.Patch(typeof(T), null, null, patchmethod ?? $"{method}_Transpile", priority);
 
         // C# macros when...
         public static void Pre<T>(this string method, Action<T> f) where T : class 
