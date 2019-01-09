@@ -75,6 +75,7 @@
     <Compile Include="EnableConsole.cs" />
     <Compile Include="VersionManifestPatches.cs" />
     <Compile Include="MemoryLeakFix.cs" />
+    <Compile Include="SimpleMetrics.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />
