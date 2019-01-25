@@ -92,12 +92,12 @@ namespace BattletechPerformanceFix
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
                     { typeof(MDDB_InMemoryCache), true },
-                    { typeof(ContractLagFix), true },
+                    { typeof(ContractLagFix), false },
                     //{ typeof(ParallelizeLoad), false },
                     { typeof(SimpleMetrics), false },
                     { typeof(LazyLoadAssets), false },
                     { typeof(EnableLoggingDuringLoads), true },
-                    { typeof(DMFix), false },
+                    { typeof(DMFix), true },
                     { typeof(ExtraLogging), true },
                     { typeof(MDDB_TagsetQueryInChunks), false }
                 };
