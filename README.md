@@ -36,6 +36,10 @@ For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop
 - DMFix
    - Fix exponential dependency checking explosion (Drops around 2 minutes from loads in roguetech)
 
+# Experimental patches
+- MDDB_TagsetQueryInChunks
+   - Prevent the game from softlocking/infinite loading when MDDB builds queries too large for sqlite3 to handle.
+
 # Upcoming patches
 - ParallelizeLoad (Disabled by default: Experimental, Dangerous)
    - An in progress patch, it is recommended you do not enable this patch at this time.
