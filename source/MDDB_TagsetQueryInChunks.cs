@@ -20,12 +20,11 @@ namespace BattletechPerformanceFix
         public void Activate()
         {
             var name = nameof(GetMatchingDataByTagSet);
-            var gm = typeof(TagSetQueryExtensions)
+            typeof(TagSetQueryExtensions)
                 .GetMethods(AccessTools.all)
                 .Where(m => m.Name == name && m.GetParameters().Count() == 8)
-                .Single();
-
-            gm.MakeGenericMethod(typeof(object)).Patch(null, null, name);
+                .Single()
+                .MakeGenericMethod(typeof(object)).Patch(null, null, name);
         }
 
         public static IEnumerable<object> InterceptQuery(MetadataDatabase mdd, string sql, object param, IDbTransaction transaction, bool buffered, int? commandTimeout, CommandType? commandType, TagSetType type)
@@ -38,7 +37,6 @@ namespace BattletechPerformanceFix
                                                            , { TagSetType.UnitDef, typeof(UnitDef_MDD) } };
 
             var realType = typemap.GetWithDefault(type, () => throw new Exception("Unknown query type {type.ToString()}"));
-
 
             var tagSetsInChunks = new Traverse(param).Property("TagSetID")
                                                      .NullCheckError("Unable to find TagSetID on param")
@@ -60,9 +58,6 @@ namespace BattletechPerformanceFix
         {
             return ins.SelectMany(i => {
                     if ((i.operand as MethodInfo)?.Name == "Query") {
-                        var meth = i.operand as MethodInfo;
-                        var gt = meth.GetGenericArguments()[0];
-
                         var ops = Sequence( new CodeInstruction(OpCodes.Ldarg_1)  // put tagSetType on stack
                                           , new CodeInstruction(OpCodes.Call, typeof(MDDB_TagsetQueryInChunks).GetMethod("InterceptQuery", AccessTools.all)));
                         return i.Replace(ops);                  
