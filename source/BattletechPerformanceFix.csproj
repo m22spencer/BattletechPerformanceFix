@@ -111,6 +111,7 @@
     <Compile Include="BTLightControllerThrottle.cs" />
     <Compile Include="HarmonyExt.cs" />
     <Compile Include="DataLoaderGetEntryCheck.cs" />
+    <Compile Include="MDDB_TagsetQueryInChunks.cs" />
     <Compile Include="MissingAssetsContinueLoad.cs" />
     <Compile Include="NoSalvageSoftlock.cs" />
     <Compile Include="LazyRoomInitialization.cs" />

@@ -80,6 +80,12 @@ namespace BattletechPerformanceFix {
         public static void ForEach<T>(this IEnumerable<T> xs, Action<T> f) {
            foreach (var x in xs) f(x);
         }
+
+        public static IEnumerable<IEnumerable<T>> GroupsOf<T>(this IEnumerable<T> items, int count) {
+            return items.Select((item,idx) => new { item, idx })
+                        .GroupBy(kv => kv.idx / count, kv => kv.item)
+                        .Select(x => x.Select(v => v));
+        }
        
         public static T GetWithDefault<K,T>(this Dictionary<K,T> d, K key, Func<T> lazyDefault)
             => d.TryGetValue(key, out var val) ? val : d[key] = lazyDefault();
@@ -154,6 +160,14 @@ namespace BattletechPerformanceFix {
             return TillDone().AsPromise();
         }
 
+        public static IEnumerable<CodeInstruction> Replace(this CodeInstruction i, IEnumerable<CodeInstruction> ins)
+        {
+            var first = ins.First();
+            var rest = ins.Skip(1);
+            i.opcode = first.opcode;
+            i.operand = first.operand;
+            return Sequence(i).Concat(rest);
+        }
 
         public static IPromise WaitAFrame(int n = 1)
             => Promise.Resolved().WaitAFrame(n);
