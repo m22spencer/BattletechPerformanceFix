@@ -69,7 +69,7 @@ namespace BattletechPerformanceFix
             if (m is DataManagerRequestCompleteMessage) {
                 var res = Trap(() => new Traverse(m).Property("Resource").GetValue<object>());
                 if (res != null && res is ILD) {
-                    LogDebug($"AddCheckDep {(m as DataManagerRequestCompleteMessage).ResourceId}");
+                    LogSpam($"AddCheckDep {(m as DataManagerRequestCompleteMessage).ResourceId}");
                     ToVerify.Add(new KeyValuePair<string,ILD>((m as DataManagerRequestCompleteMessage).ResourceId, res as ILD));
                 }
             }
