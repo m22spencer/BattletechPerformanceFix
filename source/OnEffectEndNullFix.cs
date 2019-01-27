@@ -5,6 +5,7 @@ using System.Text;
 using Harmony;
 using BattleTech;
 using System.Reflection;
+using System.Diagnostics;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -32,13 +33,13 @@ namespace BattletechPerformanceFix
             var hasCollection = collection != null;
             if (!hasCollection)
             {
-                LogWarning($"OnEffectEnd was called with null statCollection for {__instance.id}");
+                LogWarning($"OnEffectEnd was called with null statCollection for {__instance.id} from {new StackTrace(1).ToString()}");
 
                 // Taken from the base function directly.
                 // Need to continue the effect chain as it updates pathing & FOW & other logic
                 (___target as ICombatant)?.OnEffectEnd(__instance);
             }
-            
+
             return hasCollection;
         }
 
