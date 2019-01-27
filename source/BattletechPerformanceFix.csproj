@@ -116,6 +116,7 @@
     <Compile Include="NoSalvageSoftlock.cs" />
     <Compile Include="LazyRoomInitialization.cs" />
     <Compile Include="LoadFixes.cs" />
+    <Compile Include="OnEffectEndNullFix.cs" />
     <Compile Include="ParallelizeLoad.cs" />
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />

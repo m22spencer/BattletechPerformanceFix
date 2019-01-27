@@ -99,7 +99,8 @@ namespace BattletechPerformanceFix
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(DMFix), true },
                     { typeof(ExtraLogging), true },
-                    { typeof(MDDB_TagsetQueryInChunks), false }
+                    { typeof(MDDB_TagsetQueryInChunks), false },
+                    { typeof(OnEffectEndNullFix), true }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
