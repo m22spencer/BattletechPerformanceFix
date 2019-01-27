@@ -85,7 +85,7 @@ namespace BattletechPerformanceFix
                     //{ typeof(LazyRoomInitialization), false },
                     { typeof(MechlabFix), true },
                     { typeof(LoadFixes), true },
-                    { typeof(NoSalvageSoftlock), true },
+                    //{ typeof(NoSalvageSoftlock), true },
                     { typeof(MissingAssetsContinueLoad), false },
                     { typeof(DataLoaderGetEntryCheck), true },
                     { typeof(DynamicTagsFix), true },
@@ -99,7 +99,8 @@ namespace BattletechPerformanceFix
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(DMFix), true },
                     { typeof(ExtraLogging), true },
-                    { typeof(MDDB_TagsetQueryInChunks), false }
+                    { typeof(MDDB_TagsetQueryInChunks), false },
+                    { typeof(GiveMeMyDamnLoot), true }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
