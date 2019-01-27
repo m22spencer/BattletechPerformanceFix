@@ -103,6 +103,7 @@
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="DMFix.cs" />
     <Compile Include="ExtraLogging.cs" />
+    <Compile Include="FilterByTyping.cs" />
     <Compile Include="LazyLoadAssets.cs" />
     <Compile Include="Logging.cs" />
     <Compile Include="MDDB_InMemoryCache.cs" />
