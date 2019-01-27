@@ -99,7 +99,7 @@ namespace BattletechPerformanceFix
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(DMFix), true },
                     { typeof(ExtraLogging), true },
-                    { typeof(MDDB_TagsetQueryInChunks), false },
+                    { typeof(MDDB_TagsetQueryInChunks), true },
                     { typeof(OnEffectEndNullFix), true }
                 };
                                
