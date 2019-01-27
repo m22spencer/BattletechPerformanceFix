@@ -23,16 +23,23 @@ namespace BattletechPerformanceFix
             "OnEffectEnd".Pre<StatisticEffect>();
         }
 
-        public static bool OnEffectEnd_Pre(StatisticEffect __instance) {
+        public static bool OnEffectEnd_Pre(StatisticEffect __instance, object ___target) {
             if (Spam) LogSpam($"OnEffectEnd has been invoked for {__instance.id}");
             var collection = new Traverse(__instance)
                 .Property("statCollection")
                 .GetValue<StatCollection>();
 
             var hasCollection = collection != null;
-            if (!hasCollection) LogWarning($"OnEffectEnd was called with null statCollection for {__instance.id}");
+            if (!hasCollection)
+            {
+                LogWarning($"OnEffectEnd was called with null statCollection for {__instance.id}");
 
-            return collection != null;
+                // Taken from the base function directly.
+                // Need to continue the effect chain as it updates pathing & FOW & other logic
+                (___target as ICombatant)?.OnEffectEnd(__instance);
+            }
+            
+            return hasCollection;
         }
 
         public static void initStatisiticEffect_Pre(StatisticEffect __instance, EffectData effectData, StatCollection targetStatCollection) {
