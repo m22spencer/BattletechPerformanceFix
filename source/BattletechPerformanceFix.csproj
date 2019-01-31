@@ -47,8 +47,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>$(BTechData)0Harmony.dll</HintPath>
-      <Private>False</Private>
+      <HintPath>..\..\Mods\ModTek\0Harmony.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(BTechData)Assembly-CSharp.dll</HintPath>
@@ -98,31 +97,20 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
-    <Compile Include="CollectSingletons.cs" />
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
-    <Compile Include="DMFix.cs" />
     <Compile Include="ExtraLogging.cs" />
-    <Compile Include="LazyLoadAssets.cs" />
     <Compile Include="Logging.cs" />
-    <Compile Include="MDDB_InMemoryCache.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="BTLightControllerThrottle.cs" />
     <Compile Include="HarmonyExt.cs" />
     <Compile Include="DataLoaderGetEntryCheck.cs" />
-    <Compile Include="MDDB_TagsetQueryInChunks.cs" />
-    <Compile Include="MissingAssetsContinueLoad.cs" />
     <Compile Include="NoSalvageSoftlock.cs" />
     <Compile Include="LazyRoomInitialization.cs" />
     <Compile Include="LoadFixes.cs" />
-    <Compile Include="OnEffectEndNullFix.cs" />
-    <Compile Include="ParallelizeLoad.cs" />
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
-    <Compile Include="PatchMechLabPanelLoadThrottling.cs" />
-    <Compile Include="DynamicTagsFix.cs" />
-    <Compile Include="SimpleMetrics.cs" />
     <Compile Include="EnableLoggingDuringLoads.cs" />
   </ItemGroup>
   <ItemGroup>

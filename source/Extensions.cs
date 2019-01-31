@@ -178,13 +178,7 @@ namespace BattletechPerformanceFix {
             p.Done(() => BPF_CoroutineInvoker.Invoke(OneFrame(n), next.Resolve));
             return next;
         }
-
-        public static void Instrument(this MethodBase meth)
-            => SimpleMetrics.Instrument(meth);
-
-        public static void Track(this MethodBase meth)
-            => SimpleMetrics.Track(meth);
-
+        
         public static T Let<T>(this T t, Func<T,T> f) => f(t);
         public static void Let<T>(this T t, Action<T> f) => f(t);
 

@@ -65,7 +65,7 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var WantVersions = new string[] { "1.2.", "1.3." };
+                var WantVersions = new string[] { "1.4." };
                 if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
                 {
                     LogInfo(string.Format("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion));
@@ -86,21 +86,12 @@ namespace BattletechPerformanceFix
                     { typeof(MechlabFix), true },
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
-                    { typeof(MissingAssetsContinueLoad), false },
                     { typeof(DataLoaderGetEntryCheck), true },
-                    { typeof(DynamicTagsFix), true },
                     { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
-                    { typeof(MDDB_InMemoryCache), true },
                     { typeof(ContractLagFix), false },
-                    //{ typeof(ParallelizeLoad), false },
-                    { typeof(SimpleMetrics), false },
-                    { typeof(LazyLoadAssets), false },
                     { typeof(EnableLoggingDuringLoads), true },
-                    { typeof(DMFix), true },
                     { typeof(ExtraLogging), true },
-                    { typeof(MDDB_TagsetQueryInChunks), true },
-                    { typeof(OnEffectEndNullFix), true }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
@@ -109,7 +100,6 @@ namespace BattletechPerformanceFix
 
                 var alwaysOn = new Dictionary<Type, bool>
                 {
-                    { typeof(CollectSingletons), true },
                 };
 
                 var allwant = alwaysOn.Concat(want);
