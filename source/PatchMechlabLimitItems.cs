@@ -38,13 +38,13 @@ namespace BattletechPerformanceFix
        
        The core of the problem is a lack of separation between Data & Visuals.
        Most of the logic requires operating on visual elements, which come from the asset pool (or a prefab if not in pool)
-          additionally, the creation or modification of data causes preperation for re-render of the assets. (UpdateTooltips, UpdateDescription, Update....)
+       additionally, the creation or modification of data causes preperation for re-render of the assets. (UpdateTooltips, UpdateDescription, Update....)
     
        Solution:
-         Separate the data & visual elements entirely.
-         Always process the data first, and then only create or re-use a couple of visual elements to display it.
-         The user only sees 8 items at once, and they're expensive to create, so only make 8 of them.
-     */
+       Separate the data & visual elements entirely.
+       Always process the data first, and then only create or re-use a couple of visual elements to display it.
+       The user only sees 8 items at once, and they're expensive to create, so only make 8 of them.
+    */
     public class PatchMechlabLimitItems {
         MechLabPanel instance;
         MechLabInventoryWidget inventoryWidget;
@@ -69,78 +69,78 @@ namespace BattletechPerformanceFix
             try {
                 var sw = new Stopwatch();
                 sw.Start();
-            this.instance = instance;
-            this.inventoryWidget = new Traverse(instance).Field("inventoryWidget").GetValue<MechLabInventoryWidget>();
+                this.instance = instance;
+                this.inventoryWidget = new Traverse(instance).Field("inventoryWidget").GetValue<MechLabInventoryWidget>();
 
-            if (instance.IsSimGame) {
-                new Traverse(instance).Field("originalStorageInventory").SetValue(instance.storageInventory);
-            }
+                if (instance.IsSimGame) {
+                    new Traverse(instance).Field("originalStorageInventory").SetValue(instance.storageInventory);
+                }
 
-            LogDebug($"Mechbay Patch initialized :simGame? {instance.IsSimGame}");
+                LogDebug($"Mechbay Patch initialized :simGame? {instance.IsSimGame}");
 
                 inventory = instance.storageInventory.Select(mcr =>
-                {
-                    mcr.DataManager = instance.dataManager;
-                    mcr.RefreshComponentDef();
-                    var num = !instance.IsSimGame
+                    {
+                        mcr.DataManager = instance.dataManager;
+                        mcr.RefreshComponentDef();
+                        var num = !instance.IsSimGame
                         ? int.MinValue
                         : instance.sim.GetItemCount(mcr.Def.Description, mcr.Def.GetType(), instance.sim.GetItemCountDamageType(mcr));
-                    return new DefAndCount(mcr, num);
-                }).ToList();
+                        return new DefAndCount(mcr, num);
+                    }).ToList();
 
-            /* Build a list of data only for all components. */
-            rawInventory = inventory.Select<DefAndCount, ListElementController_BASE_NotListView>(dac => {
-                if (dac.ComponentRef.ComponentDefType == ComponentType.Weapon) {
-                    ListElementController_InventoryWeapon_NotListView controller = new ListElementController_InventoryWeapon_NotListView();
-                    controller.InitAndFillInSpecificWidget(dac.ComponentRef, null, instance.dataManager, null, dac.Count, false);
-                    return controller;
-                } else {
-                    ListElementController_InventoryGear_NotListView controller = new ListElementController_InventoryGear_NotListView();
-                    controller.InitAndFillInSpecificWidget(dac.ComponentRef, null, instance.dataManager, null, dac.Count, false);
-                    return controller;
-                }
-            }).ToList();
-            rawInventory = Sort(rawInventory);
+                /* Build a list of data only for all components. */
+                rawInventory = inventory.Select<DefAndCount, ListElementController_BASE_NotListView>(dac => {
+                        if (dac.ComponentRef.ComponentDefType == ComponentType.Weapon) {
+                            ListElementController_InventoryWeapon_NotListView controller = new ListElementController_InventoryWeapon_NotListView();
+                            controller.InitAndFillInSpecificWidget(dac.ComponentRef, null, instance.dataManager, null, dac.Count, false);
+                            return controller;
+                        } else {
+                            ListElementController_InventoryGear_NotListView controller = new ListElementController_InventoryGear_NotListView();
+                            controller.InitAndFillInSpecificWidget(dac.ComponentRef, null, instance.dataManager, null, dac.Count, false);
+                            return controller;
+                        }
+                    }).ToList();
+                rawInventory = Sort(rawInventory);
 
-            Func<bool, InventoryItemElement_NotListView> mkiie = (bool nonexistant) => {
-                var nlv = instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
-                                                                                                                              , BattleTechResourceType.UIModulePrefabs, null, null, null)
-                                                                                                            .GetComponent<InventoryItemElement_NotListView>();
-				if (!nonexistant) {
-                    nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>());
-				    nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
-				    nlv.gameObject.transform.localScale = UnityEngine.Vector3.one;
-                }
-                return nlv;
-            };
+                Func<bool, InventoryItemElement_NotListView> mkiie = (bool nonexistant) => {
+                    var nlv = instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
+                                                                    , BattleTechResourceType.UIModulePrefabs, null, null, null)
+                                      .GetComponent<InventoryItemElement_NotListView>();
+                    if (!nonexistant) {
+                        nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>());
+                        nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
+                        nlv.gameObject.transform.localScale = UnityEngine.Vector3.one;
+                    }
+                    return nlv;
+                };
 
-            iieTmp = mkiie(true);
+                iieTmp = mkiie(true);
 
-            /* Allocate very few visual elements, as this is extremely slow for both allocation and deallocation.
-               It's the difference between a couple of milliseconds and several seconds for many unique items in inventory 
-               This is the core of the fix, the rest is just to make it work within HBS's existing code.
-               */
-            ielCache = Enumerable.Repeat<Func<InventoryItemElement_NotListView>>( () => mkiie(false), itemLimit)
-                                 .Select(thunk => thunk())
-                                 .ToList();
-            var li = new Traverse(inventoryWidget).Field("localInventory").GetValue<List<InventoryItemElement_NotListView>>();
-            ielCache.ForEach(iw => li.Add(iw));
-            // End
+                /* Allocate very few visual elements, as this is extremely slow for both allocation and deallocation.
+                   It's the difference between a couple of milliseconds and several seconds for many unique items in inventory 
+                   This is the core of the fix, the rest is just to make it work within HBS's existing code.
+                */
+                ielCache = Enumerable.Repeat<Func<InventoryItemElement_NotListView>>( () => mkiie(false), itemLimit)
+                                     .Select(thunk => thunk())
+                                     .ToList();
+                var li = new Traverse(inventoryWidget).Field("localInventory").GetValue<List<InventoryItemElement_NotListView>>();
+                ielCache.ForEach(iw => li.Add(iw));
+                // End
 
 
 
-            var lp = new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>();
+                var lp = new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>();
 
-            // DummyStart&End are blank rects stored at the beginning and end of the list so that unity knows how big the scrollrect should be
-            // "placeholders"
-            if (DummyStart == null) DummyStart = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
-            if (DummyEnd   == null) DummyEnd   = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
+                // DummyStart&End are blank rects stored at the beginning and end of the list so that unity knows how big the scrollrect should be
+                // "placeholders"
+                if (DummyStart == null) DummyStart = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
+                if (DummyEnd   == null) DummyEnd   = new UnityEngine.GameObject().AddComponent<UnityEngine.RectTransform>();
 
-            DummyStart.SetParent(lp, false);
-            DummyEnd.SetParent(lp, false);
-            LogDebug(string.Format("[LimitItems] inventory cached in {0} ms", sw.Elapsed.TotalMilliseconds));
+                DummyStart.SetParent(lp, false);
+                DummyEnd.SetParent(lp, false);
+                LogDebug(string.Format("[LimitItems] inventory cached in {0} ms", sw.Elapsed.TotalMilliseconds));
 
-            FilterChanged();
+                FilterChanged();
             } catch(Exception e) {
                 LogException(e);
             }
@@ -186,18 +186,18 @@ namespace BattletechPerformanceFix
 
             var tmp = items.ToList();
             tmp.Sort(new Comparison<ListElementController_BASE_NotListView>((l,r) => {
-                _ac.ComponentRef = _a.componentRef = GetRef(l);
-                _bc.ComponentRef = _b.componentRef = GetRef(r);
-                _ac.controller = l;
-                _bc.controller = r;
-                _ac.controller.ItemWidget = _ac;
-                _bc.controller.ItemWidget = _bc;
-                _ac.ItemType = ToDraggableType(l.componentDef);
-                _bc.ItemType = ToDraggableType(r.componentDef);
-                var res = _cs.Invoke(_ac, _bc);
-                LogSpam($"Compare {_a.componentRef.ComponentDefID}({_ac != null},{_ac.controller.ItemWidget != null}) & {_b.componentRef.ComponentDefID}({_bc != null},{_bc.controller.ItemWidget != null}) -> {res}");
-                return res;
-            }));
+                        _ac.ComponentRef = _a.componentRef = GetRef(l);
+                        _bc.ComponentRef = _b.componentRef = GetRef(r);
+                        _ac.controller = l;
+                        _bc.controller = r;
+                        _ac.controller.ItemWidget = _ac;
+                        _bc.controller.ItemWidget = _bc;
+                        _ac.ItemType = ToDraggableType(l.componentDef);
+                        _bc.ItemType = ToDraggableType(r.componentDef);
+                        var res = _cs.Invoke(_ac, _bc);
+                        LogSpam($"Compare {_a.componentRef.ComponentDefID}({_ac != null},{_ac.controller.ItemWidget != null}) & {_b.componentRef.ComponentDefID}({_bc != null},{_bc.controller.ItemWidget != null}) -> {res}");
+                        return res;
+                    }));
 
             UnityEngine.GameObject.Destroy(go);
             UnityEngine.GameObject.Destroy(go2);
@@ -233,27 +233,27 @@ namespace BattletechPerformanceFix
             InventoryDataObject_BASE tmpctl = new InventoryDataObject_InventoryWeapon();
 
             var current = items.Where(item => { 
-                tmpctl.weaponDef = null;
-                tmpctl.ammoBoxDef = null;
-                tmpctl.componentDef = null;
-                var def = item.componentDef;
-                switch (def.ComponentType) {
-                case ComponentType.Weapon:
-                    tmpctl.weaponDef = def as WeaponDef;
-                    break;
-                case ComponentType.AmmunitionBox:
-                    tmpctl.ammoBoxDef = def as AmmunitionBoxDef;
-                    break;
-                case ComponentType.HeatSink:
-                case ComponentType.MechPart:
-                case ComponentType.JumpJet:
-                case ComponentType.Upgrade:
-                    tmpctl.componentDef = def;
-                    break;
-                }
-                var yes = filter.Execute(Enumerable.Repeat(tmpctl, 1)).Any();
-                if (!yes) LogDebug(string.Format("[Filter] Removing :id {0} :componentType {1} :quantity {2}", def.Description.Id, def.ComponentType, item.quantity));
-                return yes;
+                    tmpctl.weaponDef = null;
+                    tmpctl.ammoBoxDef = null;
+                    tmpctl.componentDef = null;
+                    var def = item.componentDef;
+                    switch (def.ComponentType) {
+                    case ComponentType.Weapon:
+                        tmpctl.weaponDef = def as WeaponDef;
+                        break;
+                    case ComponentType.AmmunitionBox:
+                        tmpctl.ammoBoxDef = def as AmmunitionBoxDef;
+                        break;
+                    case ComponentType.HeatSink:
+                    case ComponentType.MechPart:
+                    case ComponentType.JumpJet:
+                    case ComponentType.Upgrade:
+                        tmpctl.componentDef = def;
+                        break;
+                    }
+                    var yes = filter.Execute(Enumerable.Repeat(tmpctl, 1)).Any();
+                    if (!yes) LogDebug(string.Format("[Filter] Removing :id {0} :componentType {1} :quantity {2}", def.Description.Id, def.ComponentType, item.quantity));
+                    return yes;
                 }).ToList();
             return current;
         }
@@ -265,41 +265,41 @@ namespace BattletechPerformanceFix
             try {
                 var sw = new Stopwatch();
                 sw.Start();
-            var tmp = inventoryWidget.localInventory;
-            var iw = iieTmp;
-            inventoryWidget.localInventory = Enumerable.Repeat(iw, 1).ToList();
+                var tmp = inventoryWidget.localInventory;
+                var iw = iieTmp;
+                inventoryWidget.localInventory = Enumerable.Repeat(iw, 1).ToList();
 
-            // Filter items once using the faster code, then again to handle mods.
-            var okItems = Filter(items).Where(lec => {
-                var cref = GetRef(lec);
-                lec.ItemWidget = iw;
-                iw.ComponentRef = cref;
-                // Not using SetData here still works, but is much slower
-                // TODO: Figure out why.
-                iw.SetData(lec, inventoryWidget, lec.quantity, false, null);
-                if (!iw.gameObject.activeSelf) { 
-                    // Set active is very very slow, only call if absolutely needed
-                    // It would be preferable to hook SetActive, but it's an external function.
-                    iw.gameObject.SetActive(true); 
-                }
-                filterGuard = true;
-                // Let the main game or any mods filter if needed
-                // filter guard is to prevent us from infinitely recursing here, as this is also our triggering patch.
-                inventoryWidget.ApplyFiltering(false);
-                filterGuard = false;
-                lec.ItemWidget = null;
-                var yes = iw.gameObject.activeSelf == true;
-                if (!yes) LogDebug(string.Format( "[FilterUsingHBSCode] Removing :id {0} :componentType {1} :quantity {2} :tonnage {3}"
-                                                , lec.componentDef.Description.Id
-                                                , lec.componentDef.ComponentType
-                                                , lec.quantity
-                                                , (inventoryWidget.ParentDropTarget as MechLabPanel)?.activeMechDef?.Chassis?.Tonnage));
-                return yes;
-            }).ToList();
-            inventoryWidget.localInventory = tmp;
-            LogInfo(string.Format("Filter took {0} ms and resulted in {1} items", sw.Elapsed.TotalMilliseconds, okItems.Count));
+                // Filter items once using the faster code, then again to handle mods.
+                var okItems = Filter(items).Where(lec => {
+                        var cref = GetRef(lec);
+                        lec.ItemWidget = iw;
+                        iw.ComponentRef = cref;
+                        // Not using SetData here still works, but is much slower
+                        // TODO: Figure out why.
+                        iw.SetData(lec, inventoryWidget, lec.quantity, false, null);
+                        if (!iw.gameObject.activeSelf) { 
+                            // Set active is very very slow, only call if absolutely needed
+                            // It would be preferable to hook SetActive, but it's an external function.
+                            iw.gameObject.SetActive(true); 
+                        }
+                        filterGuard = true;
+                        // Let the main game or any mods filter if needed
+                        // filter guard is to prevent us from infinitely recursing here, as this is also our triggering patch.
+                        inventoryWidget.ApplyFiltering(false);
+                        filterGuard = false;
+                        lec.ItemWidget = null;
+                        var yes = iw.gameObject.activeSelf == true;
+                        if (!yes) LogDebug(string.Format( "[FilterUsingHBSCode] Removing :id {0} :componentType {1} :quantity {2} :tonnage {3}"
+                                                        , lec.componentDef.Description.Id
+                                                        , lec.componentDef.ComponentType
+                                                        , lec.quantity
+                                                        , (inventoryWidget.ParentDropTarget as MechLabPanel)?.activeMechDef?.Chassis?.Tonnage));
+                        return yes;
+                    }).ToList();
+                inventoryWidget.localInventory = tmp;
+                LogInfo(string.Format("Filter took {0} ms and resulted in {1} items", sw.Elapsed.TotalMilliseconds, okItems.Count));
 
-            return okItems;
+                return okItems;
             } catch (Exception e) {
                 LogException(e);
                 return null;
@@ -330,15 +330,15 @@ namespace BattletechPerformanceFix
                                       , f("filterEnabledJumpjet")
                                       , f("filterEnabledUpgrade")
                                       , resetIndex));
-            if (resetIndex) {
-                new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
-                index = 0;
-            }
+                if (resetIndex) {
+                    new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
+                    index = 0;
+                }
 
-            filteredInventory = FilterUsingHBSCode(rawInventory);
-            endIndex = filteredInventory.Count - itemsOnScreen;
-            Refresh();
-             } catch (Exception e) {
+                filteredInventory = FilterUsingHBSCode(rawInventory);
+                endIndex = filteredInventory.Count - itemsOnScreen;
+                Refresh();
+            } catch (Exception e) {
                 LogException(e);
             }
         }
@@ -354,9 +354,9 @@ namespace BattletechPerformanceFix
             if (index < 0) {
                 index = 0;
             }
-            #if !VVV
+#if !VVV
             LogDebug(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
-            #endif
+#endif
 
 
             var toShow = filteredInventory.Skip(index).Take(itemLimit).ToList();
@@ -371,23 +371,23 @@ namespace BattletechPerformanceFix
                                     , lec.GetId());
             };
 
-            #if !VVV
+#if !VVV
             LogDebug("[LimitItems] Showing: " + string.Join(", ", toShow.Select(pp).ToArray()));
-            #endif
+#endif
 
             var details = new List<string>();
 
             toShow.ForEach(lec => {
-                var iw = icc[0]; icc.RemoveAt(0);
-                var cref = GetRef(lec);
-                iw.ClearEverything();
-                iw.ComponentRef = cref;
-                lec.ItemWidget = iw;
-                iw.SetData(lec, inventoryWidget, lec.quantity, false, null);
-                lec.SetupLook(iw);
-                iw.gameObject.SetActive(true);
-                details.Insert(0, string.Format("enabled {0} {1}", iw.ComponentRef.ComponentDefID, iw.GetComponent<UnityEngine.RectTransform>().anchoredPosition));
-            });
+                    var iw = icc[0]; icc.RemoveAt(0);
+                    var cref = GetRef(lec);
+                    iw.ClearEverything();
+                    iw.ComponentRef = cref;
+                    lec.ItemWidget = iw;
+                    iw.SetData(lec, inventoryWidget, lec.quantity, false, null);
+                    lec.SetupLook(iw);
+                    iw.gameObject.SetActive(true);
+                    details.Insert(0, string.Format("enabled {0} {1}", iw.ComponentRef.ComponentDefID, iw.GetComponent<UnityEngine.RectTransform>().anchoredPosition));
+                });
             icc.ForEach(unused => unused.gameObject.SetActive(false));
 
             var iw_corrupted_add = inventoryWidget.localInventory.Where(x => !ielCache.Contains(x)).ToList();
@@ -425,16 +425,16 @@ namespace BattletechPerformanceFix
             DummyEnd.sizeDelta = new UnityEngine.Vector2(100, virtualEndSize);
             DummyEnd.SetAsLastSibling();
             
-			new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
-            #if !VVV
+            new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
+#if !VVV
             var sr = new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
             LogDebug(string.Format( "[LimitItems] RefreshDone dummystart {0} dummyend {1} vnp {2} lli {3}"
-                                                , DummyStart.anchoredPosition.y
-                                                , DummyEnd.anchoredPosition.y
-                                                , sr.verticalNormalizedPosition
-                                                , "(" + string.Join(", ", details.ToArray()) + ")"
-                                                ));
-            #endif
+                                  , DummyStart.anchoredPosition.y
+                                  , DummyEnd.anchoredPosition.y
+                                  , sr.verticalNormalizedPosition
+                                  , "(" + string.Join(", ", details.ToArray()) + ")"
+                                  ));
+#endif
         }
 
         void Dispose() {
@@ -530,95 +530,95 @@ namespace BattletechPerformanceFix
 
         public static bool OnAddItem(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
         {
-                if (limitItems != null && limitItems.inventoryWidget == __instance) {
-                    try {
-                        var nlv = item as InventoryItemElement_NotListView;
-                        var quantity = nlv == null ? 1 : nlv.controller.quantity;
-                        var existing = limitItems.FetchItem(item.ComponentRef);
-                        if (existing == null) {
-                            LogDebug(string.Format("OnAddItem new {0}", quantity));
-                            var controller = nlv == null ? null : nlv.controller;
-                            if (controller == null) {
-                                if (item.ComponentRef.ComponentDefType == ComponentType.Weapon) {
-                                    var ncontroller = new ListElementController_InventoryWeapon_NotListView();
-                                    ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
-                                    controller = ncontroller;
-                                } else {
-                                    var ncontroller = new ListElementController_InventoryGear_NotListView();
-                                    ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
-                                    controller = ncontroller;
-                                }
+            if (limitItems != null && limitItems.inventoryWidget == __instance) {
+                try {
+                    var nlv = item as InventoryItemElement_NotListView;
+                    var quantity = nlv == null ? 1 : nlv.controller.quantity;
+                    var existing = limitItems.FetchItem(item.ComponentRef);
+                    if (existing == null) {
+                        LogDebug(string.Format("OnAddItem new {0}", quantity));
+                        var controller = nlv == null ? null : nlv.controller;
+                        if (controller == null) {
+                            if (item.ComponentRef.ComponentDefType == ComponentType.Weapon) {
+                                var ncontroller = new ListElementController_InventoryWeapon_NotListView();
+                                ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
+                                controller = ncontroller;
+                            } else {
+                                var ncontroller = new ListElementController_InventoryGear_NotListView();
+                                ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
+                                controller = ncontroller;
                             }
-                            limitItems.rawInventory.Add(controller);
-                            limitItems.rawInventory = limitItems.Sort(limitItems.rawInventory);
-                            limitItems.FilterChanged(false);
-                        } else {
-                            LogDebug(string.Format("OnAddItem existing {0}", quantity));
-                            if (existing.quantity != Int32.MinValue) {
-                                existing.ModifyQuantity(quantity);
-                            }
-                            limitItems.Refresh(false);
-                        }            
-                    } catch(Exception e) {
-                        LogException(e);
-                    }
-                    return false;
-                } else {
-                    return true;
+                        }
+                        limitItems.rawInventory.Add(controller);
+                        limitItems.rawInventory = limitItems.Sort(limitItems.rawInventory);
+                        limitItems.FilterChanged(false);
+                    } else {
+                        LogDebug(string.Format("OnAddItem existing {0}", quantity));
+                        if (existing.quantity != Int32.MinValue) {
+                            existing.ModifyQuantity(quantity);
+                        }
+                        limitItems.Refresh(false);
+                    }            
+                } catch(Exception e) {
+                    LogException(e);
                 }
+                return false;
+            } else {
+                return true;
+            }
         }
 
         public static bool OnRemoveItem(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
         {
-                if (limitItems != null && limitItems.inventoryWidget == __instance) {
-                    try {
-                        var nlv = item as InventoryItemElement_NotListView;
+            if (limitItems != null && limitItems.inventoryWidget == __instance) {
+                try {
+                    var nlv = item as InventoryItemElement_NotListView;
 
                     var existing = limitItems.FetchItem(item.ComponentRef);
                     if (existing == null) {
-                            LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
-                        } else {
-                            LogDebug(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
-                            if (existing.quantity != Int32.MinValue) {
-                                existing.ModifyQuantity(-1);
-                                if (existing.quantity < 1)
-                                    limitItems.rawInventory.Remove(existing);
-                            }
-                            limitItems.FilterChanged(false);
-                            limitItems.Refresh(false);
-                        }            
-                    } catch(Exception e) {
-                        LogException(e);
-                    }
-                    return false;
-                } else {
-                    return true;
+                        LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
+                    } else {
+                        LogDebug(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
+                        if (existing.quantity != Int32.MinValue) {
+                            existing.ModifyQuantity(-1);
+                            if (existing.quantity < 1)
+                                limitItems.rawInventory.Remove(existing);
+                        }
+                        limitItems.FilterChanged(false);
+                        limitItems.Refresh(false);
+                    }            
+                } catch(Exception e) {
+                    LogException(e);
                 }
+                return false;
+            } else {
+                return true;
+            }
         }
 
         public static bool OnApplyFiltering(MechLabInventoryWidget __instance, bool refreshPositioning)
         {
-                if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
-                    LogDebug(string.Format("OnApplyFiltering (refresh-pos? {0})", refreshPositioning));
-                    limitItems.FilterChanged(refreshPositioning);
-                    return false;
-                } else {
-                    return true;
-                }
+            if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
+                LogDebug(string.Format("OnApplyFiltering (refresh-pos? {0})", refreshPositioning));
+                limitItems.FilterChanged(refreshPositioning);
+                return false;
+            } else {
+                return true;
+            }
         }
 
         public static bool OnApplySorting(MechLabInventoryWidget __instance)
         {
-                if (limitItems != null && limitItems.inventoryWidget == __instance) {
-                    // it's a mechlab screen, we do our own sort.
-                    var _cs = new Traverse(__instance).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
-                    var cst = _cs.Method;
-                    LogDebug(string.Format("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
-                    limitItems.FilterChanged(false);
-                    return false;
-                } else {
-                    return true;
-                }
+            if (limitItems != null && limitItems.inventoryWidget == __instance) {
+                // it's a mechlab screen, we do our own sort.
+                var _cs = new Traverse(__instance).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+                var cst = _cs.Method;
+                LogDebug(string.Format("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
+                limitItems.FilterChanged(false);
+                return false;
+            } else {
+                return true;
+            }
         }
 
         public static bool MechCanEquipItem(InventoryItemElement_NotListView item)
@@ -632,8 +632,8 @@ namespace BattletechPerformanceFix
                     LogDebug(string.Format("OnItemGrab"));
                     var nlv = item as InventoryItemElement_NotListView;
                     var nlvtmp = limitItems.instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
-                                                                                                                              , BattleTechResourceType.UIModulePrefabs, null, null, null)
-                                                                                                            .GetComponent<InventoryItemElement_NotListView>();
+                                                                                  , BattleTechResourceType.UIModulePrefabs, null, null, null)
+                                           .GetComponent<InventoryItemElement_NotListView>();
                     var lec = nlv.controller;
                     var iw = nlvtmp;
                     var cref = limitItems.GetRef(lec);
