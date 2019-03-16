@@ -52,15 +52,15 @@ namespace BattletechPerformanceFix {
         public static T Identity<T>(T t) => t;
 
         public static K SafeCast<K>(this object t) where K : class
-            => (t as K).NullCheckError($"Safe cast failed of {t.GetType().FullName} to {typeof(K).FullName}");
+            => (t as K).LogIfNull($"Safe cast failed of {t.GetType().FullName} to {typeof(K).FullName}");
 
         // Do not use for unity Objects! 
-        public static T NullCheckError<T>(this T t, string msg) {
+        public static T LogIfNull<T>(this T t, string msg) {
             if (t == null) LogError($"{msg} from {new StackTrace(1).ToString()}");
             return t;
         }
 
-        public static T NullThrowError<T>(this T t, string msg) {
+        public static T ThrowIfNull<T>(this T t, string msg) {
             if (t == null) throw new System.Exception($"{msg} from {new StackTrace(1).ToString()}");
             return t;
         }
@@ -211,11 +211,11 @@ namespace BattletechPerformanceFix {
             var onType = new StackTrace().GetFrames()
                                          .Select(frame => frame.GetMethod().DeclaringType)
                                          .FirstOrDefault(dtype => dtype?.GetInterface(typeof(Feature).FullName) != null)
-                                         .NullCheckError($"Unable to find patchable type origin :for {new StackTrace().ToString()}");
-            method.NullCheckError($"Cannot patch a null method :from {onType.FullName ?? new StackTrace().ToString()}");
+                                         .LogIfNull($"Unable to find patchable type origin :for {new StackTrace().ToString()}");
+            method.LogIfNull($"Cannot patch a null method :from {onType.FullName ?? new StackTrace().ToString()}");
             var pnames = List(premethod, postmethod, transpilemethod);
             var patches = pnames
-                .Select(name => name == null ? null : onType.GetMethod(name, AccessTools.all).NullCheckError($"Missing patch method {name} on {onType.FullName}"))
+                .Select(name => name == null ? null : onType.GetMethod(name, AccessTools.all).LogIfNull($"Missing patch method {name} on {onType.FullName}"))
                 .Select(meth => meth == null ? null : new HarmonyMethod(meth).Let(h => { h.prioritiy = priority; return h; }))
                 .ToArray();
 
@@ -240,7 +240,7 @@ namespace BattletechPerformanceFix {
                                                     ?.GetGetMethod();
             else meth = (MethodBase)typeof(T).GetMethods(AccessTools.all)
                                              .FirstOrDefault(mm => mm.Name == method && mm.GetMethodBody() != null);
-            meth.NullCheckError($"Failed to find patchable function {method} on {typeof(T).FullName}");
+            meth.LogIfNull($"Failed to find patchable function {method} on {typeof(T).FullName}");
             meth.Patch(premethod, postmethod, transpilemethod, priority);
         }
 
