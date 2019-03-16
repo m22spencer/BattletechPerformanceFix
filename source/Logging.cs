@@ -65,19 +65,19 @@ namespace BattletechPerformanceFix
 
         public static void LogInfo(string message) {
             if (!Info) return;
-            Logging.Log($"[Info] {message}", false);
+            Logging.Log($"[Info] {message}", true);
             TrapSilently(() => Main.HBSLogger.Log(message));
         }
 
         // Can't hit the HBSLogger with debug/spam. It's too slow
         public static void LogDebug(string message) {
             if (!Debug) return;
-            Logging.Log($"[Debug] {message}", false);
+            Logging.Log($"[Debug] {message}", true);
         }
 
         public static void LogSpam(string message) {
             if (!Spam) return;
-            Logging.Log($"[Spam] {message}", false);
+            Logging.Log($"[Spam] {message}", true);
         }
     }
 }
