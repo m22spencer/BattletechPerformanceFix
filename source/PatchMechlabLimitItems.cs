@@ -4,7 +4,6 @@ using BattleTech.UI;
 using System.Collections.Generic;
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Diagnostics;
 using static BattletechPerformanceFix.Extensions;
 
@@ -12,8 +11,188 @@ namespace BattletechPerformanceFix
 {
     public class MechlabFix : Feature {
         public void Activate() {
-            PatchMechlabLimitItems.Initialize();
+            "BeginSalvageScreen".Pre<AAR_SalvageScreen>();
+            "PopulateInventory".Pre<MechLabPanel>();
+            "ConfirmRevertMech".Pre<MechLabPanel>();
+            "ExitMechLab".Pre<MechLabPanel>();
+            "LateUpdate".Pre<UnityEngine.UI.ScrollRect>();
+            "OnAddItem".Pre<MechLabInventoryWidget>();
+            "OnRemoveItem".Pre<MechLabInventoryWidget>();
+            "OnItemGrab".Pre<MechLabInventoryWidget>();
+            "ApplyFiltering".Pre<MechLabInventoryWidget>();
+            "MechCanEquipItem".Pre<MechLabPanel>();
+            "ApplySorting".Pre<MechLabInventoryWidget>();
+
+            // Fix some annoying seemingly vanilla log spam
+            "OnDestroy".Pre<InventoryItemElement_NotListView>(iel => { if(iel.iconMech != null) iel.iconMech.sprite = null;
+                                                                       return false; });
         }
+        public static PatchMechlabLimitItems state;
+
+        public static bool PopulateInventory_Pre(MechLabPanel __instance)
+        {
+            if (state != null) LogError("[LimitItems] PopulateInventory was not properly cleaned");
+            LogDebug("[LimitItems] PopulateInventory patching (Mechlab fix)");
+            state = new PatchMechlabLimitItems(__instance);
+            return false;
+        }
+
+        public static void BeginSalvageScreen_Pre()
+        {
+            // Only for logging purposes.
+            LogDebug("[LimitItems] Open Salvage screen");
+        }
+
+        public static void ConfirmRevertMech_Pre()
+        {
+            LogDebug("[LimitItems] RevertMech");
+        }
+
+        public static void ExitMechLab_Pre(MechLabPanel __instance)
+        {
+            if (state == null) { LogError("[LimitItems] Unhandled ExitMechLab"); return; }
+            LogDebug("[LimitItems] Exiting mechlab");
+            state.Dispose();
+            state = null;
+        }
+
+        public static void LateUpdate_Pre(UnityEngine.UI.ScrollRect __instance)
+        {
+            if (state != null && new Traverse(state.inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() == __instance) {
+                var newIndex = (int)((state.endIndex) * (1.0f - __instance.verticalNormalizedPosition));
+                if (state.filteredInventory.Count < PatchMechlabLimitItems.itemsOnScreen) {
+                    newIndex = 0;
+                }
+                if (state.index != newIndex) {
+                    state.index = newIndex;
+                    LogDebug(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
+                    state.Refresh(false);
+                }
+            }        
+        }
+
+        public static bool OnAddItem_Pre(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
+        {
+            if (state != null && state.inventoryWidget == __instance) {
+                try {
+                    var nlv = item as InventoryItemElement_NotListView;
+                    var quantity = nlv == null ? 1 : nlv.controller.quantity;
+                    var existing = state.FetchItem(item.ComponentRef);
+                    if (existing == null) {
+                        LogDebug(string.Format("OnAddItem new {0}", quantity));
+                        var controller = nlv == null ? null : nlv.controller;
+                        if (controller == null) {
+                            if (item.ComponentRef.ComponentDefType == ComponentType.Weapon) {
+                                var ncontroller = new ListElementController_InventoryWeapon_NotListView();
+                                ncontroller.InitAndCreate(item.ComponentRef, state.instance.dataManager, state.inventoryWidget, quantity, false);
+                                controller = ncontroller;
+                            } else {
+                                var ncontroller = new ListElementController_InventoryGear_NotListView();
+                                ncontroller.InitAndCreate(item.ComponentRef, state.instance.dataManager, state.inventoryWidget, quantity, false);
+                                controller = ncontroller;
+                            }
+                        }
+                        state.rawInventory.Add(controller);
+                        state.rawInventory = state.Sort(state.rawInventory);
+                        state.FilterChanged(false);
+                    } else {
+                        LogDebug(string.Format("OnAddItem existing {0}", quantity));
+                        if (existing.quantity != Int32.MinValue) {
+                            existing.ModifyQuantity(quantity);
+                        }
+                        state.Refresh(false);
+                    }            
+                } catch(Exception e) {
+                    LogException(e);
+                }
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        public static bool OnRemoveItem_Pre(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
+        {
+            if (state != null && state.inventoryWidget == __instance) {
+                try {
+                    var nlv = item as InventoryItemElement_NotListView;
+
+                    var existing = state.FetchItem(item.ComponentRef);
+                    if (existing == null) {
+                        LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
+                    } else {
+                        LogDebug(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
+                        if (existing.quantity != Int32.MinValue) {
+                            existing.ModifyQuantity(-1);
+                            if (existing.quantity < 1)
+                                state.rawInventory.Remove(existing);
+                        }
+                        state.FilterChanged(false);
+                        state.Refresh(false);
+                    }            
+                } catch(Exception e) {
+                    LogException(e);
+                }
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        public static bool ApplyFiltering_Pre(MechLabInventoryWidget __instance, bool refreshPositioning)
+        {
+            if (state != null && state.inventoryWidget == __instance && !PatchMechlabLimitItems.filterGuard) {
+                LogDebug(string.Format("OnApplyFiltering (refresh-pos? {0})", refreshPositioning));
+                state.FilterChanged(refreshPositioning);
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        public static bool ApplySorting_Pre(MechLabInventoryWidget __instance)
+        {
+            if (state != null && state.inventoryWidget == __instance) {
+                // it's a mechlab screen, we do our own sort.
+                var _cs = new Traverse(__instance).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+                var cst = _cs.Method;
+                LogDebug(string.Format("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
+                state.FilterChanged(false);
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        public static bool MechCanEquipItem_Pre(InventoryItemElement_NotListView item)
+        {
+            return item.ComponentRef == null ? false : true;
+        }
+        
+        public static void OnItemGrab_Pre(MechLabInventoryWidget __instance, ref IMechLabDraggableItem item) {
+            if (state != null && state.inventoryWidget == __instance) {
+                try {
+                    LogDebug(string.Format("OnItemGrab"));
+                    var nlv = item as InventoryItemElement_NotListView;
+                    var nlvtmp = state.instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
+                                                                             , BattleTechResourceType.UIModulePrefabs, null, null, null)
+                                      .GetComponent<InventoryItemElement_NotListView>();
+                    var lec = nlv.controller;
+                    var iw = nlvtmp;
+                    var cref = state.GetRef(lec);
+                    iw.ClearEverything();
+                    iw.ComponentRef = cref;
+                    lec.ItemWidget = iw;
+                    iw.SetData(lec, state.inventoryWidget, lec.quantity, false, null);
+                    lec.SetupLook(iw);
+                    iw.gameObject.SetActive(true);
+                    item = iw;
+                } catch(Exception e) {
+                    LogException(e);
+                }
+            }
+        }
+
     }
 
     /* This patch fixes the slow inventory list creation within the mechlab. Without the fix, it manifests as a very long loadscreen where the indicator is frozen.
@@ -28,23 +207,23 @@ namespace BattletechPerformanceFix
        The user only sees 8 items at once, and they're expensive to create, so only make 8 of them.
     */
     public class PatchMechlabLimitItems {
-        MechLabPanel instance;
-        MechLabInventoryWidget inventoryWidget;
+        public MechLabPanel instance;
+        public MechLabInventoryWidget inventoryWidget;
 
-        List<InventoryItemElement_NotListView> ielCache;
+        public List<InventoryItemElement_NotListView> ielCache;
 
-        List<ListElementController_BASE_NotListView> rawInventory;
-        List<ListElementController_BASE_NotListView> filteredInventory;
+        public List<ListElementController_BASE_NotListView> rawInventory;
+        public List<ListElementController_BASE_NotListView> filteredInventory;
 
         // Index of current item element at the top of scrollrect
-        int index = 0;
+        public int index = 0;
 
-        int endIndex = 0;
+        public int endIndex = 0;
 
         // Temporary visual element used in the filter process.
-        InventoryItemElement_NotListView iieTmp;
+        public InventoryItemElement_NotListView iieTmp;
 
-        PatchMechlabLimitItems(MechLabPanel instance) {
+        public PatchMechlabLimitItems(MechLabPanel instance) {
             try {
                 var sw = new Stopwatch();
                 sw.Start();
@@ -120,12 +299,12 @@ namespace BattletechPerformanceFix
             }
         }
 
-        ListElementController_BASE_NotListView FetchItem(MechComponentRef mcr)
+        public ListElementController_BASE_NotListView FetchItem(MechComponentRef mcr)
         {
             return rawInventory.Where(ri => ri.componentDef == mcr.Def && mcr.DamageLevel == GetRef(ri).DamageLevel).FirstOrDefault();
         }
 
-        MechLabDraggableItemType ToDraggableType(MechComponentDef def) {
+        public MechLabDraggableItemType ToDraggableType(MechComponentDef def) {
             switch(def.ComponentType) {
             case ComponentType.NotSet: return MechLabDraggableItemType.NOT_SET;
             case ComponentType.Weapon: return MechLabDraggableItemType.InventoryWeapon;
@@ -142,7 +321,7 @@ namespace BattletechPerformanceFix
         /* Fast sort, which works off data, rather than visual elements. 
            Since only 7 visual elements are allocated, this is required.
         */
-        List<ListElementController_BASE_NotListView> Sort(List<ListElementController_BASE_NotListView> items) {
+        public List<ListElementController_BASE_NotListView> Sort(List<ListElementController_BASE_NotListView> items) {
             LogSpam($"Sorting: {items.Select(item => GetRef(item).ComponentDefID).ToArray().Dump(false)}");
 
             var sw = Stopwatch.StartNew();
@@ -186,7 +365,7 @@ namespace BattletechPerformanceFix
 
         /* Fast filtering code which works off the data, rather than the visual elements.
            Suboptimal due to potential desyncs with normal filter proceedure, but simply required for performance */
-        List<ListElementController_BASE_NotListView> Filter(List<ListElementController_BASE_NotListView> _items) {
+        public List<ListElementController_BASE_NotListView> Filter(List<ListElementController_BASE_NotListView> _items) {
             var items = Sort(_items);
 
             var iw = new Traverse(inventoryWidget);
@@ -235,7 +414,7 @@ namespace BattletechPerformanceFix
         /* Most mods hook the visual element code to filter. This function will do that as quickly as possible
            by re-using a single visual element.
         */
-        List<ListElementController_BASE_NotListView> FilterUsingHBSCode(List<ListElementController_BASE_NotListView> items) {
+        public List<ListElementController_BASE_NotListView> FilterUsingHBSCode(List<ListElementController_BASE_NotListView> items) {
             try {
                 var sw = new Stopwatch();
                 sw.Start();
@@ -280,7 +459,7 @@ namespace BattletechPerformanceFix
             }
         }
 
-        MechComponentRef GetRef(ListElementController_BASE_NotListView lec) {
+        public MechComponentRef GetRef(ListElementController_BASE_NotListView lec) {
             if (lec is ListElementController_InventoryWeapon_NotListView) return (lec as ListElementController_InventoryWeapon_NotListView).componentRef;
             if (lec is ListElementController_InventoryGear_NotListView) return (lec as ListElementController_InventoryGear_NotListView).componentRef;
             LogError("[LimitItems] lec is not gear or weapon: " + lec.GetId());
@@ -317,7 +496,7 @@ namespace BattletechPerformanceFix
             }
         }
 
-        void Refresh(bool wantClobber = true) {
+        public void Refresh(bool wantClobber = true) {
             LogDebug(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
             if (index > filteredInventory.Count - itemsOnScreen) {
                 index = filteredInventory.Count - itemsOnScreen;
@@ -367,12 +546,12 @@ namespace BattletechPerformanceFix
             var iw_corrupted_add = inventoryWidget.localInventory.Where(x => !ielCache.Contains(x)).ToList();
             if (iw_corrupted_add.Count > 0) {
                 LogError("inventoryWidget has been corrupted, items were added: " + string.Join(", ", iw_corrupted_add.Select(c => c.controller).Select(pp).ToArray()));
-                OnExitMechLab.Invoke(instance, new object[] {});
+                instance.ExitMechLab();
             }
             var iw_corrupted_remove = ielCache.Where(x => !inventoryWidget.localInventory.Contains(x)).ToList();
             if (iw_corrupted_remove.Count > 0) {
                 LogError("inventoryWidget has been corrupted, items were removed");
-                OnExitMechLab.Invoke(instance, new object[] {});
+                instance.ExitMechLab();
             }
 
             var listElemSize = 64.0f;
@@ -411,217 +590,18 @@ namespace BattletechPerformanceFix
 #endif
         }
 
-        void Dispose() {
+        public void Dispose() {
             inventoryWidget.localInventory.ForEach(ii => ii.controller = null);
         }
 
-        static int itemsOnScreen = 7;
+        public readonly static int itemsOnScreen = 7;
 
         // Maximum # of visual elements to allocate (will be used for slightly off screen elements.)
-        static int itemLimit = 8;
+        public readonly static int itemLimit = 8;
         public static UnityEngine.RectTransform DummyStart; 
         public static UnityEngine.RectTransform DummyEnd;
         public static PatchMechlabLimitItems limitItems = null;
-        static MethodInfo OnPopulateInventory = AccessTools.Method(typeof(MechLabPanel), "PopulateInventory");
-        static MethodInfo OnConfirmRevertMech = AccessTools.Method(typeof(MechLabPanel), "ConfirmRevertMech");
-        static MethodInfo OnExitMechLab       = AccessTools.Method(typeof(MechLabPanel), "ExitMechLab");
 
-        static bool filterGuard = false;
-        public static void Initialize() {
-            var self = typeof(PatchMechlabLimitItems);
-            Hook.Prefix( AccessTools.Method(typeof(AAR_SalvageScreen), "BeginSalvageScreen")
-                       , self.GetMethod("OpenSalvageScreen"));
-            Hook.Prefix(OnPopulateInventory, self.GetMethod("PopulateInventory"));
-
-            Hook.Prefix(OnConfirmRevertMech, self.GetMethod("ConfirmRevertMech"));
-
-            Hook.Prefix(OnExitMechLab, self.GetMethod("ExitMechLab"));
-
-            var onLateUpdate = AccessTools.Method(typeof(UnityEngine.UI.ScrollRect), "LateUpdate");
-            Hook.Prefix(onLateUpdate, self.GetMethod("LateUpdate"));
-
-            var onAddItem = AccessTools.Method(typeof(MechLabInventoryWidget), "OnAddItem");
-            Hook.Prefix(onAddItem, self.GetMethod("OnAddItem"));
-
-            var onRemoveItem = AccessTools.Method(typeof(MechLabInventoryWidget), "OnRemoveItem");
-            Hook.Prefix(onRemoveItem, self.GetMethod("OnRemoveItem"));
-
-            var onItemGrab = AccessTools.Method(typeof(MechLabInventoryWidget), "OnItemGrab");
-            Hook.Prefix(onItemGrab, AccessTools.Method(typeof(PatchMechlabLimitItems), "ItemGrabPrefix"));
-
-            var onApplyFiltering = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplyFiltering");
-            Hook.Prefix(onApplyFiltering, self.GetMethod("OnApplyFiltering"));
-
-            /* FIXME: It's possible for some elements to be in an improper state to this function call. Drop if so.
-             */
-            Hook.Prefix(AccessTools.Method(typeof(MechLabPanel), "MechCanEquipItem"), self.GetMethod("MechCanEquipItem"));
-
-            var onApplySorting = AccessTools.Method(typeof(MechLabInventoryWidget), "ApplySorting");
-            Hook.Prefix(onApplySorting, self.GetMethod("OnApplySorting"), Priority.Last);
-        }
-
-        public static bool PopulateInventory(MechLabPanel __instance)
-        {
-            if (limitItems != null) LogError("[LimitItems] PopulateInventory was not properly cleaned");
-            LogDebug("[LimitItems] PopulateInventory patching (Mechlab fix)");
-            limitItems = new PatchMechlabLimitItems(__instance);
-            return false;
-        }
-
-        public static void OpenSalvageScreen()
-        {
-            // Only for logging purposes.
-            LogDebug("[LimitItems] Open Salvage screen");
-        }
-
-        public static void ConfirmRevertMech()
-        {
-            LogDebug("[LimitItems] RevertMech");
-        }
-
-        public static void ExitMechLab(MechLabPanel __instance)
-        {
-            if (limitItems == null) { LogError("[LimitItems] Unhandled ExitMechLab"); return; }
-            LogDebug("[LimitItems] Exiting mechlab");
-            limitItems.Dispose();
-            limitItems = null;
-        }
-
-        public static void LateUpdate(UnityEngine.UI.ScrollRect __instance)
-        {
-            if (limitItems != null && new Traverse(limitItems.inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() == __instance) {
-                var newIndex = (int)((limitItems.endIndex) * (1.0f - __instance.verticalNormalizedPosition));
-                if (limitItems.filteredInventory.Count < itemsOnScreen) {
-                    newIndex = 0;
-                }
-                if (limitItems.index != newIndex) {
-                    limitItems.index = newIndex;
-                    LogDebug(string.Format("[LimitItems] Refresh with: {0} {1}", newIndex, __instance.verticalNormalizedPosition));
-                    limitItems.Refresh(false);
-                }
-            }        
-        }
-
-        public static bool OnAddItem(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
-        {
-            if (limitItems != null && limitItems.inventoryWidget == __instance) {
-                try {
-                    var nlv = item as InventoryItemElement_NotListView;
-                    var quantity = nlv == null ? 1 : nlv.controller.quantity;
-                    var existing = limitItems.FetchItem(item.ComponentRef);
-                    if (existing == null) {
-                        LogDebug(string.Format("OnAddItem new {0}", quantity));
-                        var controller = nlv == null ? null : nlv.controller;
-                        if (controller == null) {
-                            if (item.ComponentRef.ComponentDefType == ComponentType.Weapon) {
-                                var ncontroller = new ListElementController_InventoryWeapon_NotListView();
-                                ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
-                                controller = ncontroller;
-                            } else {
-                                var ncontroller = new ListElementController_InventoryGear_NotListView();
-                                ncontroller.InitAndCreate(item.ComponentRef, limitItems.instance.dataManager, limitItems.inventoryWidget, quantity, false);
-                                controller = ncontroller;
-                            }
-                        }
-                        limitItems.rawInventory.Add(controller);
-                        limitItems.rawInventory = limitItems.Sort(limitItems.rawInventory);
-                        limitItems.FilterChanged(false);
-                    } else {
-                        LogDebug(string.Format("OnAddItem existing {0}", quantity));
-                        if (existing.quantity != Int32.MinValue) {
-                            existing.ModifyQuantity(quantity);
-                        }
-                        limitItems.Refresh(false);
-                    }            
-                } catch(Exception e) {
-                    LogException(e);
-                }
-                return false;
-            } else {
-                return true;
-            }
-        }
-
-        public static bool OnRemoveItem(MechLabInventoryWidget __instance, IMechLabDraggableItem item)
-        {
-            if (limitItems != null && limitItems.inventoryWidget == __instance) {
-                try {
-                    var nlv = item as InventoryItemElement_NotListView;
-
-                    var existing = limitItems.FetchItem(item.ComponentRef);
-                    if (existing == null) {
-                        LogError(string.Format("OnRemoveItem new (should be impossible?) {0}", nlv.controller.quantity));
-                    } else {
-                        LogDebug(string.Format("OnRemoveItem existing {0}", nlv.controller.quantity));
-                        if (existing.quantity != Int32.MinValue) {
-                            existing.ModifyQuantity(-1);
-                            if (existing.quantity < 1)
-                                limitItems.rawInventory.Remove(existing);
-                        }
-                        limitItems.FilterChanged(false);
-                        limitItems.Refresh(false);
-                    }            
-                } catch(Exception e) {
-                    LogException(e);
-                }
-                return false;
-            } else {
-                return true;
-            }
-        }
-
-        public static bool OnApplyFiltering(MechLabInventoryWidget __instance, bool refreshPositioning)
-        {
-            if (limitItems != null && limitItems.inventoryWidget == __instance && !filterGuard) {
-                LogDebug(string.Format("OnApplyFiltering (refresh-pos? {0})", refreshPositioning));
-                limitItems.FilterChanged(refreshPositioning);
-                return false;
-            } else {
-                return true;
-            }
-        }
-
-        public static bool OnApplySorting(MechLabInventoryWidget __instance)
-        {
-            if (limitItems != null && limitItems.inventoryWidget == __instance) {
-                // it's a mechlab screen, we do our own sort.
-                var _cs = new Traverse(__instance).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
-                var cst = _cs.Method;
-                LogDebug(string.Format("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
-                limitItems.FilterChanged(false);
-                return false;
-            } else {
-                return true;
-            }
-        }
-
-        public static bool MechCanEquipItem(InventoryItemElement_NotListView item)
-        {
-            return item.ComponentRef == null ? false : true;
-        }
-        
-        public static void ItemGrabPrefix(MechLabInventoryWidget __instance, ref IMechLabDraggableItem item) {
-            if (limitItems != null && limitItems.inventoryWidget == __instance) {
-                try {
-                    LogDebug(string.Format("OnItemGrab"));
-                    var nlv = item as InventoryItemElement_NotListView;
-                    var nlvtmp = limitItems.instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
-                                                                                  , BattleTechResourceType.UIModulePrefabs, null, null, null)
-                                           .GetComponent<InventoryItemElement_NotListView>();
-                    var lec = nlv.controller;
-                    var iw = nlvtmp;
-                    var cref = limitItems.GetRef(lec);
-                    iw.ClearEverything();
-                    iw.ComponentRef = cref;
-                    lec.ItemWidget = iw;
-                    iw.SetData(lec, limitItems.inventoryWidget, lec.quantity, false, null);
-                    lec.SetupLook(iw);
-                    iw.gameObject.SetActive(true);
-                    item = iw;
-                } catch(Exception e) {
-                    LogException(e);
-                }
-            }
-        }
+        public static bool filterGuard = false;
     }
 }
