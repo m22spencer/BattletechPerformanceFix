@@ -16,24 +16,6 @@ namespace BattletechPerformanceFix
         }
     }
 
-
-    // Deprecated, will be removed.
-    public class DefAndCount {
-        public MechComponentRef ComponentRef;
-        public int Count;
-        public DefAndCount(MechComponentRef componentRef, int count) {
-            this.ComponentRef = componentRef;
-            this.Count = count;
-        }
-
-        public void Decr() {
-            if (Count != int.MinValue) Count--;
-        }
-        public void Incr() {
-            if (Count != int.MinValue) Count++;
-        }
-    }
-
     /* This patch fixes the slow inventory list creation within the mechlab. Without the fix, it manifests as a very long loadscreen where the indicator is frozen.
        
        The core of the problem is a lack of separation between Data & Visuals.
@@ -48,9 +30,6 @@ namespace BattletechPerformanceFix
     public class PatchMechlabLimitItems {
         MechLabPanel instance;
         MechLabInventoryWidget inventoryWidget;
-
-        // Deprecated, will be removed.
-        List<DefAndCount> inventory;
 
         List<InventoryItemElement_NotListView> ielCache;
 
@@ -78,25 +57,21 @@ namespace BattletechPerformanceFix
 
                 LogDebug($"Mechbay Patch initialized :simGame? {instance.IsSimGame}");
 
-                inventory = instance.storageInventory.Select(mcr =>
-                    {
-                        mcr.DataManager = instance.dataManager;
-                        mcr.RefreshComponentDef();
-                        var num = !instance.IsSimGame
-                        ? int.MinValue
-                        : instance.sim.GetItemCount(mcr.Def.Description, mcr.Def.GetType(), instance.sim.GetItemCountDamageType(mcr));
-                        return new DefAndCount(mcr, num);
-                    }).ToList();
-
                 /* Build a list of data only for all components. */
-                rawInventory = inventory.Select<DefAndCount, ListElementController_BASE_NotListView>(dac => {
-                        if (dac.ComponentRef.ComponentDefType == ComponentType.Weapon) {
+                rawInventory = instance.storageInventory.Select<MechComponentRef, ListElementController_BASE_NotListView>(componentRef => {
+                        componentRef.DataManager = instance.dataManager;
+                        componentRef.RefreshComponentDef();
+                        var count = (!instance.IsSimGame
+                                      ? int.MinValue
+                                      : instance.sim.GetItemCount(componentRef.Def.Description, componentRef.Def.GetType(), instance.sim.GetItemCountDamageType(componentRef)));
+
+                        if (componentRef.ComponentDefType == ComponentType.Weapon) {
                             ListElementController_InventoryWeapon_NotListView controller = new ListElementController_InventoryWeapon_NotListView();
-                            controller.InitAndFillInSpecificWidget(dac.ComponentRef, null, instance.dataManager, null, dac.Count, false);
+                            controller.InitAndFillInSpecificWidget(componentRef, null, instance.dataManager, null, count, false);
                             return controller;
                         } else {
                             ListElementController_InventoryGear_NotListView controller = new ListElementController_InventoryGear_NotListView();
-                            controller.InitAndFillInSpecificWidget(dac.ComponentRef, null, instance.dataManager, null, dac.Count, false);
+                            controller.InitAndFillInSpecificWidget(componentRef, null, instance.dataManager, null, count, false);
                             return controller;
                         }
                     }).ToList();
@@ -126,7 +101,6 @@ namespace BattletechPerformanceFix
                 var li = new Traverse(inventoryWidget).Field("localInventory").GetValue<List<InventoryItemElement_NotListView>>();
                 ielCache.ForEach(iw => li.Add(iw));
                 // End
-
 
 
                 var lp = new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>();
