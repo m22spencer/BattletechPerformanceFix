@@ -507,10 +507,7 @@ namespace BattletechPerformanceFix
             if (index < 0) {
                 index = 0;
             }
-#if !VVV
-            LogDebug(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
-#endif
-
+            if (Spam) LogSpam(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
 
             var toShow = filteredInventory.Skip(index).Take(itemLimit).ToList();
 
@@ -524,9 +521,7 @@ namespace BattletechPerformanceFix
                                     , lec.GetId());
             };
 
-#if !VVV
-            LogDebug("[LimitItems] Showing: " + string.Join(", ", toShow.Select(pp).ToArray()));
-#endif
+            if (Spam) LogSpam("[LimitItems] Showing: " + string.Join(", ", toShow.Select(pp).ToArray()));
 
             var details = new List<string>();
 
@@ -579,15 +574,14 @@ namespace BattletechPerformanceFix
             DummyEnd.SetAsLastSibling();
             
             new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
-#if !VVV
-            var sr = new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
-            LogDebug(string.Format( "[LimitItems] RefreshDone dummystart {0} dummyend {1} vnp {2} lli {3}"
-                                  , DummyStart.anchoredPosition.y
-                                  , DummyEnd.anchoredPosition.y
-                                  , sr.verticalNormalizedPosition
-                                  , "(" + string.Join(", ", details.ToArray()) + ")"
-                                  ));
-#endif
+            if (Spam) { var sr = new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
+                        LogSpam(string.Format( "[LimitItems] RefreshDone dummystart {0} dummyend {1} vnp {2} lli {3}"
+                                             , DummyStart.anchoredPosition.y
+                                             , DummyEnd.anchoredPosition.y
+                                             , sr.verticalNormalizedPosition
+                                             , "(" + string.Join(", ", details.ToArray()) + ")"
+                                             ));
+            }
         }
 
         public void Dispose() {
