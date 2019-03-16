@@ -228,38 +228,44 @@ namespace BattletechPerformanceFix
                 var sw = new Stopwatch();
                 sw.Start();
                 this.instance = instance;
-                this.inventoryWidget = new Traverse(instance).Field("inventoryWidget").GetValue<MechLabInventoryWidget>();
+                this.inventoryWidget = new Traverse(instance).Field("inventoryWidget")
+                                                             .GetValue<MechLabInventoryWidget>()
+                                                             .LogIfNull("inventoryWidget is null");
 
                 if (instance.IsSimGame) {
-                    new Traverse(instance).Field("originalStorageInventory").SetValue(instance.storageInventory);
+                    new Traverse(instance).Field("originalStorageInventory").SetValue(instance.storageInventory.LogIfNull("storageInventory is null"));
                 }
 
                 LogDebug($"Mechbay Patch initialized :simGame? {instance.IsSimGame}");
 
+                List<ListElementController_BASE_NotListView> BuildRawInventory()
+                    => instance.storageInventory.Select<MechComponentRef, ListElementController_BASE_NotListView>(componentRef => {
+                            componentRef.LogIfNull("componentRef is null");
+                            componentRef.DataManager = instance.dataManager.LogIfNull("(MechLabPanel instance).dataManager is null");
+                            componentRef.RefreshComponentDef();
+                            componentRef.Def.LogIfNull("componentRef.Def is null");
+                            var count = (!instance.IsSimGame
+                                          ? int.MinValue
+                                          : instance.sim.GetItemCount(componentRef.Def.Description, componentRef.Def.GetType(), instance.sim.GetItemCountDamageType(componentRef)));
+
+                            if (componentRef.ComponentDefType == ComponentType.Weapon) {
+                                ListElementController_InventoryWeapon_NotListView controller = new ListElementController_InventoryWeapon_NotListView();
+                                controller.InitAndFillInSpecificWidget(componentRef, null, instance.dataManager, null, count, false);
+                                return controller;
+                            } else {
+                                ListElementController_InventoryGear_NotListView controller = new ListElementController_InventoryGear_NotListView();
+                                controller.InitAndFillInSpecificWidget(componentRef, null, instance.dataManager, null, count, false);
+                                return controller;
+                            }
+                        }).ToList();
                 /* Build a list of data only for all components. */
-                rawInventory = instance.storageInventory.Select<MechComponentRef, ListElementController_BASE_NotListView>(componentRef => {
-                        componentRef.DataManager = instance.dataManager;
-                        componentRef.RefreshComponentDef();
-                        var count = (!instance.IsSimGame
-                                      ? int.MinValue
-                                      : instance.sim.GetItemCount(componentRef.Def.Description, componentRef.Def.GetType(), instance.sim.GetItemCountDamageType(componentRef)));
+                rawInventory = Sort(BuildRawInventory());
 
-                        if (componentRef.ComponentDefType == ComponentType.Weapon) {
-                            ListElementController_InventoryWeapon_NotListView controller = new ListElementController_InventoryWeapon_NotListView();
-                            controller.InitAndFillInSpecificWidget(componentRef, null, instance.dataManager, null, count, false);
-                            return controller;
-                        } else {
-                            ListElementController_InventoryGear_NotListView controller = new ListElementController_InventoryGear_NotListView();
-                            controller.InitAndFillInSpecificWidget(componentRef, null, instance.dataManager, null, count, false);
-                            return controller;
-                        }
-                    }).ToList();
-                rawInventory = Sort(rawInventory);
-
-                Func<bool, InventoryItemElement_NotListView> mkiie = (bool nonexistant) => {
+                InventoryItemElement_NotListView mkiie(bool nonexistant) {
                     var nlv = instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
                                                                     , BattleTechResourceType.UIModulePrefabs, null, null, null)
-                                      .GetComponent<InventoryItemElement_NotListView>();
+                                      .GetComponent<InventoryItemElement_NotListView>()
+                                      .LogIfNull("Inventory_Element_prefab does not contain a NLV");
                     if (!nonexistant) {
                         nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>());
                         nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
@@ -274,13 +280,15 @@ namespace BattletechPerformanceFix
                    It's the difference between a couple of milliseconds and several seconds for many unique items in inventory 
                    This is the core of the fix, the rest is just to make it work within HBS's existing code.
                 */
-                ielCache = Enumerable.Repeat<Func<InventoryItemElement_NotListView>>( () => mkiie(false), itemLimit)
-                                     .Select(thunk => thunk())
-                                     .ToList();
+                List<InventoryItemElement_NotListView> make_ielCache()
+                    => Enumerable.Repeat<Func<InventoryItemElement_NotListView>>( () => mkiie(false), itemLimit)
+                                 .Select(thunk => thunk())
+                                 .ToList();
+                ielCache = make_ielCache();
+                    
                 var li = new Traverse(inventoryWidget).Field("localInventory").GetValue<List<InventoryItemElement_NotListView>>();
                 ielCache.ForEach(iw => li.Add(iw));
                 // End
-
 
                 var lp = new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>();
 
