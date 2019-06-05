@@ -21,7 +21,7 @@ namespace BattletechPerformanceFix
         public string logLevel = "debug";
         public Dictionary<string,bool> features = new Dictionary<string,bool>();
 
-        public bool WantContractsLagFixVerify = true;
+        public bool WantContractsLagFixVerify = false;
     }
 
     public static class Main
@@ -88,7 +88,7 @@ namespace BattletechPerformanceFix
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(DataLoaderGetEntryCheck), true },
                     { typeof(ShopTabLagFix), true },
-                    { typeof(ContractLagFix), false },
+                    { typeof(ContractLagFix), true },
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(ExtraLogging), true },
                     { typeof(ShaderDependencyOverride), true },
