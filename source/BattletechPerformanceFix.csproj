@@ -94,15 +94,16 @@
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="ExtraLogging.cs" />
+    <Compile Include="GhostBlipOverride.cs" />
     <Compile Include="Logging.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Extensions.cs" />
-    <Compile Include="BTLightControllerThrottle.cs" />
     <Compile Include="HarmonyExt.cs" />
     <Compile Include="DataLoaderGetEntryCheck.cs" />
     <Compile Include="NoSalvageSoftlock.cs" />
     <Compile Include="LazyRoomInitialization.cs" />
     <Compile Include="LoadFixes.cs" />
+    <Compile Include="ShaderDependencyOverride.cs" />
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
     <Compile Include="EnableLoggingDuringLoads.cs" />

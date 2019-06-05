@@ -65,7 +65,7 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var WantVersions = new string[] { "1.4.", "1.5." };
+                var WantVersions = new string[] { "1.6" };
                 if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
                 {
                     LogInfo(string.Format("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion));
@@ -87,11 +87,12 @@ namespace BattletechPerformanceFix
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
                     { typeof(DataLoaderGetEntryCheck), true },
-                    { typeof(BTLightControllerThrottle), false },
                     { typeof(ShopTabLagFix), true },
                     { typeof(ContractLagFix), false },
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(ExtraLogging), true },
+                    { typeof(ShaderDependencyOverride), true },
+                    { typeof(GhostBlipOverride), true },
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
