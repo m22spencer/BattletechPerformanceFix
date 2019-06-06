@@ -264,11 +264,14 @@ namespace BattletechPerformanceFix
                 InventoryItemElement_NotListView mkiie(bool nonexistant) {
                     var nlv = instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
                                                                     , BattleTechResourceType.UIModulePrefabs, null, null, null)
+                                      .ThrowIfNull("Unable to instantiate INVENTORY_ELEMENT_PREFAB_NotListView")
                                       .GetComponent<InventoryItemElement_NotListView>()
-                                      .LogIfNull("Inventory_Element_prefab does not contain a NLV");
+                                      .ThrowIfNull("Inventory_Element_prefab does not contain a NLV");
+                    nlv.gameObject.IsDestroyedError("NLV gameObject has been destroyed");
+                    nlv.gameObject.ThrowIfNull("NLV gameObject has been destroyed");
                     if (!nonexistant) {
-                        nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>());
-                        nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>(), false);
+                        nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>().ThrowIfNull("inventoryRadioSet is null"));
+                        nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>().ThrowIfNull("listParent is null"), false);
                         nlv.gameObject.transform.localScale = UnityEngine.Vector3.one;
                     }
                     return nlv;
