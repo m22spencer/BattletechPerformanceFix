@@ -232,6 +232,8 @@ namespace BattletechPerformanceFix
                                                              .GetValue<MechLabInventoryWidget>()
                                                              .LogIfNull("inventoryWidget is null");
 
+                LogDebug($"StorageInventory contains {instance.storageInventory.Count}");
+
                 if (instance.IsSimGame) {
                     new Traverse(instance).Field("originalStorageInventory").SetValue(instance.storageInventory.LogIfNull("storageInventory is null"));
                 }
@@ -264,14 +266,14 @@ namespace BattletechPerformanceFix
                 InventoryItemElement_NotListView mkiie(bool nonexistant) {
                     var nlv = instance.dataManager.PooledInstantiate( ListElementController_BASE_NotListView.INVENTORY_ELEMENT_PREFAB_NotListView
                                                                     , BattleTechResourceType.UIModulePrefabs, null, null, null)
-                                      .ThrowIfNull("Unable to instantiate INVENTORY_ELEMENT_PREFAB_NotListView")
+                                      .LogIfNull("Unable to instantiate INVENTORY_ELEMENT_PREFAB_NotListView")
                                       .GetComponent<InventoryItemElement_NotListView>()
-                                      .ThrowIfNull("Inventory_Element_prefab does not contain a NLV");
+                                      .LogIfNull("Inventory_Element_prefab does not contain a NLV");
                     nlv.gameObject.IsDestroyedError("NLV gameObject has been destroyed");
-                    nlv.gameObject.ThrowIfNull("NLV gameObject has been destroyed");
+                    nlv.gameObject.LogIfNull("NLV gameObject has been destroyed");
                     if (!nonexistant) {
-                        nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>().ThrowIfNull("inventoryRadioSet is null"));
-                        nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>().ThrowIfNull("listParent is null"), false);
+                        nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>().LogIfNull("inventoryRadioSet is null"));
+                        nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>().LogIfNull("listParent is null"), false);
                         nlv.gameObject.transform.localScale = UnityEngine.Vector3.one;
                     }
                     return nlv;
@@ -461,7 +463,7 @@ namespace BattletechPerformanceFix
                         return yes;
                     }).ToList();
                 inventoryWidget.localInventory = tmp;
-                LogInfo(string.Format("Filter took {0} ms and resulted in {1} items", sw.Elapsed.TotalMilliseconds, okItems.Count));
+                LogInfo(string.Format("Filter took {0} ms and resulted in {1} -> {2} items", sw.Elapsed.TotalMilliseconds, items.Count, okItems.Count));
 
                 return okItems;
             } catch (Exception e) {
