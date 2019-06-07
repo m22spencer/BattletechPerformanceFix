@@ -19,9 +19,9 @@ namespace BattletechPerformanceFix
             "OnAddItem".Pre<MechLabInventoryWidget>();
             "OnRemoveItem".Pre<MechLabInventoryWidget>();
             "OnItemGrab".Pre<MechLabInventoryWidget>();
-            "ApplyFiltering".Pre<MechLabInventoryWidget>();
+            "ApplyFiltering".Pre<MechLabInventoryWidget>("ApplyFiltering_Pre", Priority.First);
             "MechCanEquipItem".Pre<MechLabPanel>();
-            "ApplySorting".Pre<MechLabInventoryWidget>();
+            "ApplySorting".Pre<MechLabInventoryWidget>("ApplySorting_Pre", Priority.First);
 
             // Fix some annoying seemingly vanilla log spam
             "OnDestroy".Pre<InventoryItemElement_NotListView>(iel => { if(iel.iconMech != null) iel.iconMech.sprite = null;
@@ -417,7 +417,31 @@ namespace BattletechPerformanceFix
                         tmpctl.componentDef = def;
                         break;
                     }
-                    var yes = filter.Execute(Enumerable.Repeat(tmpctl, 1)).Any();
+                Func<string> Summary = () =>
+                {
+                    var o = "";
+                    o += "filteringWeapons? " + f("filteringWeapons") + "\n";
+                    o += "filterEnabledWeaponBallistic? " + f("filterEnabledWeaponBallistic") + "\n";
+                    o += "filterEnabledWeaponEnergy? " + f("filterEnabledWeaponEnergy") + "\n";
+                    o += "filterEnabledWeaponMissile? " + f("filterEnabledWeaponMissile") + "\n";
+                    o += "filterEnabledWeaponSmall? " + f("filterEnabledWeaponSmall") + "\n";
+                    o += "filteringEquipment? " + f("filteringEquipment") + "\n";
+                    o += "filterEnabledHeatsink? " + f("filterEnabledHeatsink") + "\n";
+                    o += "filterEnabledJumpjet? " + f("filterEnabledJumpjet") + "\n";
+                    o += "mechTonnage? " + iw.Field("mechTonnage").GetValue<float>() + "\n";
+                    o += "filterEnabledUpgrade? " + f("filterEnabledUpgrade") + "\n";
+                    o += $"weaponDef? {tmpctl.weaponDef}\n";
+                    o += $"ammoboxDef? {tmpctl.ammoBoxDef}\n";
+                    o += $"componentDef? {tmpctl.componentDef}\n";
+                    o += $"ComponentDefType? {tmpctl.componentDef?.ComponentType}\n";
+                    o += $"componentDefCSType? {tmpctl.componentDef?.GetType()?.FullName}\n";
+                    var json = Trap(() => new Traverse(tmpctl.componentDef).Method("ToJSON").GetValue<string>());
+                    o += "JSON: " + json;
+                    return o;
+                };
+
+                    var yes = Trap(() => filter.Execute(Enumerable.Repeat(tmpctl, 1)).Any()
+                                  ,() => { LogError($"Filtering failed\n{Summary()}\n\n"); return false; });
                     if (!yes) LogDebug(string.Format("[Filter] Removing :id {0} :componentType {1} :quantity {2}", def.Description.Id, def.ComponentType, item.quantity));
                     return yes;
                 }).ToList();
@@ -433,10 +457,10 @@ namespace BattletechPerformanceFix
                 sw.Start();
                 var tmp = inventoryWidget.localInventory;
                 var iw = iieTmp;
-                inventoryWidget.localInventory = Enumerable.Repeat(iw, 1).ToList();
 
                 // Filter items once using the faster code, then again to handle mods.
                 var okItems = Filter(items).Where(lec => {
+                        inventoryWidget.localInventory = Enumerable.Repeat(iw, 1).ToList();
                         var cref = GetRef(lec);
                         lec.ItemWidget = iw;
                         iw.ComponentRef = cref;
@@ -451,7 +475,30 @@ namespace BattletechPerformanceFix
                         filterGuard = true;
                         // Let the main game or any mods filter if needed
                         // filter guard is to prevent us from infinitely recursing here, as this is also our triggering patch.
-                        inventoryWidget.ApplyFiltering(false);
+                    Trap(() => { inventoryWidget.ApplyFiltering(false); return 0; }
+                        , () =>
+                         {
+                             // We don't display bad items
+                             iw.gameObject.SetActive(false);
+
+                             var fst = inventoryWidget.localInventory.Count > 0 ? inventoryWidget.localInventory[0] : null;
+                             var o = "";
+                             o += $"Widget? {fst != null}\n";
+                             o += $"Controller? {fst?.controller != null}\n";
+                             o += $"ComponentDef? {fst?.controller?.componentDef != null}\n";
+                             o += $"ComponentDefType? {fst?.controller?.componentDef?.ComponentType}\n";
+                             o += $"componentDefCSType? {fst?.controller?.componentDef?.GetType()?.FullName}\n";
+                             o += $"ComponentRef? {fst?.ComponentRef != null}\n";
+                             o += $"ComponentRefDef? {fst?.ComponentRef?.Def != null}\n";
+                             o += $"ComponentRefType? {fst?.ComponentRef?.Def?.ComponentType}\n";
+                             o += $"componentRefCSType? {fst?.ComponentRef?.Def?.GetType()?.FullName}\n";
+
+                             var def = (fst?.controller?.componentDef) ?? (fst?.ComponentRef?.Def);
+                             var json = Trap(() => new Traverse(def).Method("ToJSON").GetValue<string>());
+                             o += "JSON: " + json;
+                             LogError($"FilterSummary: \n{o}\n\n");
+                             return 0;
+                             });;
                         filterGuard = false;
                         lec.ItemWidget = null;
                         var yes = iw.gameObject.activeSelf == true;
@@ -522,17 +569,36 @@ namespace BattletechPerformanceFix
             }
             if (Spam) LogSpam(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
 
-            var toShow = filteredInventory.Skip(index).Take(itemLimit).ToList();
-
-            var icc = ielCache.ToList();
-
-            Func<ListElementController_BASE_NotListView,string> pp = lec => {
-                return string.Format( "[id:{0},damage:{1},quantity:{2},id:{3}]"
+            Func<ListElementController_BASE_NotListView, string> pp = lec => {
+                return string.Format("[id:{0},damage:{1},quantity:{2},id:{3}]"
                                     , GetRef(lec).ComponentDefID
                                     , GetRef(lec).DamageLevel
                                     , lec.quantity
                                     , lec.GetId());
             };
+
+            var iw_corrupted_add = inventoryWidget.localInventory.Where(x => !ielCache.Contains(x)).ToList();
+            if (iw_corrupted_add.Count > 0)
+            {
+                LogError("inventoryWidget has been corrupted, items were added directly: " + string.Join(", ", iw_corrupted_add.Select(c => c.controller).Select(pp).ToArray()));
+            }
+            var iw_corrupted_remove = ielCache.Where(x => !inventoryWidget.localInventory.Contains(x)).ToList();
+            if (iw_corrupted_remove.Count > 0)
+            {
+                LogError("inventoryWidget has been corrupted, iel elements were removed.");
+            }
+
+            if (iw_corrupted_add.Any() || iw_corrupted_remove.Any())
+            {
+                LogWarning("Restoring to last good state. Duplication or item loss may occur.");
+                inventoryWidget.localInventory = ielCache.ToArray().ToList();
+            }
+
+            var toShow = filteredInventory.Skip(index).Take(itemLimit).ToList();
+
+            var icc = ielCache.ToList();
+
+            
 
             if (Spam) LogSpam("[LimitItems] Showing: " + string.Join(", ", toShow.Select(pp).ToArray()));
 
@@ -550,17 +616,6 @@ namespace BattletechPerformanceFix
                     details.Insert(0, string.Format("enabled {0} {1}", iw.ComponentRef.ComponentDefID, iw.GetComponent<UnityEngine.RectTransform>().anchoredPosition));
                 });
             icc.ForEach(unused => unused.gameObject.SetActive(false));
-
-            var iw_corrupted_add = inventoryWidget.localInventory.Where(x => !ielCache.Contains(x)).ToList();
-            if (iw_corrupted_add.Count > 0) {
-                LogError("inventoryWidget has been corrupted, items were added: " + string.Join(", ", iw_corrupted_add.Select(c => c.controller).Select(pp).ToArray()));
-                instance.ExitMechLab();
-            }
-            var iw_corrupted_remove = ielCache.Where(x => !inventoryWidget.localInventory.Contains(x)).ToList();
-            if (iw_corrupted_remove.Count > 0) {
-                LogError("inventoryWidget has been corrupted, items were removed");
-                instance.ExitMechLab();
-            }
 
             var listElemSize = 64.0f;
             var spacerTotal  = 16.0f; // IEL elements are 64 tall, but have a total of 80 pixels between each when considering spacing.
