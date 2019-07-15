@@ -35,6 +35,8 @@ For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop
    - This fix sees more gain for late game players with lots of items inventory.
 - DMFix
    - Fix exponential dependency checking explosion (Drops around 2 minutes from loads in roguetech)
+- RemovedFlashpointFix
+   - This fix removes invalid flashpoints allowing saves to load if a user created flashpoint was removed from the mods in use
 
 # Experimental patches
 - MDDB_TagsetQueryInChunks

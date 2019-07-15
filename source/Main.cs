@@ -93,7 +93,8 @@ namespace BattletechPerformanceFix
                     { typeof(ExtraLogging), true },
                     { typeof(ShaderDependencyOverride), true },
                     { typeof(GhostBlipOverride), true },
-                    { typeof(DisableDeployAudio), false }
+                    { typeof(DisableDeployAudio), false },
+                    { typeof(RemovedFlashpointFix), true }
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);
