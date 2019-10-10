@@ -116,6 +116,7 @@
     <Compile Include="ShopTabLagFix.cs" />
     <Compile Include="PatchMechLabLimitItems.cs" />
     <Compile Include="EnableLoggingDuringLoads.cs" />
+    <Compile Include="RemovedFlashpointFix.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />
