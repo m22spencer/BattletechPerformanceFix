@@ -102,6 +102,7 @@
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="DisableDeployAudio.cs" />
+    <Compile Include="DisableSimAnimations.cs" />
     <Compile Include="ExtraLogging.cs" />
     <Compile Include="GhostBlipOverride.cs" />
     <Compile Include="Logging.cs" />
