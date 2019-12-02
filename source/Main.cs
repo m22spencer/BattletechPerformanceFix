@@ -51,7 +51,7 @@ namespace BattletechPerformanceFix
             LogInfo(string.Format("Harmony? {0}", Assembly.GetAssembly(typeof(HarmonyInstance)).GetName().Version));
             LogInfo(string.Format("Unity? {0}", UnityEngine.Application.unityVersion));
             LogInfo(string.Format("Product? {0}-{1}", UnityEngine.Application.productName, UnityEngine.Application.version));
-            LogInfo(string.Format("ModTek? {0}", ModTekType.Assembly.GetName().Version));
+            LogInfo(string.Format("ModTek? {0}", ModTekType?.Assembly?.GetName()?.Version));
             LogInfo(string.Format("Initialized {0} {1}", ModFullName, Assembly.GetExecutingAssembly().GetName().Version));
             LogInfo(string.Format("Mod-Dir? {0}", ModDir));
 
@@ -65,7 +65,7 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var WantVersions = new string[] { "1.7" };
+                var WantVersions = new string[] { "1.8" };
                 if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
                 {
                     LogInfo(string.Format("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion));
@@ -92,7 +92,6 @@ namespace BattletechPerformanceFix
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(ExtraLogging), true },
                     { typeof(ShaderDependencyOverride), true },
-                    { typeof(GhostBlipOverride), true },
                     { typeof(DisableDeployAudio), false },
                     { typeof(RemovedFlashpointFix), true },
                     { typeof(DisableSimAnimations), false },

@@ -49,7 +49,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>../../Mods/ModTek/0Harmony.dll</HintPath>
+      <HintPath>$(BTechData)/0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
@@ -104,7 +104,6 @@
     <Compile Include="DisableDeployAudio.cs" />
     <Compile Include="DisableSimAnimations.cs" />
     <Compile Include="ExtraLogging.cs" />
-    <Compile Include="GhostBlipOverride.cs" />
     <Compile Include="Logging.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="Extensions.cs" />
