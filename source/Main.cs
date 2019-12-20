@@ -95,6 +95,7 @@ namespace BattletechPerformanceFix
                     { typeof(DisableDeployAudio), false },
                     { typeof(RemovedFlashpointFix), true },
                     { typeof(DisableSimAnimations), false },
+                    { typeof(RemovedContractsFix), true },
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);

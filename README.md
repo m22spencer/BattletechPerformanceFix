@@ -38,7 +38,9 @@ For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop
 - RemovedFlashpointFix
    - This fix removes invalid flashpoints allowing saves to load if a user created flashpoint was removed from the mods in use.
 - DisableSimAnimations
-   - Make all simgame room transitions instant. 
+   - Make all simgame room transitions instant.
+- RemovedContractsFix
+   - This fix removes invalid contracts allowing saves to load if a user created contract was removed from the mods in use.
 
 # Experimental patches
 - MDDB_TagsetQueryInChunks
