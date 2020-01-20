@@ -1,14 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Harmony;
-using BattleTech;
-using BattleTech.UI;
-using System.Collections.Generic;
-using System;
-using System.Linq;
-using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
 using BattleTech.Assetbundles;

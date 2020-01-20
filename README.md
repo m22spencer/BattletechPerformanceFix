@@ -34,7 +34,13 @@ For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop
    - Replace the MechLab UI with a virtual one, which allocates only enough prefabs for what you're currently seeing on the screen.
    - This fix sees more gain for late game players with lots of items inventory.
 - DMFix
-   - Fix exponential dependency checking explosion (Drops around 2 minutes from loads in roguetech)
+   - Fix exponential dependency checking explosion (Drops around 2 minutes from loads in roguetech).
+- RemovedFlashpointFix
+   - This fix removes invalid flashpoints allowing saves to load if a user created flashpoint was removed from the mods in use.
+- DisableSimAnimations
+   - Make all simgame room transitions instant.
+- RemovedContractsFix
+   - This fix removes invalid contracts allowing saves to load if a user created contract was removed from the mods in use.
 
 # Experimental patches
 - MDDB_TagsetQueryInChunks

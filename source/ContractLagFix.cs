@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using BattleTech;
-using BattleTech.Data;
 using BattleTech.Framework;
 using Harmony;
 using System.Reflection;
 using System.Diagnostics;
-using HBS.Util;
 using static System.Reflection.Emit.OpCodes;
 using static BattletechPerformanceFix.Extensions;
 
@@ -20,19 +16,21 @@ namespace BattletechPerformanceFix
         {
             Assembly.GetAssembly(typeof(ObjectiveRef))
                 .GetTypes()
-                .Where(ty => ty.BaseType != null && ty.BaseType.FullName.Contains("EncounterObjectRef"))
+                //.Where(ty => ty != null && ty.BaseType != null && ty.BaseType.FullName.Contains("EncounterObjectRef"))
+                .Where(ty => ty != null && ty.BaseType != null && ty.BaseType.Name.Contains("EncounterObjectRef"))
                 .ToList()
-                .ForEach(ty => {
-                    var meth = AccessTools.Method(ty.BaseType, "UpdateEncounterObjectRef");
+                .ForEach(ty =>
+                 {
+                     var meth = AccessTools.Method(ty.BaseType, "UpdateEncounterObjectRef");
 
-                    var tpatch = new HarmonyMethod(typeof(ContractLagFix), nameof(Transpile));
-                    tpatch.prioritiy = Priority.First;
+                     var tpatch = new HarmonyMethod(typeof(ContractLagFix), nameof(Transpile));
+                     tpatch.prioritiy = Priority.First;
 
-                    Main.harmony.Patch(meth
-                                         , new HarmonyMethod(typeof(ContractLagFix), nameof(Pre))
-                                         , new HarmonyMethod(typeof(ContractLagFix), nameof(Post))
-                                         , tpatch);
-                });
+                     Main.harmony.Patch(meth
+                                          , new HarmonyMethod(typeof(ContractLagFix), nameof(Pre))
+                                          , new HarmonyMethod(typeof(ContractLagFix), nameof(Post))
+                                          , tpatch);
+                 });
 
             LogDebug($"EncounterLayerData ctors {typeof(EncounterLayerData).GetConstructors().Count()}");
             typeof(EncounterLayerData).GetConstructors()
@@ -43,7 +41,6 @@ namespace BattletechPerformanceFix
 
         }
 
-        static int ct = 0;
         static Stopwatch sw = new Stopwatch();
 
         public static void EncounterLayerData_Constructor(EncounterLayerData __instance)
