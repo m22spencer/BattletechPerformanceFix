@@ -119,6 +119,7 @@
     <Compile Include="EnableLoggingDuringLoads.cs" />
     <Compile Include="RemovedFlashpointFix.cs" />
     <Compile Include="RemovedContractsFix.cs" />
+    <Compile Include="VersionManifestPatches.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />
