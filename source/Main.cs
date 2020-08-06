@@ -65,7 +65,7 @@ namespace BattletechPerformanceFix
                     return;
                 }
 
-                var WantVersions = new string[] { "1.8" };
+                var WantVersions = new string[] { "1.9" };
                 if (WantVersions.Where(v => VersionInfo.ProductVersion.Trim().StartsWith(v)).Any())
                 {
                     LogInfo(string.Format("BattletechPerformanceFix found BattleTech {0} and will now load", VersionInfo.ProductVersion));
@@ -83,6 +83,7 @@ namespace BattletechPerformanceFix
 
                 var allFeatures = new Dictionary<Type, bool> {
                     //{ typeof(LazyRoomInitialization), false },
+                    { typeof(HarmonyPatches), true },
                     { typeof(MechlabFix), true },
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
@@ -95,7 +96,8 @@ namespace BattletechPerformanceFix
                     { typeof(DisableDeployAudio), false },
                     { typeof(RemovedFlashpointFix), true },
                     { typeof(DisableSimAnimations), false },
-                    { typeof(RemovedContractsFix), true },
+                    { typeof(RemovedContractsFix), true }
+
                 };
                                
                 Dictionary<Type, bool> want = allFeatures.ToDictionary(f => f.Key, f => settings.features.TryGetValue(f.Key.Name, out var userBool) ? userBool : f.Value);

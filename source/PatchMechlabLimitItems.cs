@@ -383,18 +383,19 @@ namespace BattletechPerformanceFix
 
             var iw = new Traverse(inventoryWidget);
             Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
-            var filter = new InventoryFilter( false //this.filteringAll
-                                            , f("filteringWeapons")
-                                            , f("filterEnabledWeaponBallistic")
-                                            , f("filterEnabledWeaponEnergy")
-                                            , f("filterEnabledWeaponMissile")
-                                            , f("filterEnabledWeaponSmall")
-                                            , f("filteringEquipment")
-                                            , f("filterEnabledHeatsink")
-                                            , f("filterEnabledJumpjet")
-                                            , iw.Field("mechTonnage").GetValue<float>()
-                                            , f("filterEnabledUpgrade")
-                                            , false );
+            var filter = new InventoryFilter( allAllowed: false //this.filteringAll
+                                            , weaponsAllowed: f("filteringWeapons")
+                                            , weaponsBallisticAllowed: f("filterEnabledWeaponBallistic")
+                                            , weaponsEnergyAllowed: f("filterEnabledWeaponEnergy")
+                                            , weaponsMissileAllowed: f("filterEnabledWeaponMissile")
+                                            , weaponsPersonnelAllowed: f("filterEnabledWeaponSmall")
+                                            , gearAllowed: f("filteringEquipment")
+                                            , gearHeatSinksAllowed: f("filterEnabledHeatsink")
+                                            , gearJumpJetsAllowed: f("filterEnabledJumpjet")
+                                            , mechTonnageForJumpJets: iw.Field("mechTonnage").GetValue<float>()
+                                            , gearUpgradesAllowed: f("filterEnabledUpgrade")
+                                            , mechsAllowed: false
+                                            , ammoAllowed: true);
 
             InventoryDataObject_BASE tmpctl = new InventoryDataObject_InventoryWeapon();
 
