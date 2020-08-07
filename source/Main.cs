@@ -84,6 +84,7 @@ namespace BattletechPerformanceFix
                 var allFeatures = new Dictionary<Type, bool> {
                     //{ typeof(LazyRoomInitialization), false },
                     { typeof(HarmonyPatches), true },
+                    { typeof(LocalizationPatches), true },
                     { typeof(MechlabFix), true },
                     { typeof(LoadFixes), true },
                     { typeof(NoSalvageSoftlock), true },
