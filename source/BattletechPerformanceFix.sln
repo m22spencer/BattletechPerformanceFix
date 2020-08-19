@@ -1,9 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27703.2047
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30204.135
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BattletechPerformanceFix", "BattletechPerformanceFix.csproj", "{5A4F01FA-FA62-442A-BF77-03B43002FCD3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BattletechPerformanceFix", "BattletechPerformanceFix.csproj", "{A87B849E-CC97-4E88-8BAE-33EBAA438453}"
+	ProjectSection(ProjectDependencies) = postProject
+		{02AFDB48-08B6-4535-A2AD-07E389F51445} = {02AFDB48-08B6-4535-A2AD-07E389F51445}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemoveAccessControl", "..\RemoveAccessControl\RemoveAccessControl.csproj", "{02AFDB48-08B6-4535-A2AD-07E389F51445}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +16,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{5A4F01FA-FA62-442A-BF77-03B43002FCD3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{5A4F01FA-FA62-442A-BF77-03B43002FCD3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{5A4F01FA-FA62-442A-BF77-03B43002FCD3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{5A4F01FA-FA62-442A-BF77-03B43002FCD3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A87B849E-CC97-4E88-8BAE-33EBAA438453}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A87B849E-CC97-4E88-8BAE-33EBAA438453}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A87B849E-CC97-4E88-8BAE-33EBAA438453}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A87B849E-CC97-4E88-8BAE-33EBAA438453}.Release|Any CPU.Build.0 = Release|Any CPU
+		{02AFDB48-08B6-4535-A2AD-07E389F51445}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{02AFDB48-08B6-4535-A2AD-07E389F51445}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{02AFDB48-08B6-4535-A2AD-07E389F51445}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{02AFDB48-08B6-4535-A2AD-07E389F51445}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

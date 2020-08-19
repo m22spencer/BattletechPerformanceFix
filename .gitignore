@@ -264,3 +264,6 @@ paket-files/
 __pycache__/
 *.pyc
 /readme_images
+
+libs/
+libs.fixed/
