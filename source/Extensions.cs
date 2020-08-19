@@ -18,9 +18,6 @@ using System.Reflection.Emit;
 namespace BattletechPerformanceFix
 {
     public static partial class Extensions {
-        public static int GetVersion<T>(this List<T> l)
-            => new Traverse(l).Field("_version").GetValue<int>();  
-
         public static void AlertUser(string title, string message) {
             GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create(title, message);
             genericPopupBuilder.Render();

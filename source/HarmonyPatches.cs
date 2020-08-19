@@ -35,7 +35,7 @@ namespace BattletechPerformanceFix
         {
             __result = FastInvokeCache.TryGetValue(methodInfo, out var finvoke)
                 ? finvoke
-                : FastInvokeCache[methodInfo] = (FastInvokeHandler)(typeof(MethodInvoker).GetMethod("Handler", AccessTools.all).Invoke(null, new object[] { methodInfo, methodInfo.DeclaringType.Module, false }));
+                : FastInvokeCache[methodInfo] = MethodInvoker.Handler(methodInfo, methodInfo.DeclaringType.Module, false);
 
             return false;
         }

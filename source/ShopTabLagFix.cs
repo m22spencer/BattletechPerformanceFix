@@ -22,18 +22,17 @@ namespace BattletechPerformanceFix
         public static void OnlySortAtEnd(SG_Shop_Screen __instance)
         {
             LogDebug("ShopTabLagFix: OnlySortAtEnd");
-            var _this = Traverse.Create(__instance);
-            var lv = _this.Field("inventoryWidget").Field("ListView");
+            var lv = __instance.inventoryWidget.ListView;
 
             //These don't actually seem to be needed, but keeping them just in case.
-            lv.Method("Sort").GetValue();
-            lv.Method("Refresh").GetValue();
+            lv.Sort();
+            lv.Refresh();
         }
         public static bool AddItemToInventory(MechLabInventoryWidget_ListView __instance, InventoryDataObject_BASE ItemData)
         {
             LogDebug("ShopTabLagFix: AddItemToInventory");
             var _this = __instance;
-            var _items = (List<InventoryDataObject_BASE>)Traverse.Create(__instance).Field("ListView").Property("Items").GetValue();
+            var _items = _this.ListView.Items;
             InventoryDataObject_BASE listElementController_BASE = null;
             foreach (InventoryDataObject_BASE listElementController_BASE2 in _this.inventoryData)
             {
