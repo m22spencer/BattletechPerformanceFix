@@ -50,6 +50,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="DXTCache.cs" />
     <Compile Include="LocalizationPatches.cs" />
     <Compile Include="HarmonyPatches.cs" />
     <Compile Include="ContractLagFix.cs" />

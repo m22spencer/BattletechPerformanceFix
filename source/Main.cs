@@ -100,6 +100,7 @@ namespace BattletechPerformanceFix
                     { typeof(RemovedContractsFix), true },
                     { typeof(VersionManifestPatches), true },
                     { typeof(EnableConsole), false },
+                    { typeof(DXTCache), true },
                 };
 
                 
