@@ -99,6 +99,7 @@ namespace BattletechPerformanceFix
                     { typeof(DisableSimAnimations), false },
                     { typeof(RemovedContractsFix), true },
                     { typeof(VersionManifestPatches), true },
+                    { typeof(EnableConsole), false },
                 };
 
                 
@@ -143,6 +144,8 @@ namespace BattletechPerformanceFix
                 LogInfo($"LogLevel {settings.logLevel}");
                 Logging.SetLogLevel(settings.logLevel);
             });
+
+
         }
 
         public static MethodBase CheckPatch(MethodBase meth, params string[] sha256s)

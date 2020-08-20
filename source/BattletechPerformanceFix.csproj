@@ -71,6 +71,7 @@
     <Compile Include="EnableLoggingDuringLoads.cs" />
     <Compile Include="RemovedFlashpointFix.cs" />
     <Compile Include="RemovedContractsFix.cs" />
+    <Compile Include="EnableConsole.cs" />
     <Compile Include="VersionManifestPatches.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -89,9 +90,6 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\libs.fixed\Assembly-CSharp.dll</HintPath>
     </Reference>
-    <Reference Include="Assembly-CSharp-firstpass">
-      <HintPath>..\libs.fixed\Assembly-CSharp-firstpass.dll</HintPath>
-    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>..\libs.fixed\Newtonsoft.Json.dll</HintPath>
     </Reference>
@@ -107,6 +105,10 @@
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>..\libs.fixed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\libs.fixed\UnityEngine.ImageConversionModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>..\libs.fixed\UnityEngine.UI.dll</HintPath>
