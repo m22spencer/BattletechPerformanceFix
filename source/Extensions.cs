@@ -137,11 +137,11 @@ namespace BattletechPerformanceFix
 
         public static string Dump<T>(this T t, bool indented = true)
         {
-            return JsonConvert.SerializeObject(t, indented ? Formatting.Indented : Formatting.None, new JsonSerializerSettings
-                {
-                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                    Error = (serializer, err) => err.ErrorContext.Handled = true
-                });
+            return Trap(() => JsonConvert.SerializeObject(t, indented ? Formatting.Indented : Formatting.None, new JsonSerializerSettings
+            {
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                Error = (serializer, err) => err.ErrorContext.Handled = true
+            }), () => "Extensions.Dump.SerializationFailed");
         }
 
         public static IPromise AsPromise(this AsyncOperation operation, string sceneName = null) {
