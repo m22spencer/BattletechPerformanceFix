@@ -36,11 +36,16 @@ namespace RemoveAccessControl
                 {
                     Console.WriteLine("For: " + file);
                     var def = AssemblyDefinition.ReadAssembly(file, readerParameters);
-                    var types = def.Modules.SelectMany(m => m.Types).ToList();
+                    var types = def.Modules.SelectMany(m => m.GetAllTypes()).ToList();
                     var methods = types.SelectMany(t => t.Methods).ToList();
                     var fields = types.SelectMany(t => t.Fields).ToList();
 
-                    types.ForEach(t => t.IsPublic = t.IsNestedPublic = true);
+                    foreach (var type in types.Where(t => t.IsNested))
+                        type.IsNestedPublic = true;
+
+                    foreach (var type in types.Where(t => !t.IsNested))
+                        type.IsPublic = true;
+
                     methods.ForEach(m => m.IsPublic = true);
                     fields.ForEach(m => m.IsPublic = true);
                     return (file, def);
