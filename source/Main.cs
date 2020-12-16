@@ -91,6 +91,7 @@ namespace BattletechPerformanceFix
                     { typeof(DataLoaderGetEntryCheck), true },
                     { typeof(ShopTabLagFix), true },
                     { typeof(ContractLagFix), true },
+                    { typeof(NavigationMapFilterLagFix), true },
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(ExtraLogging), true },
                     { typeof(ShaderDependencyOverride), true },

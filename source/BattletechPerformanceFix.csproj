@@ -53,6 +53,7 @@
     <Compile Include="LocalizationPatches.cs" />
     <Compile Include="HarmonyPatches.cs" />
     <Compile Include="ContractLagFix.cs" />
+    <Compile Include="NavigationMapFilterLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="DisableDeployAudio.cs" />
     <Compile Include="DisableSimAnimations.cs" />
