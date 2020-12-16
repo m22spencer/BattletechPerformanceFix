@@ -35,6 +35,9 @@
    - Make all simgame room transitions instant.
 - RemovedContractsFix
    - This fix removes invalid contracts allowing saves to load if a user created contract was removed from the mods in use.
+- NavigationMapFilterLagFix
+   - This fix removes some unnecessary code in the navigation map's difficulty filter selection.
+   - The performance gain is negligible in vanilla, but in modpacks using the entire IS map such as RT or BTA, this saves a few seconds.
 
 # Experimental patches
 - MDDB_TagsetQueryInChunks
