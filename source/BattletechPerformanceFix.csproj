@@ -53,6 +53,7 @@
     <Compile Include="LocalizationPatches.cs" />
     <Compile Include="HarmonyPatches.cs" />
     <Compile Include="ContractLagFix.cs" />
+    <Compile Include="NavigationMapFilterLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="DisableDeployAudio.cs" />
     <Compile Include="DisableSimAnimations.cs" />
@@ -67,7 +68,7 @@
     <Compile Include="LoadFixes.cs" />
     <Compile Include="ShaderDependencyOverride.cs" />
     <Compile Include="ShopTabLagFix.cs" />
-    <Compile Include="PatchMechLabLimitItems.cs" />
+    <Compile Include="PatchMechlabLimitItems.cs" />
     <Compile Include="EnableLoggingDuringLoads.cs" />
     <Compile Include="RemovedFlashpointFix.cs" />
     <Compile Include="RemovedContractsFix.cs" />
