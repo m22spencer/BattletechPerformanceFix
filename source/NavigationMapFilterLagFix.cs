@@ -4,7 +4,6 @@ using BattleTech.UI;
 using Harmony;
 using System.Reflection;
 using System.Reflection.Emit;
-using HBS;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -17,29 +16,11 @@ namespace BattletechPerformanceFix
             var method = AccessTools.Method(typeof(SGNavigationScreen), "OnDifficultySelectionChanged");
             var transpiler = new HarmonyMethod(typeof(NavigationMapFilterLagFix), nameof(Transpiler));
             Main.harmony.Patch(method, null, null, transpiler);
-
-            var cdc = nameof(SGNavigationScreen.CreateDifficultyCallouts);
-            cdc.Pre<SGNavigationScreen>();
-            cdc.Post<SGNavigationScreen>();
-            var rsi = nameof(SGNavigationScreen.RefreshSystemIndicators);
-            rsi.Pre<SGNavigationScreen>();
-            rsi.Post<SGNavigationScreen>();
         }
         
-        // FIXME remove
-        // TODO write a wrapper to make these quickly & easily
-        public static void CreateDifficultyCallouts_Pre(ref Stopwatch __state)
-        { __state = new Stopwatch(); __state.Start(); }
-        public static void CreateDifficultyCallouts_Post(ref Stopwatch __state)
-        { __state.Stop(); LogDebug("[PROFILE] " + __state.Elapsed + " CreateDifficultyCallouts"); }
-        public static void RefreshSystemIndicators_Pre(ref Stopwatch __state)
-        { __state = new Stopwatch(); __state.Start(); }
-        public static void RefreshSystemIndicators_Post(ref Stopwatch __state)
-        { __state.Stop(); LogDebug("[PROFILE] " + __state.Elapsed + " RefreshSystemIndicators"); }
-
-        // cuts out the if/else block in CreateDifficultyCallouts() because CreateDifficultyCallouts()
+        // cuts out the if/else block in OnDifficultySelectionChanged() because CreateDifficultyCallouts()
         // is called later by RefreshSystemIndicators() anyways just after the block
-        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
             int startIndex = -1;
             int endIndex = -1;
@@ -62,7 +43,6 @@ namespace BattletechPerformanceFix
             }
 
             if (startIndex != -1 && endIndex != -1) {
-                LogInfo("Applying code changes for NavigationMapFilterLagFix");
                 LogDebug("Overwriting instructions in SGNavigationScreen.OnDifficultySelectionChanged()" +
                         " at indices " + startIndex + "-" + endIndex + " with nops");
                 for (int i = startIndex; i <= endIndex; i++) {
@@ -74,7 +54,6 @@ namespace BattletechPerformanceFix
                 LogError("NavigationMapFilterLagFix has not been applied, report this as a bug");
             }
 
-            //foreach(CodeInstruction c in code) { LogSpam(c.opcode + " | " + c.operand); }
             return code.AsEnumerable();
         }
     }
