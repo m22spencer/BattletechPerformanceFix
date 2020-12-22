@@ -61,7 +61,7 @@ namespace BattletechPerformanceFix
 
             var exitIndex = MethodExitIndexMap.GetWithDefault(exit.QualifiedSignature(), () => MethodExitIndexMap.Count);
             while (exitIndex >= ExitTimers.Count) ExitTimers.Add(new List<int>());
-            
+
             ExitTimers[exitIndex].Add(entryIndex);
 
             var cindex = ((uint)entryIndex << 16) | (uint)exitIndex;
@@ -143,7 +143,7 @@ namespace BattletechPerformanceFix
                         var all = pre.Concat(seq).Concat(post);
                         var first = all.First();
                         var rest  = all.Skip(1);
-                        // Mutate the current instruction to retain jump offsets. 
+                        // Mutate the current instruction to retain jump offsets.
                         i.opcode = first.opcode;
                         i.operand = first.operand;
                         return Sequence(i).Concat(rest);
@@ -152,7 +152,7 @@ namespace BattletechPerformanceFix
                     }
                 });
         }
-        
+
         public static void Instrument(MethodBase meth) {
             if (meth == null)
                 LogError($"Cannot instrument null meth from {new StackTrace().ToString()}");
@@ -216,7 +216,7 @@ namespace BattletechPerformanceFix
         }
 
         public static void __Post(ref Metric __state) {
-            try { 
+            try {
             __state.timer.Stop();
             } catch(Exception e) { LogException(e); }
         }

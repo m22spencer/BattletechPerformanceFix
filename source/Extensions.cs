@@ -250,7 +250,6 @@ namespace BattletechPerformanceFix
                             .SingleOrDefault()
                             ?.GetMethod(meth, AccessTools.all);
         }
-            
                                     
         public static string QualifiedSignature(this MethodBase method)
             => $"{method.DeclaringType.FullName}::{method.ToString()}";
