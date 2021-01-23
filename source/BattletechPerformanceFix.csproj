@@ -76,6 +76,7 @@
     <Compile Include="VersionManifestPatches.cs" />
     <Compile Include="MemoryLeakFix.cs" />
     <Compile Include="SimpleMetrics.cs" />
+    <Compile Include="UnityHeapDump.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />

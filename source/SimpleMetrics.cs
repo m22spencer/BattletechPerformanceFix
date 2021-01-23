@@ -41,11 +41,45 @@ namespace BattletechPerformanceFix
                          , "BattleTech.SimGameState::_OnBeginAttachUX"
                          , "BattleTech.UI.SimGameUXCreator::Awake"
                          , "BattleTech.SimGameState::_OnAttachUXComplete");
+
+            "AddSubscriber".Pre<MessageCenter>("_LogMessageCenterSubscribe");
+            "AddFiniteSubscriber".Pre<MessageCenter>("_LogMessageCenterSubscribe");
+            "RemoveSubscriber".Pre<MessageCenter>("_LogMessageCenterSubscribe");
+            "RemoveFiniteSubscriber".Pre<MessageCenter>("_LogMessageCenterSubscribe");
         }
 
         public static void Update_Post() {
             if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.M)) {
                 Summary();
+            } else if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.D)) {
+                DumpHeap();
+            }
+        }
+
+        private static void DumpHeap() {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            Trap (() => UnityHeapDump.Create());
+        }
+
+        private static void _Subscriber_Pre(MessageCenter __instance, MessageCenterMessageType GUID, ReceiveMessageCenterMessage subscriber) {
+            _LogMessageCenterSubscribe(__instance, GUID, subscriber);
+        }
+
+        private static void _FiniteSubscriber_Pre(MessageCenter __instance, MessageCenterMessageType GUID, ReceiveMessageCenterMessageAutoDelete subscriber) {
+            _LogMessageCenterSubscribe(__instance, GUID, subscriber);
+        }
+
+        private static void _LogMessageCenterSubscribe(MessageCenter __instance, MessageCenterMessageType GUID, Delegate subscriber) {
+            var meth = new StackFrame(2).GetMethod();
+            var hash = __instance.GetHashCode();
+            LogSpam($"Tracked[{hash}] {DateTime.Now.ToString("MM/dd/yy HH:mm:ss.ffffff")} " +
+                    $"{meth.ToString().Split("(".ToCharArray())[0]} GUID: {GUID} " +
+                    $"MethodImpl: {subscriber.GetMethodImpl().ReturnType} {subscriber.GetMethodImpl().Name}(...)");
+            StackTrace st = new StackTrace();
+            foreach (var line in st.ToString().Split(new [] { '\r', '\n' })) {
+                LogSpam(line);
             }
         }
 
@@ -95,7 +129,7 @@ namespace BattletechPerformanceFix
                         var timer = EntryTimers[startIndex];
                         var cindex = ((uint)startIndex << 16) | (uint)index;
                         var meths = IdPairToMethods[cindex];
-                        LogWarning($"Measured [{meths.Key.QualifiedSignature()} -> {meths.Value.QualifiedSignature()}] in {timer.Elapsed.TotalMilliseconds}");
+                        LogWarning($"Measured [{meths.Key.QualifiedSignature()} -> {meths.Value.QualifiedSignature()}] in {timer.Elapsed.TotalMilliseconds} ms");
                     });
         }
 
@@ -225,7 +259,8 @@ namespace BattletechPerformanceFix
         public static void __Track(object __instance) {
             var meth = new StackFrame(1).GetMethod();
             var hash = __instance.GetHashCode();
-            LogDebug($"Tracked[{hash}] {meth.DeclaringType.FullName}::{meth.ToString()}");
+            var timestamp = DateTime.Now.ToString("MM/dd/yy HH:mm:ss.ffffff");
+            LogDebug($"Tracked[{hash}] {timestamp} {meth.DeclaringType.FullName}::{meth.ToString()}");
         }
 
         public static void Summary() {
