@@ -73,6 +73,7 @@
     <Compile Include="RemovedContractsFix.cs" />
     <Compile Include="EnableConsole.cs" />
     <Compile Include="VersionManifestPatches.cs" />
+    <Compile Include="MemoryLeakFix.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />
