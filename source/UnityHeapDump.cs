@@ -12,9 +12,9 @@ using System.Text.RegularExpressions;
 
 public class UnityHeapDump
 {
-	const int TYPE_MIN_SIZE_TO_PRINT = 40*1024*1024;
+	const int TYPE_MIN_SIZE_TO_PRINT = 50*1024*1024;
 	const int ROOT_MIN_SIZE = TYPE_MIN_SIZE_TO_PRINT;
-	const int CHILD_MIN_SIZE = 128*1024;
+	const int CHILD_MIN_SIZE = 1024*1024;
 
   static string childIndent = "  ";
 
@@ -39,7 +39,7 @@ public class UnityHeapDump
 		Directory.CreateDirectory(dumpDir + "/uobjects");
 		Directory.CreateDirectory(dumpDir + "/statics");
 
-    Regex assembliesToDump = new Regex("Assembly-CSharp,.*|Unity(Engine)?.*");
+		Regex assembliesToDump = new Regex("(Assembly-CSharp,|Unity(Engine)?).*");
 
 		using (var logger = new StreamWriter(dumpDir + "/log.txt"))
 		{
@@ -49,7 +49,7 @@ public class UnityHeapDump
 
 			foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
 			{
-        if (!assembliesToDump.IsMatch(assembly.FullName)) { continue; }
+				if (!assembliesToDump.IsMatch(assembly.FullName)) { continue; }
 
 				string assemblyFolder;
 				if (assembly.FullName.Contains("Assembly-CSharp"))
@@ -68,9 +68,6 @@ public class UnityHeapDump
 						continue;
 					}
 
-          // FIXME remove
-          if (!type.FullName.Contains("ActiveOrDefaultSettings")) { continue; }
-
 					try
 					{
 						types.Add(new StructOrClass(type, assemblyFolder));
@@ -85,7 +82,6 @@ public class UnityHeapDump
 
 			List<StructOrClass> unityComponents = new List<StructOrClass>();
 
-      /*
 			foreach (var go in Resources.FindObjectsOfTypeAll<GameObject>())
 			{
 				foreach (var component in go.GetComponents<Component>())
@@ -104,11 +100,9 @@ public class UnityHeapDump
 					}
 				}
 			}
-      */
 
 			List<StructOrClass> unityScriptableObjects = new List<StructOrClass>();
 
-      /*
 			foreach (ScriptableObject scriptableObject in Resources.FindObjectsOfTypeAll<ScriptableObject>())
 			{
 				if (scriptableObject == null)
@@ -124,9 +118,7 @@ public class UnityHeapDump
 					parseErrors.Add(new KeyValuePair<Type, Exception>(scriptableObject.GetType(), e));
 				}
 			}
-      */
 
-      /*
 			foreach (var genericType in genericTypes.ToList())
 			{
 				try
@@ -138,7 +130,6 @@ public class UnityHeapDump
 					parseErrors.Add(new KeyValuePair<Type, Exception>(genericType, e));
 				}
 			}
-      */
 
 			foreach (var pair in assemblyResults)
 			{
@@ -249,15 +240,12 @@ public class UnityHeapDump
 					using (var writer = new StreamWriter(string.Format("{0}{1}-{2}", assemblyFolder, Size, fileName)))
 					{
 						writer.WriteLine("Static ({0}): {1} bytes", ParsedType, Size);
-						Children.Sort((a, b) => (int) (b.Size - a.Size));
+						Children.Sort((a, b) => String.Compare(a.Identifier, b.Identifier));
 						foreach (var child in Children)
 						{
 							if (child.Size >= CHILD_MIN_SIZE)
 							{
 								child.Write(writer, childIndent);
-							} else
-							{
-								break;
 							}
 						}
 					}
@@ -289,9 +277,9 @@ public class UnityHeapDump
 				return;
 			}
 
-      //if(!(uObject is ScriptableObject)) {
-      //  return;
-      //}
+			if(!(uObject is ScriptableObject)) {
+				return;
+			}
 			string fileName = string.Format(dumpDir + "/{0}/{1}-{2}",
 				uObject is ScriptableObject ? "sobjects" : "uobjects",
 				Size,
@@ -301,7 +289,7 @@ public class UnityHeapDump
 			using (var writer = new StreamWriter(fileName))
 			{
 				writer.WriteLine("{0} ({1}): {2} bytes", Identifier, ParsedType, Size);
-				Children.Sort((a, b) => (int) (b.Size - a.Size));
+				Children.Sort((a, b) => String.Compare(a.Identifier, b.Identifier));
 				foreach (var child in Children)
 				{
 					if (child.Size >= CHILD_MIN_SIZE)
@@ -430,15 +418,12 @@ public class UnityHeapDump
 			{
 				writer.WriteLine("{0}{1} ({2}) : {3}", indent, Identifier, ParsedType, Size);
 			}
-			Children.Sort((a, b) => (int) (b.Size - a.Size));
+			Children.Sort((a, b) => String.Compare(a.Identifier, b.Identifier));
 			foreach (var child in Children)
 			{
 				if (child.Size >= CHILD_MIN_SIZE)
 				{
 					child.Write(writer, indent + childIndent);
-				} else
-				{
-					return;
 				}
 			}
 		}
