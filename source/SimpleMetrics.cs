@@ -27,7 +27,7 @@ namespace BattletechPerformanceFix
 
     class SimpleMetrics : Feature
     {
-        private const Type self = typeof(SimpleMetrics);
+        private static Type self = typeof(SimpleMetrics);
 
         public static bool Active = false;
         public void Activate() {
