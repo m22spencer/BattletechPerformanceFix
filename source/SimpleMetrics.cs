@@ -7,7 +7,10 @@ using System.Linq;
 using System.Text;
 using Harmony;
 using UnityEngine;
+using BattleTech;
 using BattleTech.Data;
+using BattleTech.Framework;
+using UnityHeapCrawler;
 using static BattletechPerformanceFix.Extensions;
 
 namespace BattletechPerformanceFix
@@ -24,9 +27,10 @@ namespace BattletechPerformanceFix
 
     class SimpleMetrics : Feature
     {
+        private const Type self = typeof(SimpleMetrics);
+
         public static bool Active = false;
         public void Activate() {
-            var self = typeof(SimpleMetrics);
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.UI.SimGameOptionsMenu), "OnAddedToHierarchy")
                               , new HarmonyMethod(AccessTools.Method(self, "Summary")));
             Main.harmony.Patch( AccessTools.Method(typeof(BattleTech.UI.SGLoadSavedGameScreen), "LoadSelectedSlot")
@@ -46,33 +50,84 @@ namespace BattletechPerformanceFix
             "AddFiniteSubscriber".Pre<MessageCenter>("_LogMessageCenterSubscribe");
             "RemoveSubscriber".Pre<MessageCenter>("_LogMessageCenterSubscribe");
             "RemoveFiniteSubscriber".Pre<MessageCenter>("_LogMessageCenterSubscribe");
+
+            Stack_Trace(AccessTools.Constructor(typeof(ContractObjectiveOverride), new Type[]{}));
+            Stack_Trace(AccessTools.Constructor(typeof(ContractObjectiveOverride), new Type[]{typeof(ContractObjectiveGameLogic)}));
+
+            // Harmony 2.x in BT when
+            // would've been Stack_Trace(AccessTools.Constructor(typeof(ContractOverride), new Type[]{}, false));
+            var ctor = AccessTools.FindIncludingBaseTypes(typeof(ContractOverride),
+                    t => t.GetConstructor(AccessTools.all & ~BindingFlags.Static, null, new Type[]{}, new ParameterModifier[] { }));
+            Stack_Trace(ctor);
+
+            var types = new Type[]{ typeof(string), typeof(string), typeof(string), typeof(ContractTypeValue),
+                                    typeof(GameInstance), typeof(ContractOverride), typeof(GameContext),
+                                    typeof(bool), typeof(int), typeof(int), typeof(int?)};
+            Stack_Trace(AccessTools.Constructor(typeof(Contract), types));
+            Stack_Trace(AccessTools.Method(typeof(Contract), "PostDeserialize"));
         }
 
-        public static void Update_Post() {
+        private static void Update_Post(UnityGameInstance __instance) {
             if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.M)) {
                 Summary();
             } else if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.D)) {
-                DumpHeap();
+                Trap (() => DumpHeap());
+            } else if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.S)) {
+                Trap (() => AuditMessageCenter(__instance.Game.MessageCenter));
             }
         }
 
         private static void DumpHeap() {
+            /*
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            Trap (() => UnityHeapDump.Create());
+            UnityHeapDump.Create();
+            */
+
+            var hsc = new HeapSnapshotCollector();
+            hsc.AddForbiddenTypes(new Type[]{typeof(HeapSnapshotCollector)});
+
+            //hsc.DifferentialMode = false;
+            hsc.UserRootsSettings.MinItemSize = 1024*1024;
+            hsc.HierarchySettings.MinItemSize = 1024*1024;
+            hsc.HierarchySettings.PrintOnlyGameObjects = false;
+            hsc.ScriptableObjectsSettings.MinItemSize = 1024*1024;
+            hsc.PrefabsSettings.MinItemSize = 1024*1024;
+            hsc.UnityObjectsSettings.MinItemSize = 1024*1024;
+
+            hsc.AddTrackedTypes(new Type[] {
+                typeof(ContractObjectiveOverride),
+                typeof(ContractOverride),
+                typeof(Contract)
+            });
+
+            hsc.AddRoot(HBS.SceneSingletonBehavior<UnityGameInstance>.Instance, "UnityGameInstance");
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            hsc.Start();
         }
 
-        private static void _Subscriber_Pre(MessageCenter __instance, MessageCenterMessageType GUID, ReceiveMessageCenterMessage subscriber) {
-            _LogMessageCenterSubscribe(__instance, GUID, subscriber);
-        }
-
-        private static void _FiniteSubscriber_Pre(MessageCenter __instance, MessageCenterMessageType GUID, ReceiveMessageCenterMessageAutoDelete subscriber) {
-            _LogMessageCenterSubscribe(__instance, GUID, subscriber);
+        public static void AuditMessageCenter(MessageCenter mc) {
+            LogDebug($"MessageCenter[{mc.GetHashCode()}] messageIndex {mc.messageIndex}");
+            foreach (var key in mc.messageTable.Keys) {
+                var subscriptions = mc.messageTable[key];
+                LogDebug($"  message type: {key} subscribers: {subscriptions.Count}");
+                foreach (var sub in subscriptions) {
+                    var which = (sub.Callback != null) ? "Callback" : "DeleteCallback";
+                    var @delegate = (sub.Callback != null) ? (Delegate) sub.Callback : (Delegate) sub.DeleteCallback;
+                    var targetInfo = (@delegate.Target != null) ?
+                                     $"{@delegate.Target.GetType().ToString()}[{@delegate.Target.GetHashCode()}]" :
+                                     "null (static method) ";
+                    LogDebug($"    {which}[{@delegate.GetHashCode()}] Method: {sub.Name()}[{@delegate.Method.GetHashCode()}] Target: {targetInfo}");
+                }
+            }
         }
 
         private static void _LogMessageCenterSubscribe(MessageCenter __instance, MessageCenterMessageType GUID, Delegate subscriber) {
-            var meth = new StackFrame(2).GetMethod();
+            var meth = new StackFrame(1).GetMethod();
             var hash = __instance.GetHashCode();
             LogSpam($"Tracked[{hash}] {DateTime.Now.ToString("MM/dd/yy HH:mm:ss.ffffff")} " +
                     $"{meth.ToString().Split("(".ToCharArray())[0]} GUID: {GUID} " +
@@ -196,7 +251,6 @@ namespace BattletechPerformanceFix
             if(PreHook == null || PostHook == null) {
                 LogInfo("Initializing simple metrics hooks");
 
-                var self = typeof(SimpleMetrics);
                 PreHook = new HarmonyMethod(AccessTools.Method(self, nameof(__Pre)));
                 PreHook.prioritiy = Priority.First;
                 PostHook = new HarmonyMethod(AccessTools.Method(self, nameof(__Post)));
@@ -221,7 +275,6 @@ namespace BattletechPerformanceFix
             if(TrackHook == null) {
                 LogInfo("Initializing tracking hooks");
 
-                var self = typeof(SimpleMetrics);
                 TrackHook = new HarmonyMethod(AccessTools.Method(self, nameof(__Track)));
                 TrackHook.prioritiy = Priority.First;
             }
@@ -232,6 +285,28 @@ namespace BattletechPerformanceFix
                 LogError($"Cannot instrument a method with no body {meth.DeclaringType.FullName}::{meth.ToString()}");
             } else {
                 Trap(() => Main.harmony.Patch(meth, TrackHook));
+            }
+        }
+
+        public static void Stack_Trace(MethodBase meth) {
+            if (meth == null)
+                LogError($"Cannot instrument null meth from {new StackTrace().ToString()}");
+
+            LogDebug($"Tracing stack of {meth.DeclaringType.FullName}::{meth.ToString()}");
+
+            if(StackTraceHook == null) {
+                LogInfo("Initializing tracing hooks");
+
+                StackTraceHook = new HarmonyMethod(AccessTools.Method(self, nameof(__StackTrace)));
+                StackTraceHook.prioritiy = Priority.First;
+            }
+
+            if (meth.IsGenericMethod || meth.IsGenericMethodDefinition) {
+                LogError($"Cannot instrument a generic method {meth.DeclaringType.FullName}::{meth.ToString()}");
+            } else if (meth.GetMethodBody() == null) {
+                LogError($"Cannot instrument a method with no body {meth.DeclaringType.FullName}::{meth.ToString()}");
+            } else {
+                Trap(() => Main.harmony.Patch(meth, StackTraceHook));
             }
         }
 
@@ -260,7 +335,19 @@ namespace BattletechPerformanceFix
             var meth = new StackFrame(1).GetMethod();
             var hash = __instance.GetHashCode();
             var timestamp = DateTime.Now.ToString("MM/dd/yy HH:mm:ss.ffffff");
-            LogDebug($"Tracked[{hash}] {timestamp} {meth.DeclaringType.FullName}::{meth.ToString()}");
+            LogDebug($"Tracked[{hash}] {timestamp} {meth.DeclaringType.FullName}::{meth.ToString()}[{meth.GetHashCode()}]");
+        }
+
+        static HarmonyMethod StackTraceHook;
+        public static void __StackTrace(object __instance) {
+            var meth = new StackFrame(1).GetMethod();
+            var hash = __instance.GetHashCode();
+            var timestamp = DateTime.Now.ToString("MM/dd/yy HH:mm:ss.ffffff");
+            LogDebug($"StackTrace[{hash}] {timestamp} {meth.DeclaringType.FullName}::{meth.ToString()}[{meth.GetHashCode()}]");
+            var st = new StackTrace();
+            foreach (var line in st.ToString().Split(new [] { '\r', '\n' })) {
+                LogDebug($"StackTrace[{hash}] {line}");
+            }
         }
 
         public static void Summary() {
@@ -276,3 +363,4 @@ namespace BattletechPerformanceFix
 
     class Metric { public long times = 0; public Stopwatch timer = new Stopwatch(); }
 }
+// vim: ts=4:sw=4
