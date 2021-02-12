@@ -60,6 +60,9 @@ namespace BattletechPerformanceFix
                     t => t.GetConstructor(AccessTools.all & ~BindingFlags.Static, null, new Type[]{}, new ParameterModifier[] { }));
             Stack_Trace(ctor);
 
+            ctor = AccessTools.FindIncludingBaseTypes(typeof(Contract),
+                    t => t.GetConstructor(AccessTools.all & ~BindingFlags.Static, null, new Type[]{}, new ParameterModifier[] { }));
+            Stack_Trace(ctor);
             var types = new Type[]{ typeof(string), typeof(string), typeof(string), typeof(ContractTypeValue),
                                     typeof(GameInstance), typeof(ContractOverride), typeof(GameContext),
                                     typeof(bool), typeof(int), typeof(int), typeof(int?)};
@@ -78,23 +81,16 @@ namespace BattletechPerformanceFix
         }
 
         private static void DumpHeap() {
-            /*
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-            UnityHeapDump.Create();
-            */
-
             var hsc = new HeapSnapshotCollector();
             hsc.AddForbiddenTypes(new Type[]{typeof(HeapSnapshotCollector)});
 
-            //hsc.DifferentialMode = false;
-            hsc.UserRootsSettings.MinItemSize = 1024*1024;
-            hsc.HierarchySettings.MinItemSize = 1024*1024;
+            hsc.DifferentialMode = false;
+            hsc.UserRootsSettings.MinItemSize = 1024;
+            hsc.HierarchySettings.MinItemSize = 1024;
             hsc.HierarchySettings.PrintOnlyGameObjects = false;
-            hsc.ScriptableObjectsSettings.MinItemSize = 1024*1024;
-            hsc.PrefabsSettings.MinItemSize = 1024*1024;
-            hsc.UnityObjectsSettings.MinItemSize = 1024*1024;
+            hsc.ScriptableObjectsSettings.MinItemSize = 1024;
+            hsc.PrefabsSettings.MinItemSize = 1024;
+            hsc.UnityObjectsSettings.MinItemSize = 1024;
 
             hsc.AddTrackedTypes(new Type[] {
                 typeof(ContractObjectiveOverride),
@@ -103,7 +99,10 @@ namespace BattletechPerformanceFix
             });
 
             hsc.AddRoot(HBS.SceneSingletonBehavior<UnityGameInstance>.Instance, "UnityGameInstance");
+            hsc.AddRoot(HBS.SceneSingletonBehavior<DataManagerUnityInstance>.Instance, "DataManagerUnityInstance");
+            hsc.AddRootTypes(typeof(DataManager));
 
+            Resources.UnloadUnusedAssets();
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
