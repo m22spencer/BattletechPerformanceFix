@@ -9,19 +9,11 @@ using Harmony;
 using static BattletechPerformanceFix.Extensions;
 using BattleTech;
 using BattleTech.Analytics.Sim;
-using BattleTech.Data;
 using BattleTech.Framework;
-using BattleTech.Framework.Save;
 using BattleTech.Save;
 using BattleTech.Save.Test;
 using BattleTech.UI;
-using BattleTech.UI.Tooltips;
-using BattleTech.UI.TMProWrapper;
 using Localize;
-using HBS.Collections;
-using HBS.FSM;
-using HBS.Util;
-using UnityEngine;
 
 namespace BattletechPerformanceFix
 {
