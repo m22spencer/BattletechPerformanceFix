@@ -59,7 +59,6 @@ namespace BattletechPerformanceFix
             // InterpolatedText
             "Init".Transpile<InterpolatedText>();
             // these finalizers could never run to begin with, and they only did RemoveSubscriber; nop them
-            // FIXME? may need to nop out specifically the call to RemoveSubscriber (test this)
             "Finalize".Transpile<Contract>("TranspileNopAll");
             "Finalize".Transpile<ContractObjectiveOverride>("TranspileNopAll");
             "Finalize".Transpile<ObjectiveOverride>("TranspileNopAll");
