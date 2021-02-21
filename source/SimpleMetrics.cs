@@ -71,12 +71,14 @@ namespace BattletechPerformanceFix
         }
 
         private static void Update_Post(UnityGameInstance __instance) {
-            if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.M)) {
-                Summary();
-            } else if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.D)) {
-                Trap (() => DumpHeap());
-            } else if (Input.GetKey(KeyCode.LeftShift) && Input.GetKeyDown(KeyCode.S)) {
-                Trap (() => AuditMessageCenter(__instance.Game.MessageCenter));
+            if (Input.GetKey(KeyCode.LeftShift) && Input.GetKey(KeyCode.LeftControl)) {
+                if (Input.GetKeyDown(KeyCode.M)) {
+                    Summary();
+                } else if (Input.GetKeyDown(KeyCode.D)) {
+                    Trap (() => DumpHeap());
+                } else if (Input.GetKeyDown(KeyCode.S)) {
+                    Trap (() => AuditMessageCenter(__instance.Game.MessageCenter));
+                }
             }
         }
 
@@ -84,18 +86,32 @@ namespace BattletechPerformanceFix
             var hsc = new HeapSnapshotCollector();
             hsc.AddForbiddenTypes(new Type[]{typeof(HeapSnapshotCollector)});
 
+            //hsc.UserRootsSettings.Enabled = false;
+            //hsc.HierarchySettings.Enabled = false;
+            //hsc.ScriptableObjectsSettings.Enabled = false;
+            //hsc.PrefabsSettings.Enabled = false;
+            //hsc.UnityObjectsSettings.Enabled = false;
+
             hsc.DifferentialMode = false;
-            hsc.UserRootsSettings.MinItemSize = 1024;
-            hsc.HierarchySettings.MinItemSize = 1024;
+            hsc.UserRootsSettings.MinItemSize = 128*1024;
+            hsc.HierarchySettings.MinItemSize = 128*1024;
             hsc.HierarchySettings.PrintOnlyGameObjects = false;
-            hsc.ScriptableObjectsSettings.MinItemSize = 1024;
-            hsc.PrefabsSettings.MinItemSize = 1024;
-            hsc.UnityObjectsSettings.MinItemSize = 1024;
+            hsc.ScriptableObjectsSettings.MinItemSize = 128*1024;
+            hsc.PrefabsSettings.MinItemSize = 128*1024;
+            hsc.UnityObjectsSettings.MinItemSize = 128*1024;
 
             hsc.AddTrackedTypes(new Type[] {
-                typeof(ContractObjectiveOverride),
-                typeof(ContractOverride),
-                typeof(Contract)
+                typeof(Contract),
+                typeof(CombatGameState),
+                typeof(UnitSpawnPointGameLogic),
+                typeof(MapEncounterLayerDataCell[,]),
+                typeof(MapEncounterLayerDataCell[]),
+                typeof(MapTerrainDataCell[,]),
+                typeof(MapTerrainDataCell[]),
+                typeof(BuildingRaycastHit[]),
+                typeof(ObstructionGameLogic),
+                typeof(RegionGameLogic),
+                typeof(Pilot),
             });
 
             hsc.AddRoot(HBS.SceneSingletonBehavior<UnityGameInstance>.Instance, "UnityGameInstance");
