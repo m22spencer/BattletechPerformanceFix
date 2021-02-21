@@ -35,6 +35,8 @@
    - Make all simgame room transitions instant.
 - RemovedContractsFix
    - This fix removes invalid contracts allowing saves to load if a user created contract was removed from the mods in use.
+- MemoryLeakFix
+   - Various fixes for memory leaks in the vanilla game.
 
 # Experimental patches
 - MDDB_TagsetQueryInChunks

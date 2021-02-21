@@ -99,6 +99,7 @@ namespace BattletechPerformanceFix
                     { typeof(DisableSimAnimations), false },
                     { typeof(RemovedContractsFix), true },
                     { typeof(VersionManifestPatches), true },
+                    { typeof(MemoryLeakFix), true },
                     { typeof(EnableConsole), false },
                 };
 
