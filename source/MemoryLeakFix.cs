@@ -207,26 +207,6 @@ namespace BattletechPerformanceFix
             });
         }
 
-        private static IEnumerable<CodeInstruction>
-        TranspileReplaceOverloadedCall(IEnumerable<CodeInstruction> ins, Type originalMethodClass,
-                                       string originalMethodName, Type[] originalParamTypes,
-                                       MethodInfo replacementMethod)
-        {
-            LogInfo($"TranspileReplaceOverloadedCall: {originalMethodClass.ToString()}.{originalMethodName}" +
-                     $"({String.Concat(originalParamTypes.Select(x => x.ToString()))}) -> {replacementMethod.ToString()}");
-            return ins.SelectMany(i => {
-                var methInfo = i.operand as MethodInfo;
-                if (i.opcode == OpCodes.Callvirt &&
-                    methInfo.DeclaringType == originalMethodClass &&
-                    methInfo.Name.StartsWith(originalMethodName) &&
-                    Enumerable.SequenceEqual(methInfo.GetParameters().Select(x => x.ParameterType), originalParamTypes))
-                {
-                    i.operand = replacementMethod;
-                }
-                return Sequence(i);
-            });
-        }
-
         private static IEnumerable<CodeInstruction> TranspileNopAll(IEnumerable<CodeInstruction> ins)
         {
             return ins.SelectMany(i => {
