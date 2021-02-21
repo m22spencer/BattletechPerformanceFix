@@ -102,7 +102,7 @@ namespace BattletechPerformanceFix
                     { typeof(VersionManifestPatches), true },
                     { typeof(MemoryLeakFix), true },
                     { typeof(EnableConsole), false },
-                    { typeof(SimpleMetrics), true }
+                    { typeof(SimpleMetrics), false }
                 };
 
                 
