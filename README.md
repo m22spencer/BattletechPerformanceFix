@@ -39,6 +39,8 @@
 # Experimental patches
 - MDDB_TagsetQueryInChunks
    - Prevent the game from softlocking/infinite loading when MDDB builds queries too large for sqlite3 to handle.
+- SimpleMetrics
+   - Performance measurement tools used by the mod developers. Unless you know what you're doing, leave this set to false.
 
 # Upcoming patches
 - ParallelizeLoad (Disabled by default: Experimental, Dangerous)

@@ -67,12 +67,13 @@
     <Compile Include="LoadFixes.cs" />
     <Compile Include="ShaderDependencyOverride.cs" />
     <Compile Include="ShopTabLagFix.cs" />
-    <Compile Include="PatchMechLabLimitItems.cs" />
+    <Compile Include="PatchMechlabLimitItems.cs" />
     <Compile Include="EnableLoggingDuringLoads.cs" />
     <Compile Include="RemovedFlashpointFix.cs" />
     <Compile Include="RemovedContractsFix.cs" />
     <Compile Include="EnableConsole.cs" />
     <Compile Include="VersionManifestPatches.cs" />
+    <Compile Include="SimpleMetrics.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />
