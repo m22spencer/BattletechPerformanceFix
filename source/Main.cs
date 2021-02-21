@@ -91,7 +91,6 @@ namespace BattletechPerformanceFix
                     { typeof(DataLoaderGetEntryCheck), true },
                     { typeof(ShopTabLagFix), true },
                     { typeof(ContractLagFix), true },
-                    { typeof(NavigationMapFilterLagFix), true },
                     { typeof(EnableLoggingDuringLoads), true },
                     { typeof(ExtraLogging), true },
                     { typeof(ShaderDependencyOverride), true },
@@ -100,7 +99,6 @@ namespace BattletechPerformanceFix
                     { typeof(DisableSimAnimations), false },
                     { typeof(RemovedContractsFix), true },
                     { typeof(VersionManifestPatches), true },
-                    { typeof(MemoryLeakFix), true },
                     { typeof(EnableConsole), false },
                     { typeof(SimpleMetrics), false }
                 };
