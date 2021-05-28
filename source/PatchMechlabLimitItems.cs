@@ -58,7 +58,7 @@ namespace BattletechPerformanceFix
 
         public static void LateUpdate_Pre(UnityEngine.UI.ScrollRect __instance)
         {
-            if (state != null && new Traverse(state.inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>() == __instance) {
+            if (state != null && state.inventoryWidget.scrollbarArea == __instance) {
                 var newIndex = (int)((state.endIndex) * (1.0f - __instance.verticalNormalizedPosition));
                 if (state.filteredInventory.Count < PatchMechlabLimitItems.itemsOnScreen) {
                     newIndex = 0;
@@ -154,7 +154,7 @@ namespace BattletechPerformanceFix
         {
             if (state != null && state.inventoryWidget == __instance) {
                 // it's a mechlab screen, we do our own sort.
-                var _cs = new Traverse(__instance).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+                var _cs = __instance.currentSort;
                 var cst = _cs.Method;
                 LogDebug(string.Format("OnApplySorting using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
                 state.FilterChanged(false);
@@ -228,14 +228,12 @@ namespace BattletechPerformanceFix
                 var sw = new Stopwatch();
                 sw.Start();
                 this.instance = instance;
-                this.inventoryWidget = new Traverse(instance).Field("inventoryWidget")
-                                                             .GetValue<MechLabInventoryWidget>()
-                                                             .LogIfNull("inventoryWidget is null");
+                this.inventoryWidget = instance.inventoryWidget.LogIfNull("inventoryWidget is null");
 
                 LogDebug($"StorageInventory contains {instance.storageInventory.Count}");
 
                 if (instance.IsSimGame) {
-                    new Traverse(instance).Field("originalStorageInventory").SetValue(instance.storageInventory.LogIfNull("storageInventory is null"));
+                    instance.originalStorageInventory = instance.storageInventory.LogIfNull("storageInventory is null");
                 }
 
                 LogDebug($"Mechbay Patch initialized :simGame? {instance.IsSimGame}");
@@ -272,8 +270,8 @@ namespace BattletechPerformanceFix
                     nlv.gameObject.IsDestroyedError("NLV gameObject has been destroyed");
                     nlv.gameObject.LogIfNull("NLV gameObject has been destroyed");
                     if (!nonexistant) {
-                        nlv.SetRadioParent(new Traverse(inventoryWidget).Field("inventoryRadioSet").GetValue<HBSRadioSet>().LogIfNull("inventoryRadioSet is null"));
-                        nlv.gameObject.transform.SetParent(new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>().LogIfNull("listParent is null"), false);
+                        nlv.SetRadioParent(inventoryWidget.inventoryRadioSet.LogIfNull("inventoryRadioSet is null"));
+                        nlv.gameObject.transform.SetParent(inventoryWidget.listParent.LogIfNull("listParent is null"), false);
                         nlv.gameObject.transform.localScale = UnityEngine.Vector3.one;
                     }
                     return nlv;
@@ -291,11 +289,11 @@ namespace BattletechPerformanceFix
                                  .ToList();
                 ielCache = make_ielCache();
                     
-                var li = new Traverse(inventoryWidget).Field("localInventory").GetValue<List<InventoryItemElement_NotListView>>();
+                var li = inventoryWidget.localInventory;
                 ielCache.ForEach(iw => li.Add(iw));
                 // End
 
-                var lp = new Traverse(inventoryWidget).Field("listParent").GetValue<UnityEngine.Transform>();
+                var lp = inventoryWidget.listParent;
 
                 // DummyStart&End are blank rects stored at the beginning and end of the list so that unity knows how big the scrollrect should be
                 // "placeholders"
@@ -346,7 +344,7 @@ namespace BattletechPerformanceFix
             var _bc = go2.AddComponent<InventoryItemElement_NotListView>();
             _ac.controller = _a;
             _bc.controller = _b;
-            var _cs = new Traverse(inventoryWidget).Field("currentSort").GetValue<Comparison<InventoryItemElement_NotListView>>();
+            var _cs = inventoryWidget.currentSort;
             var cst = _cs.Method;
             LogDebug(string.Format("Sort using {0}::{1}", cst.DeclaringType.FullName, cst.ToString()));
 
@@ -381,20 +379,19 @@ namespace BattletechPerformanceFix
         public List<ListElementController_BASE_NotListView> Filter(List<ListElementController_BASE_NotListView> _items) {
             var items = Sort(_items);
 
-            var iw = new Traverse(inventoryWidget);
-            Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
-            var filter = new InventoryFilter( false //this.filteringAll
-                                            , f("filteringWeapons")
-                                            , f("filterEnabledWeaponBallistic")
-                                            , f("filterEnabledWeaponEnergy")
-                                            , f("filterEnabledWeaponMissile")
-                                            , f("filterEnabledWeaponSmall")
-                                            , f("filteringEquipment")
-                                            , f("filterEnabledHeatsink")
-                                            , f("filterEnabledJumpjet")
-                                            , iw.Field("mechTonnage").GetValue<float>()
-                                            , f("filterEnabledUpgrade")
-                                            , false );
+            var filter = new InventoryFilter( allAllowed: false //this.filteringAll
+                                            , weaponsAllowed: inventoryWidget.filteringWeapons
+                                            , weaponsBallisticAllowed: inventoryWidget.filterEnabledWeaponBallistic
+                                            , weaponsEnergyAllowed: inventoryWidget.filterEnabledWeaponEnergy
+                                            , weaponsMissileAllowed: inventoryWidget.filterEnabledWeaponMissile
+                                            , weaponsPersonnelAllowed: inventoryWidget.filterEnabledWeaponSmall
+                                            , gearAllowed: inventoryWidget.filteringEquipment
+                                            , gearHeatSinksAllowed: inventoryWidget.filterEnabledHeatsink
+                                            , gearJumpJetsAllowed: inventoryWidget.filterEnabledJumpjet
+                                            , mechTonnageForJumpJets: inventoryWidget.mechTonnage
+                                            , gearUpgradesAllowed: inventoryWidget.filterEnabledUpgrade
+                                            , mechsAllowed: false
+                                            , ammoAllowed: true);
 
             InventoryDataObject_BASE tmpctl = new InventoryDataObject_InventoryWeapon();
 
@@ -420,22 +417,22 @@ namespace BattletechPerformanceFix
                 Func<string> Summary = () =>
                 {
                     var o = "";
-                    o += "filteringWeapons? " + f("filteringWeapons") + "\n";
-                    o += "filterEnabledWeaponBallistic? " + f("filterEnabledWeaponBallistic") + "\n";
-                    o += "filterEnabledWeaponEnergy? " + f("filterEnabledWeaponEnergy") + "\n";
-                    o += "filterEnabledWeaponMissile? " + f("filterEnabledWeaponMissile") + "\n";
-                    o += "filterEnabledWeaponSmall? " + f("filterEnabledWeaponSmall") + "\n";
-                    o += "filteringEquipment? " + f("filteringEquipment") + "\n";
-                    o += "filterEnabledHeatsink? " + f("filterEnabledHeatsink") + "\n";
-                    o += "filterEnabledJumpjet? " + f("filterEnabledJumpjet") + "\n";
-                    o += "mechTonnage? " + iw.Field("mechTonnage").GetValue<float>() + "\n";
-                    o += "filterEnabledUpgrade? " + f("filterEnabledUpgrade") + "\n";
+                    o += "filteringWeapons? " + inventoryWidget.filteringWeapons + "\n";
+                    o += "filterEnabledWeaponBallistic? " + inventoryWidget.filterEnabledWeaponBallistic + "\n";
+                    o += "filterEnabledWeaponEnergy? " + inventoryWidget.filterEnabledWeaponEnergy + "\n";
+                    o += "filterEnabledWeaponMissile? " + inventoryWidget.filterEnabledWeaponMissile + "\n";
+                    o += "filterEnabledWeaponSmall? " + inventoryWidget.filterEnabledWeaponSmall + "\n";
+                    o += "filteringEquipment? " + inventoryWidget.filteringEquipment + "\n";
+                    o += "filterEnabledHeatsink? " + inventoryWidget.filterEnabledHeatsink + "\n";
+                    o += "filterEnabledJumpjet? " + inventoryWidget.filterEnabledJumpjet + "\n";
+                    o += "mechTonnage? " + inventoryWidget.mechTonnage + "\n";
+                    o += "filterEnabledUpgrade? " + inventoryWidget.filterEnabledUpgrade + "\n";
                     o += $"weaponDef? {tmpctl.weaponDef}\n";
                     o += $"ammoboxDef? {tmpctl.ammoBoxDef}\n";
                     o += $"componentDef? {tmpctl.componentDef}\n";
                     o += $"ComponentDefType? {tmpctl.componentDef?.ComponentType}\n";
                     o += $"componentDefCSType? {tmpctl.componentDef?.GetType()?.FullName}\n";
-                    var json = Trap(() => new Traverse(tmpctl.componentDef).Method("ToJSON").GetValue<string>());
+                    var json = Trap(() => tmpctl.componentDef.ToJSON());
                     o += "JSON: " + json;
                     return o;
                 };
@@ -494,7 +491,7 @@ namespace BattletechPerformanceFix
                              o += $"componentRefCSType? {fst?.ComponentRef?.Def?.GetType()?.FullName}\n";
 
                              var def = (fst?.controller?.componentDef) ?? (fst?.ComponentRef?.Def);
-                             var json = Trap(() => new Traverse(def).Method("ToJSON").GetValue<string>());
+                             var json = Trap(() => def.ToJSON());
                              o += "JSON: " + json;
                              LogError($"FilterSummary: \n{o}\n\n");
                              return 0;
@@ -529,22 +526,19 @@ namespace BattletechPerformanceFix
         /* The user has changed a filter, and we rebuild the item cache. */
         public void FilterChanged(bool resetIndex = true) {
             try {
-                var iw = new Traverse(inventoryWidget);
-                Func<string,bool> f = (n) => iw.Field(n).GetValue<bool>();
-
                 LogDebug(string.Format("[LimitItems] Filter changed (reset? {9}):\n  :weapons {0}\n  :equip {1}\n  :ballistic {2}\n  :energy {3}\n  :missile {4}\n  :small {5}\n  :heatsink {6}\n  :jumpjet {7}\n  :upgrade {8}"
-                                      , f("filteringWeapons")
-                                      , f("filteringEquipment")
-                                      , f("filterEnabledWeaponBallistic")
-                                      , f("filterEnabledWeaponEnergy")
-                                      , f("filterEnabledWeaponMissile")
-                                      , f("filterEnabledWeaponSmall")
-                                      , f("filterEnabledHeatsink")
-                                      , f("filterEnabledJumpjet")
-                                      , f("filterEnabledUpgrade")
+                                      , inventoryWidget.filteringWeapons
+                                      , inventoryWidget.filteringEquipment
+                                      , inventoryWidget.filterEnabledWeaponBallistic
+                                      , inventoryWidget.filterEnabledWeaponEnergy
+                                      , inventoryWidget.filterEnabledWeaponMissile
+                                      , inventoryWidget.filterEnabledWeaponSmall
+                                      , inventoryWidget.filterEnabledHeatsink
+                                      , inventoryWidget.filterEnabledJumpjet
+                                      , inventoryWidget.filterEnabledUpgrade
                                       , resetIndex));
                 if (resetIndex) {
-                    new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition = 1.0f;
+                    inventoryWidget.scrollbarArea.verticalNormalizedPosition = 1.0f;
                     index = 0;
                 }
 
@@ -557,7 +551,7 @@ namespace BattletechPerformanceFix
         }
 
         public void Refresh(bool wantClobber = true) {
-            LogDebug(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
+            LogDebug(string.Format("[LimitItems] Refresh: {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, inventoryWidget.scrollbarArea.verticalNormalizedPosition));
             if (index > filteredInventory.Count - itemsOnScreen) {
                 index = filteredInventory.Count - itemsOnScreen;
             }
@@ -567,7 +561,7 @@ namespace BattletechPerformanceFix
             if (index < 0) {
                 index = 0;
             }
-            if (Spam) LogSpam(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>().verticalNormalizedPosition));
+            if (Spam) LogSpam(string.Format("[LimitItems] Refresh(F): {0} {1} {2} {3}", index, filteredInventory.Count, itemLimit, inventoryWidget.scrollbarArea.verticalNormalizedPosition));
 
             Func<ListElementController_BASE_NotListView, string> pp = lec => {
                 return string.Format("[id:{0},damage:{1},quantity:{2},id:{3}]"
@@ -640,9 +634,9 @@ namespace BattletechPerformanceFix
             DummyEnd.gameObject.SetActive(itemsHanging > 0); //If nothing postfixing, must disable to prevent halfspacer offset.
             DummyEnd.sizeDelta = new UnityEngine.Vector2(100, virtualEndSize);
             DummyEnd.SetAsLastSibling();
-            
-            new Traverse(instance).Method("RefreshInventorySelectability").GetValue();
-            if (Spam) { var sr = new Traverse(inventoryWidget).Field("scrollbarArea").GetValue<UnityEngine.UI.ScrollRect>();
+
+            instance.RefreshInventorySelectability();
+            if (Spam) { var sr = inventoryWidget.scrollbarArea;
                         LogSpam(string.Format( "[LimitItems] RefreshDone dummystart {0} dummyend {1} vnp {2} lli {3}"
                                              , DummyStart.anchoredPosition.y
                                              , DummyEnd.anchoredPosition.y

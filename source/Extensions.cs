@@ -12,8 +12,11 @@ using Newtonsoft.Json;
 using RT = BattleTech.BattleTechResourceType;
 using BattleTech.UI;
 using static BattletechPerformanceFix.Extensions;
+using System.Runtime.CompilerServices;
+using System.Reflection.Emit;
 
-namespace BattletechPerformanceFix {
+namespace BattletechPerformanceFix
+{
     public static partial class Extensions {
         public static void AlertUser(string title, string message) {
             GenericPopupBuilder genericPopupBuilder = GenericPopupBuilder.Create(title, message);
@@ -134,11 +137,11 @@ namespace BattletechPerformanceFix {
 
         public static string Dump<T>(this T t, bool indented = true)
         {
-            return JsonConvert.SerializeObject(t, indented ? Formatting.Indented : Formatting.None, new JsonSerializerSettings
-                {
-                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                    Error = (serializer, err) => err.ErrorContext.Handled = true
-                });
+            return Trap(() => JsonConvert.SerializeObject(t, indented ? Formatting.Indented : Formatting.None, new JsonSerializerSettings
+            {
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                Error = (serializer, err) => err.ErrorContext.Handled = true
+            }), () => "Extensions.Dump.SerializationFailed");
         }
 
         public static IPromise AsPromise(this AsyncOperation operation, string sceneName = null) {

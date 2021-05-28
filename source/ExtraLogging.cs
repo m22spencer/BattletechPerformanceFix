@@ -29,7 +29,7 @@ namespace BattletechPerformanceFix
         }
 
         public static void PrepContract_Post(SimGameState __instance, Contract contract, StarSystem system) {
-            var fd = Trap(() => new Traverse(contract?.Override).Field("finalDifficulty").GetValue<int>());
+            var fd = Trap(() => contract?.Override.finalDifficulty);
             LogInfo($"(CL) SimGameState::PrepContract(post) :contract.Name {contract?.Name} :contract.Difficulty {contract?.Difficulty} :contract.Override.finalDifficulty {fd} :UIDifficulty {contract?.Override?.GetUIDifficulty()}");
         }
 

@@ -1,11 +1,5 @@
-This mod is fully compatible with https://github.com/Sheep-y/BattleTech_Turbine
-
 # Requirements
-- BTML  : [https://github.com/janxious/BattleTechModLoader/releases](https://github.com/janxious/BattleTechModLoader/releases)
 - ModTek: [https://github.com/janxious/ModTek/releases](https://github.com/janxious/ModTek/releases)
-
-For an install guide see here: [https://github.com/janxious/ModTek/wiki/The-Drop-Dead-Simple-Guide-to-Installing-BTML-&-ModTek-&-ModTek-mods](https://github.com/janxious/ModTek/wiki/The-Drop-Dead-Simple-Guide-to-Installing-BTML-&-ModTek-&-ModTek-mods)
-
 
 # What does this mod do?
 - LoadFixes

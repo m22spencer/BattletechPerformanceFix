@@ -16,12 +16,12 @@ namespace BattletechPerformanceFix
                                  , new HarmonyMethod(typeof(NoSalvageSoftlock), nameof(NoSalvageSoftlock.HasAllPriority)), null);
         }
 
-        public static bool HasAllPriority(AAR_SalvageChosen __instance, Contract ___contract, AAR_SalvageScreen ___parent, ref bool __result)
+        public static bool HasAllPriority(AAR_SalvageChosen __instance, ref bool __result)
         {
             try
             {
-                int negotiated = ___contract.FinalPrioritySalvageCount;
-                int totalSalvageMadeAvailable = ___parent.TotalSalvageMadeAvailable;
+                int negotiated = __instance.contract.FinalPrioritySalvageCount;
+                int totalSalvageMadeAvailable = __instance.parent.TotalSalvageMadeAvailable;
                 int count = __instance.PriorityInventory.Count;
                 int num = negotiated;
                 if (num > totalSalvageMadeAvailable)

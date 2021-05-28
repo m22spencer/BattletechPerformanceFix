@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -25,6 +25,7 @@
     <WarningLevel>4</WarningLevel>
     <LangVersion>default</LangVersion>
     <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>none</DebugType>
@@ -48,57 +49,9 @@
     <BTechData Condition="$(IsLinux) == true">../../BattleTech_Data/Managed/</BTechData>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="0Harmony">
-      <HintPath>$(BTechData)/0Harmony.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>$(BTechData)/Assembly-CSharp.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Assembly-CSharp-firstpass">
-      <HintPath>$(BTechData)/Assembly-CSharp-firstpass.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>$(BTechData)/Newtonsoft.Json.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System">
-      <HintPath>$(BTechData)System.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System.Core">
-      <HintPath>$(BTechData)System.Core.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System.Data">
-      <HintPath>$(BTechData)System.Data.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="RSG.Promise">
-      <HintPath>../libs/RSG.Promise.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine">
-      <HintPath>$(BTechData)/UnityEngine.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.AssetBundleModule">
-      <HintPath>$(BTechData)/UnityEngine.AssetBundleModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(BTechData)/UnityEngine.CoreModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.UI">
-      <HintPath>$(BTechData)/UnityEngine.UI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="LocalizationPatches.cs" />
+    <Compile Include="HarmonyPatches.cs" />
     <Compile Include="ContractLagFix.cs" />
     <Compile Include="DisableSensitiveDataLogDump.cs" />
     <Compile Include="DisableDeployAudio.cs" />
@@ -118,12 +71,49 @@
     <Compile Include="EnableLoggingDuringLoads.cs" />
     <Compile Include="RemovedFlashpointFix.cs" />
     <Compile Include="RemovedContractsFix.cs" />
+    <Compile Include="EnableConsole.cs" />
+    <Compile Include="VersionManifestPatches.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\mod.json" />
     <None Include="..\README.md" />
+    <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Reference Include="mscorlib">
+      <HintPath>..\libs.fixed\mscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>..\libs.fixed\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\libs.fixed\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\libs.fixed\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="RSG.Promise, Version=3.0.1.0, Culture=neutral, PublicKeyToken=7019fe0722eef3a4, processorArchitecture=MSIL">
+      <HintPath>packages\RSG.Promise.3.0.1\lib\net35\RSG.Promise.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="UnityEngine">
+      <HintPath>..\libs.fixed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>..\libs.fixed\UnityEngine.AssetBundleModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>..\libs.fixed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\libs.fixed\UnityEngine.ImageConversionModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\libs.fixed\UnityEngine.UI.dll</HintPath>
+    </Reference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent Condition="$(IsWindows) == true">xcopy /Y "$(TargetDir)$(TargetName).dll" "$(SolutionDir)../../Mods/BattletechPerformanceFix\"</PostBuildEvent>
